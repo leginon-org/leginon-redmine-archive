@@ -43,6 +43,47 @@ class InstrumentData(Data):
 		)
 	typemap = classmethod(typemap)
 
+class PyscopeServer(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('hostname', str),
+			('port', int),
+		)
+	typemap = classmethod(typemap)
+
+class PyscopeInstrument(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('server', PyscopeServer),
+			('name', str),
+			('class', str),
+		)
+	typemap = classmethod(typemap)
+
+class TEM(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('instrument', PyscopeInstrument),
+			('cs', float),
+		)
+	typemap = classmethod(typemap)
+
+class Camera(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('instrument', PyscopeInstrument),
+			('pixelmax', float),
+		)
+	typemap = classmethod(typemap)
+
+class TEMCameraGroup(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('', PyscopeInstrument),
+			('pixelmax', float),
+		)
+	typemap = classmethod(typemap)
+
 class MagnificationsData(Data):
 	def typemap(cls):
 		return Data.typemap() + (

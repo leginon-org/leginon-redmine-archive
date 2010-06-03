@@ -1,19 +1,5 @@
-# The Leginon software is Copyright 2004
-# The Scripps Research Institute, La Jolla, CA
-# For terms of the license agreement
-# see http://ami.scripps.edu/software/leginon-license
-#
-# $Source: /ami/sw/cvsroot/pyleginon/instrument.py,v $
-# $Revision: 1.38 $
-# $Name: not supported by cvs2svn $
-# $Date: 2008-02-22 22:48:19 $
-# $Author: pulokas $
-# $State: Exp $
-# $Locker:  $
-
 import leginondata
-import remotecall
-import gui.wx.Events
+import pyscope.remote
 
 class InstrumentError(Exception):
 	pass
@@ -21,8 +7,62 @@ class InstrumentError(Exception):
 class NotAvailableError(InstrumentError):
 	pass
 
+class RemoteInstrument(object):
+	def __init__(self, remoteclient, name):
+		self.remoteclient = remoteclient
+		self.name = name
+		caps = remoteclient.getCapabilities()
+		self.class = caps['class']
+		self.caps = caps['caps']
+
+	def __getattr__(self, name):
+		## search caps for property or method, then get or call
+		self.caps
+		return self.remoteclient.get(self.name, [name])
+
+	def __setattr__(self, name, value):
+		## search caps for property, then set
+		return self.remoteclient.set(self.name, {name: value})
+
+	def 
+
+class Connections(object):
+	def __init__(self):
+		self.clients = {}
+		self.instruments = {}
+		self.caps = {}
+		self.all = {}
+		self.tems = {}
+		self.cameras = {}
+
+	def connect(self, login, status, hostname, port=pyscope.remote.PYSCOPE_PORT):
+		client = pyscope.remote.Client(login, status, hostname, port)
+
+		server = leginondata.PyscopeServer(hostname=hostname, port=port)
+		server.insert()
+
+		allcaps = client.getCapabilities()
+		for name,instrumentcaps in allcaps:
+			instrument = leginondata.PyscopeInstrument()
+			instrument['server'] = server
+			instrument['name'] = name
+			instrument['class'] = instrumentcaps['class']
+			caps = instrumentcaps['caps']
+			instrument.insert()
+
+			key = hostname, name
+			if instrument['class'] == 'TEM':
+				subinstrument = leginondata.TEM(instrument=instrument)
+				self.tems[key] = client
+			elif instrument['class'] == 'Camera':
+				subinstrument = leginondata.Camera(instrument=instrument)
+			subinstrument.insert()
+		self.
+
+connections = Connections()
+
 class Proxy(object):
-	def __init__(self, objectservice, session=None, wxeventhandler=None):
+	def __init__(self, session=None):
 		self.tems = {}
 		self.ccdcameras = {}
 		self.tem = None
@@ -30,63 +70,24 @@ class Proxy(object):
 		self.camerasize = None
 		self.camerasizes = {}
 		self.session = session
-		self.wxeventhandler = wxeventhandler
-		self.objectservice = objectservice
-		self.objectservice._addDescriptionHandler(add=self.onAddDescription,
-																							remove=self.onRemoveDescription)
 
-	def onAddDescription(self, nodename, name, description, types):
-		if 'TEM' in types:
-			proxy = self.objectservice.getObjectProxy(nodename, name)
-			self.tems[name] = proxy
-			if self.wxeventhandler is not None:
-				names = self.getTEMNames()
-				evt = gui.wx.Events.SetTEMsEvent(self.wxeventhandler, names=names)
-				self.wxeventhandler.GetEventHandler().AddPendingEvent(evt)
-			if self.tem is None:
-				self.setTEM(name)
-
-		if 'CCDCamera' in types:
-			proxy = self.objectservice.getObjectProxy(nodename, name)
-			self.ccdcameras[name] = proxy
-			self.camerasizes[name] = proxy.CameraSize
-			if self.wxeventhandler is not None:
-				names = self.getCCDCameraNames()
-				evt = gui.wx.Events.SetCCDCamerasEvent(self.wxeventhandler, names=names)
-				self.wxeventhandler.GetEventHandler().AddPendingEvent(evt)
-			if self.ccdcamera is None:
-				self.setCCDCamera(name)
-
-	def onRemoveDescription(self, nodename, name):
-		if name in self.tems and self.tem is self.tems[name]:
-			self.setTEM(None)
-			del self.tems[name]
-
-		if name in self.ccdcameras and self.ccdcamera is self.ccdcameras[name]:
-			self.setCCDCamera(None)
-			del self.ccdcameras[name]
-		try:
-			del self.camerasizes[name]
-		except KeyError:
-			pass
-
-	def getTEM(self, temname):
-		try:
-			return self.tems[temname]
-		except KeyError:
-			raise NotAvailableError('TEM \'%s\' not available' % temname)
-
-	def getTEMName(self):
-		if self.tem is None:
-			return None
-		return self.tem._name
-
+	## USED BY presets.py and internally
 	def getTEMNames(self):
 		tems = self.tems.keys()
 		tems.sort()
 		return tems
 
+	## USED BY presets.py and internally
+	def getCCDCameraNames(self):
+		ccdcameras = self.ccdcameras.keys()
+		ccdcameras.sort()
+		return ccdcameras
+
+	## USED BY many modules.  name arg only used by presets.py and internally
 	def getTEMData(self, name=None):
+		'''
+		Return InstrumentData instance by name, or currently selected
+		'''
 		if name is None:
 			if self.tem is None:
 				return None
@@ -104,43 +105,11 @@ class Proxy(object):
 			instrumentdata['hostname'] = self.tems[name].Hostname
 		except:
 			raise RuntimeError('unable to get TEM hostname')
-		results = instrumentdata.query(results=1)
-		## save in DB if not already there
-		if results:
-			dbinstrumentdata = results[0]
-		else:
-			dbinstrumentdata = instrumentdata
-			dbinstrumentdata.insert()
-		return dbinstrumentdata
+		instrumentdata = instrumentdata.query(results=1)[0]
+		return instrumentdata
 
-	def getMagnifications(self, name=None):
-		if name is None:
-			if self.tem is None:
-				return []
-			else:
-				name = self.tem._name
-		else:
-			if name not in self.tems:
-				raise RuntimeError('no TEM \'%s\' available' % name)
-		mags = self.tems[name].Magnifications
-		return mags
-
-	def getCCDCamera(self, ccdcameraname):
-		try:
-			return self.ccdcameras[ccdcameraname]
-		except KeyError:
-			raise NotAvailableError('CCD Camera \'%s\' not available' % ccdcameraname)
-
-	def getCCDCameraName(self):
-		if self.ccdcamera is None:
-			return None
-		return self.ccdcamera._name
-
-	def getCCDCameraNames(self):
-		ccdcameras = self.ccdcameras.keys()
-		ccdcameras.sort()
-		return ccdcameras
-
+	## USED BY many modules.  name arg only used by presets.py and internally
+	## name arg used by presets.py, corrector.py, correctorclient.py
 	def getCCDCameraData(self, name=None):
 		if name is None:
 			if self.ccdcamera is None:
@@ -159,15 +128,10 @@ class Proxy(object):
 			instrumentdata['hostname'] = self.ccdcameras[name].Hostname
 		except:
 			raise RuntimeError('unable to get TEM hostname')
-		results = instrumentdata.query(results=1)
-		## save in DB if not already there
-		if results:
-			dbinstrumentdata = results[0]
-		else:
-			dbinstrumentdata = instrumentdata
-			dbinstrumentdata.insert()
-		return dbinstrumentdata
+		instrumentdata = instrumentdata.query(results=1)[0]
+		return instrumentdata
 
+	## USED BY many nodes to select which TEM to use
 	def setTEM(self, name):
 		if name is None:
 			self.tem = None
@@ -176,10 +140,8 @@ class Proxy(object):
 				self.tem = self.tems[name]
 			except KeyError:
 				raise NotAvailableError('TEM \'%s\' not available' % name)
-		if self.wxeventhandler is not None:
-			evt = gui.wx.Events.SetTEMEvent(self.wxeventhandler, name=name)
-			self.wxeventhandler.GetEventHandler().AddPendingEvent(evt)
 
+	## USED BY many nodes to select which CCD to use
 	def setCCDCamera(self, name):
 		if name is None:
 			self.ccdcamera = None
@@ -190,16 +152,15 @@ class Proxy(object):
 				self.camerasize = self.camerasizes[name]
 			except KeyError:
 				raise NotAvailableError('CCD camera \'%s\' not available' % name)
-		if self.wxeventhandler is not None:
-			evt = gui.wx.Events.SetCCDCameraEvent(self.wxeventhandler, name=name)
-			self.wxeventhandler.GetEventHandler().AddPendingEvent(evt)
 
+	## USED BY presets.py and internally
 	def getTEMParameter(self, temname, name):
 		for parameter, attr_name in parametermapping:
 			if parameter == name:
 				return getattr(self.tems[temname], attr_name)
 		raise ValueError
 
+	## USED BY presets.py and internally
 	def getCCDCameraParameter(self, ccdcameraname, name):
 		for parameter, attr_name in parametermapping:
 			if parameter == name:
@@ -305,17 +266,6 @@ class Proxy(object):
 					raise result
 			except AttributeError:
 				pass
-
-class TEM(remotecall.Locker):
-	def getDatabaseType(self):
-		return 'TEM'
-
-class CCDCamera(remotecall.Locker):
-	def getDatabaseType(self):
-		return 'CCDCamera'
-
-class FastCCDCamera(CCDCamera):
-	pass
 
 parametermapping = (
 	# ScopeEM

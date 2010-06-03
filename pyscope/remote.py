@@ -17,7 +17,7 @@ import socket
 import config
 import cPickle
 import pyscope.tem
-import pyscope.ccdcamera
+import pyscope.camera
 import traceback
 
 PYSCOPE_PORT = 55555
@@ -39,7 +39,7 @@ class LoginResponse(PyscopeData):
 		PyscopeData.__init__(self)
 		self.status = status
 
-class UnauthorizedRequest(PyscopeData):
+class UnauthorizedResponse(PyscopeData):
 	'''Response to an unauthorized request'''
 	def __init__(self, reason):
 		PyscopeData.__init__(self)
@@ -153,7 +153,8 @@ class InstrumentRequestHandler(PickleRequestHandler):
 			return None
 
 	def handle_unauthorized(self, request, reason):
-		response = UnauthorizedRequest(reason=reason)
+		print 'AAAAAAAAAAAAAa', UnauthorizedResponse.__module__
+		response = UnauthorizedResponse(reason=reason)
 		return response
 
 	def handle_login(self, request):
@@ -262,11 +263,12 @@ class Instruments(dict):
 		caps = {}
 		for name, instrument in self.items():
 			caps[name] = {}
-			if isinstance(instrument, pyscope.tem.TEM):
-				inst_type = 'TEM'
-			elif isinstance(instrument, pyscope.ccdcamera.CCDCamera):
-				inst_type = 'CCDCamera'
-			caps[name]['type'] = inst_type
+			if isinstance(instrument, pyscope.camera.Camera):
+				caps[name]['class'] = 'Camera'
+			elif isinstance(instrument, pyscope.tem.TEM):
+				caps[name]['class'] = 'TEM'
+			else:
+				caps[name]['class'] = 'Other'
 			caps[name]['caps'] = instrument.getCapabilities()
 		return caps
 
@@ -276,6 +278,8 @@ class Client(PickleHandler):
 		self.host = host
 		self.port = port
 		self.doLogin(status)
+		self.caps = None
+		self.getCapabilities()
 
 	def __del__(self):
 		try:
@@ -312,13 +316,13 @@ class Client(PickleHandler):
 		req = LoginRequest('logout')
 		response = self.doRequest(req)
 		if response.status != req.status:
-			print 'AAAAAAAAAAAAAAAAA'
 			raise Exception('unable to log out')
 
 	def getCapabilities(self):
-		req = CapabilityRequest()
-		caps = self.doRequest(req)
-		return caps
+		if self.caps is None:
+			req = CapabilityRequest()
+			self.caps = self.doRequest(req)
+		return self.caps
 
 	def set(self, instrument, property_dict):
 		req = SetRequest(instrument, property_dict)
@@ -335,7 +339,6 @@ class Client(PickleHandler):
 		response = self.doRequest(req)
 		return response
 
-
 def startServer():
 	addr = ('', PYSCOPE_PORT)
 	server = Server(addr, InstrumentRequestHandler)
@@ -343,8 +346,11 @@ def startServer():
 
 if __name__ == '__main__':
 	import sys
+	## qualifying everything with pyscope.remote instead of __main__
+	## so pickle and unpickle are consistent
+	import pyscope.remote
 	if sys.argv[1] == 'server':
-		startServer()
+		pyscope.remote.startServer()
 	elif sys.argv[1] == 'client':
 		login = sys.argv[2]
 		status = sys.argv[3]
@@ -352,7 +358,7 @@ if __name__ == '__main__':
 			host = sys.argv[4]
 		else:
 			host = ''
-		c = Client(login, status, host)
+		c = pyscope.remote.Client(login, status, host)
 		print ''
 		print c.getCapabilities()
 		print ''
@@ -360,9 +366,9 @@ if __name__ == '__main__':
 		print ''
 		print c.get('Sim TEM', ['StagePosition'])
 		print ''
-		print c.get('Sim TEM', ['StagePosition','SpotSize','dummy'])
+		print c.get('Sim TEM', ['StagePosition','SpotSize'])
 		print ''
 		print c.call('Sim TEM', 'resetDefocus')
 		print ''
 		import time
-		time.sleep(2)
+		time.sleep(20)
