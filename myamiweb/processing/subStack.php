@@ -232,10 +232,12 @@ function createSubStackForm($extra=false, $title='subStack.py Launcher', $headin
 		echo "<b>Select Random Subset (less than $nump)</b><br />\n";
 		echo docpop('numOfParticlePop', '<b>Number of Particles:</b> ');
      	echo "<input type='text' name='numOfParticles' size='5' value='$numOfParticles' $randomdisable><br />\n";
-		echo "</td></tr>";
-		echo "<tr><td COLSPAN=2>";
-		echo "<input type='checkbox' name='correctbt' $correctbtcheck>\n";
-		echo "<b>Correct Beam Tilt Phase Shift According to Leginon Calibrations</b><br />\n";
+		if (!HIDE_FEATURE) {
+			echo "</td></tr>";
+			echo "<tr><td COLSPAN=2>";
+			echo "<input type='checkbox' name='correctbt' $correctbtcheck>\n";
+			echo "<b>Correct Beam Tilt Phase Shift According to Leginon Calibrations</b><br />\n";
+		}
 		echo "</td></tr></table>\n";
 		
 		echo closeRoundBorder();
@@ -334,9 +336,12 @@ function runSubStack() {
 	$command.="--projectid=".getProjectId()." ";
 	$command.="--old-stack-id=$stackId ";
 	$command.="--runname=$runname ";
+	$command.="--rundir=$procdir ";
 	$command.="--description=\"$description\" ";
 	if (!$exclude and !$mean) {
-		if ($firstp!='' && $lastp) $command.="--first=".($firstp-1)." --last=".($lastp-1)." ";
+		# subStack.py will subtract one from the particle number listed here to generate
+		# EMAN-styled particle number.  So don't substract one here
+		if ($firstp!='' && $lastp) $command.="--first=".($firstp)." --last=".($lastp)." ";
 		elseif ($split) $command.="--split=$split ";
 		elseif ($numOfParticles) $command.="--random=$numOfParticles ";
 	} elseif ($exclude) {

@@ -35,7 +35,7 @@ if test "$PHP_MRC" = "yes"; then
 			fft_source="fft3.c"
 		fi
 	fi
-	for i in /usr/include/php/ext/gd/libgd /usr/include; do
+	for i in /usr/include; do
 		test -f "$i/gd.h" && GD_DIR=$i && break
 	done
 	if test -z "$GD_DIR"; then
@@ -58,7 +58,7 @@ if test "$PHP_MRC" = "yes"; then
 		fi
 	fi
 	PHP_ADD_LIBRARY_WITH_PATH(fftw3, $FFTW_LIB_DIR, MRC_SHARED_LIBADD)
-dnl	PHP_ADD_LIBRARY_WITH_PATH(gd, $GD_LIB_DIR, MRC_SHARED_LIBADD)
+	PHP_ADD_LIBRARY_WITH_PATH(gd, $GD_LIB_DIR, MRC_SHARED_LIBADD)
 	PHP_ADD_INCLUDE($FFTW_DIR/include)
 	PHP_ADD_INCLUDE($GD_DIR)
 	PHP_SUBST(MRC_SHARED_LIBADD)

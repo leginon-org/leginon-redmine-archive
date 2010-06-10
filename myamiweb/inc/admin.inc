@@ -117,10 +117,10 @@ function defaultsettings_fileheader($user_id,$admin_init=false) {
 	$array[] = '	exit();'.$linebreak;
 	$array[] = '}'.$linebreak;
 	$array[] = '$dbc=$leginondata->mysql;'.$linebreak;
-	$array[] = '$q = "insert into `SessionData` (`name`,`REF|UserData|user` ) "'.$linebreak;
+	$array[] = '$q = "insert into `SessionData` (`name`,`REF|UserData|user`,`comment`) "'.$linebreak;
 	$array[] = '      . " VALUES "'.$linebreak;
 	$array[] = '      . " ( concat(\'importsettings\', DATE_FORMAT(now(), \'%Y%m%d%H%i%s\')), "'.$linebreak;
-	$array[] = '			. " ".$user_id." ) ";'.$linebreak;
+	$array[] = '			. " ".$user_id.",\'revert to default\' ) ";'.$linebreak;
 	$array[] = '$sessionId = $dbc->SQLQuery($q, true);'.$linebreak;
 	$array[] = $linebreak;
 	return $array;
@@ -146,10 +146,12 @@ function makeSettingsCode($user_id) {
 		'CorrectorSettingsData'=>array('Correction'),
 		'BeamFixerSettingsData'=>array('Fix Beam'),
 		'GonModelerSettingsData'=>array('GonioModeling'),
+		'BeamTiltImagerSettingsData'=>array('Beam Tilt Image'),
 	);
 	$show_tables = false;
 	$lpfids = array();
 	$bfids = array();
+	$html = '';
 	defaultsettings_fileheader($user_id);
 	$aliases = array('edge lpf','template lpf','lpf');
 	$admin_id = $leginondata->getAdminUserId();
@@ -181,7 +183,11 @@ function makeSettingsCode($user_id) {
 						}
 						$sqldata1['REF|LowPassFilterSettingsData|'.$alias] = '$lid'.$lid; 
 					} else {
-						$sqldata1 = array_diff_key($sqldata1,array('REF|LowPassFilterSettingsData|'.$alias=>$lid)); 
+						if (is_array($sqldata1)) {
+							$sqldata1 = array_diff_key($sqldata1,array('REF|LowPassFilterSettingsData|'.$alias=>$lid)); 
+						} else {
+							$html .= 'Node '.$name. ' has no administrator settings in the table called '.$table.'<br/>';
+						} 
 					}
 				}
 			}
@@ -217,9 +223,10 @@ function makeSettingsCode($user_id) {
 			}
 		}
 	}
+	return $html;
 }
 
-function assembleResult($result,$table,$name) {
+function assembleResult($result,$table,$name='') {
 	$filearray = array();
 	if ($result) {
 		$id = $result['DEF_id'];

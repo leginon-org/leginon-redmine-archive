@@ -66,10 +66,10 @@ function fileHeader() {
 	$array[] = '	exit();'.$linebreak;
 	$array[] = '}'.$linebreak;
 	$array[] = '$dbc=$leginondata->mysql;'.$linebreak;
-	$array[] = '$q = "insert into `SessionData` (`name`,`REF|UserData|user` ) "'.$linebreak;
+	$array[] = '$q = "insert into `SessionData` (`name`,`REF|UserData|user`,`comment`) "'.$linebreak;
 	$array[] = '      . " VALUES "'.$linebreak;
 	$array[] = '      . " ( concat(\'importsettings\', DATE_FORMAT(now(), \'%Y%m%d%H%i%s\')), "'.$linebreak;
-	$array[] = '			. " ".$user_id." ) ";'.$linebreak;
+	$array[] = '			. " ".$user_id.",\'import default\' ) ";'.$linebreak;
 	$array[] = '$sessionId = $dbc->SQLQuery($q, true);'.$linebreak;
 	$array[] = $linebreak;
 	writeFile($array);
@@ -153,6 +153,7 @@ $nodenames = array(
 	'CorrectorSettingsData'=>array('Correction'),
 	'BeamFixerSettingsData'=>array('Fix Beam'),
 	'GonModelerSettingsData'=>array('GonioModeling'),
+	'BeamTiltImagerSettingsData'=>array('Beam Tilt Image'),
 );
 $show_tables = false;
 $filename = 'test.php';
