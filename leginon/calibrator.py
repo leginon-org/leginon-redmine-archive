@@ -26,8 +26,7 @@ class Calibrator(node.Node):
 	def __init__(self, id, session, managerlocation, **kwargs):
 		node.Node.__init__(self, id, session, managerlocation, **kwargs)
 		self.cortypes = ['cross', 'phase']
-		self.instrument = instrument.Proxy(self.session,
-																				self.panel)
+		self.instrument = instrument.Proxy(self.session)
 		self.presetsclient = presets.PresetsClient(self)
 
 	def getMagnification(self):
