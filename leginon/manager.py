@@ -28,6 +28,7 @@ import noderegistry
 import remotecall
 import time
 import sys
+import instrument
 
 class DataBinder(databinder.DataBinder):
 	def handleData(self, newdata):
@@ -136,7 +137,7 @@ class Manager(node.Node):
 			app.setLauncherAlias(alias, hostname)
 		self.runApplication(app)
 
-	def run(self, session, clients, prevapp=False):
+	def run(self, session, launcherhosts, pyscopehosts, prevapp=False):
 		self.session = session
 		self.frame.session = self.session
 
@@ -144,11 +145,19 @@ class Manager(node.Node):
 													target=self.createLauncher)
 		t.start()
 
-		for client in clients:
+		for launcherhost in launcherhosts:
 			try:
-				self.addLauncher(client, 55555)
+				self.addLauncher(launcherhost, 55555)
 			except Exception, e:
 				self.logger.warning('Failed to add launcher: %s' % e)
+
+		for pyscopehost in pyscopehosts:
+			try:
+				instrument.connections.connect(pyscopehost, self.session['user']['username'], 'controller')
+			except socket.error:
+				print 'Server %s may not be running or is unreachable.' % (pyscopehost,)
+			except Exception, e:
+				print 'pyscope host: %s: %s' % (pyscopehost, str(e))
 
 		if prevapp:
 			threading.Thread(target=self.launchPreviousApp).start()

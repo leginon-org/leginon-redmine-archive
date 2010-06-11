@@ -273,7 +273,7 @@ class Instruments(dict):
 		return caps
 
 class Client(PickleHandler):
-	def __init__(self, login, status, host='', port=PYSCOPE_PORT):
+	def __init__(self, host, login, status, port=PYSCOPE_PORT):
 		self.login = login
 		self.host = host
 		self.port = port
@@ -342,7 +342,15 @@ class Client(PickleHandler):
 def startServer():
 	addr = ('', PYSCOPE_PORT)
 	server = Server(addr, InstrumentRequestHandler)
-	server.serve_forever()
+
+	host = socket.gethostname()
+	port = server.server_address[1]
+	print 'Server started: %s %s' % (host, port)
+
+	try:
+		server.serve_forever()
+	except KeyboardInterrupt:
+		print '\nnormal exit\n'
 
 if __name__ == '__main__':
 	import sys
@@ -358,7 +366,7 @@ if __name__ == '__main__':
 			host = sys.argv[4]
 		else:
 			host = ''
-		c = pyscope.remote.Client(login, status, host)
+		c = pyscope.remote.Client(host, login, status)
 		print ''
 		print c.getCapabilities()
 		print ''

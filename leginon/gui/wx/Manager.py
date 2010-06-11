@@ -129,7 +129,7 @@ class App(wx.App):
 		self.manager.frame.Show(True)
 
 		session = None
-		clients = ()
+		launchers = ()
 
 		### try to get session from command line
 		prevapp = False
@@ -138,9 +138,9 @@ class App(wx.App):
 				if self.options.session:
 					name = self.options.session
 					session = self.manager.getSessionByName(name)
-			if hasattr(self.options, 'clients'):
-				if self.options.clients:
-					clients = self.options.clients.split(',')
+			if hasattr(self.options, 'launchers'):
+				if self.options.launchers:
+					launchers = self.options.launchers.split(',')
 			if hasattr(self.options, 'prevapp'):
 				if self.options.prevapp:
 					prevapp = True
@@ -150,10 +150,12 @@ class App(wx.App):
 			setup = SetupWizard.SetupWizard(self.manager)
 			if setup.run():
 				session = setup.session
-				clients = setup.clients
+				launcherhosts = setup.launcherhosts
+				pyscopehosts = setup.pyscopehosts
 			else:
 				session = None
-				clients = None
+				launcherhosts = None
+				pyscopehosts = None
 
 		if session is None:
 			self.manager.exit()
@@ -161,7 +163,7 @@ class App(wx.App):
 			self.abort = True
 		else:
 			self.manager.frame.SetTitle('Leginon:  %s' % (session['name'],))
-			self.manager.run(session, clients, prevapp)
+			self.manager.run(session, launcherhosts, pyscopehosts, prevapp)
 
 		return True
 

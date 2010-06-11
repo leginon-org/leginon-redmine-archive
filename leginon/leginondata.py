@@ -1133,6 +1133,17 @@ class ConnectToClientsData(InSessionData):
 		)
 	typemap = classmethod(typemap)
 
+class ConnectToHostsData(InSessionData):
+	def typemap(cls):
+		return InSessionData.typemap() + (
+			('pyscope', list),
+			('launcher', list),
+			('localhost', str),
+			('installation', str),
+			('version', str),
+		)
+	typemap = classmethod(typemap)
+
 class SetupWizardSettingsData(SettingsData):
 	def typemap(cls):
 		return SettingsData.typemap() + (

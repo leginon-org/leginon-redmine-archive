@@ -139,17 +139,17 @@ class SessionTypePage(WizardPage):
 You can skip the entire setup wizard if you want to continue
 a previous session.  Start leginon with the -s and -c options:
 
-     %s -s <session> -c <clients>
+     %s -s <session> -l <launchers>
 
 Examples:
 
-     %s -s 07apr16b -c tecnai2
+     %s -s 07apr16b -l tecnai2
          (restart session 07apr16b, connect to tecnai2)
-     %s -s 07apr16b -c tecnai2,somehost
-         (restart session 07apr16b, connect to clients tecnai2 and somehost)
+     %s -s 07apr16b -l tecnai2,somehost
+         (restart session 07apr16b, connect to launchers tecnai2 and somehost)
 
-Starting Leginon this way will instantly connect to the clients,
-so be sure the clients are running before starting Leginon.
+Starting Leginon this way will instantly connect to the launchers,
+so be sure the launchers are running before starting Leginon.
 ''' % (sys.argv[0], sys.argv[0], sys.argv[0]))
 		sizer.Add(label, (5, 0), (1, 2))
 
@@ -222,20 +222,32 @@ class SessionSelectPage(WizardPage):
 
 		self.Bind(wx.EVT_CHOICE, self.onSessionChoice, self.sessionchoice)
 
-		clientssizer = wx.GridBagSizer(5, 5)
-		self.clientslabel = wx.StaticText(self, -1, '')
-		self.setClients([])
-		clientssizer.Add(self.clientslabel, (0, 0), (1, 1),
+		instrumentsizer = wx.GridBagSizer(5, 5)
+		self.instrumentslabel = wx.StaticText(self, -1, '')
+		self.setInstruments([])
+		instrumentsizer.Add(self.instrumentslabel, (0, 0), (1, 1),
 											wx.ALIGN_CENTER_VERTICAL)
-		editclientsbutton = wx.Button(self, -1, 'Edit...')
-		clientssizer.Add(editclientsbutton, (0, 1), (1, 1),
+		editinstrumentsbutton = wx.Button(self, -1, 'Edit...')
+		instrumentsizer.Add(editinstrumentsbutton, (0, 1), (1, 1),
 											wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
-		clientssizer.AddGrowableCol(0)
-		clientssizer.AddGrowableCol(1)
-		self.sizer.Add(clientssizer, (7, 0), (1, 2), wx.EXPAND)
+		instrumentsizer.AddGrowableCol(0)
+		instrumentsizer.AddGrowableCol(1)
+		self.sizer.Add(instrumentsizer, (7, 0), (1, 2), wx.EXPAND)
+
+		launchersizer = wx.GridBagSizer(5, 5)
+		self.launcherslabel = wx.StaticText(self, -1, '')
+		self.setLaunchers([])
+		launchersizer.Add(self.launcherslabel, (0, 0), (1, 1),
+											wx.ALIGN_CENTER_VERTICAL)
+		editlaunchersbutton = wx.Button(self, -1, 'Edit...')
+		launchersizer.Add(editlaunchersbutton, (0, 1), (1, 1),
+											wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
+		launchersizer.AddGrowableCol(0)
+		launchersizer.AddGrowableCol(1)
+		self.sizer.Add(launchersizer, (8, 0), (1, 2), wx.EXPAND)
 
 		self.sizer.Add(wx.StaticText(self, -1,
-							'Finally, press the "Finish" button to begin.'), (9, 0), (1, 2))
+							'Finally, press the "Finish" button to begin.'), (10, 0), (1, 2))
 
 		self.pagesizer.Add(self.sizer, (0, 0), (1, 1), wx.ALIGN_CENTER)
 		self.pagesizer.AddGrowableRow(0)
@@ -243,25 +255,45 @@ class SessionSelectPage(WizardPage):
 
 		self.SetSizerAndFit(self.pagesizer)
 
-		self.Bind(wx.EVT_BUTTON, self.onEditClientsButton, editclientsbutton)
+		self.Bind(wx.EVT_BUTTON, self.onEditInstrumentsButton, editinstrumentsbutton)
+		self.Bind(wx.EVT_BUTTON, self.onEditLaunchersButton, editlaunchersbutton)
 
-	def setClients(self, clients):
-		self.clients = clients
-		self.history = self.GetParent().setup.getRecentClients()
-		label = 'Connect to clients: '
-		if clients:
-			for i in clients:
+	def setLaunchers(self, launcherhosts):
+		self.launcherhosts = launcherhosts
+		self.launcherhistory = self.GetParent().setup.getRecentHosts('launcher')
+		label = 'Connect to launchers: '
+		if launcherhosts:
+			for i in launcherhosts:
 				label += i
 				label += ', '
 			label = label[:-2]
 		else:
-			label += '(no clients selected)'
-		self.clientslabel.SetLabel(label)
+			label += '(no launchers selected)'
+		self.launcherslabel.SetLabel(label)
 
-	def onEditClientsButton(self, evt):
-		dialog = EditClientsDialog(self, self.clients, self.history)
+	def onEditLaunchersButton(self, evt):
+		dialog = EditHostsDialog(self, self.launcherhosts, self.launcherhistory, 'Edit Launchers')
 		if dialog.ShowModal() == wx.ID_OK:
-			self.setClients(dialog.listbox.getValues())
+			self.setLaunchers(dialog.listbox.getValues())
+		dialog.Destroy()
+
+	def setInstruments(self, pyscopehosts):
+		self.pyscopehosts = pyscopehosts
+		self.pyscopehistory = self.GetParent().setup.getRecentHosts('pyscope')
+		label = 'Connect to instruments: '
+		if pyscopehosts:
+			for i in pyscopehosts:
+				label += i
+				label += ', '
+			label = label[:-2]
+		else:
+			label += '(no instruments selected)'
+		self.instrumentslabel.SetLabel(label)
+
+	def onEditInstrumentsButton(self, evt):
+		dialog = EditHostsDialog(self, self.pyscopehosts, self.pyscopehistory, 'Edit Instruments')
+		if dialog.ShowModal() == wx.ID_OK:
+			self.setInstruments(dialog.listbox.getValues())
 		dialog.Destroy()
 
 	def onLimitChange(self, evt):
@@ -294,7 +326,8 @@ class SessionSelectPage(WizardPage):
 			# if label is too big for wizard (presized) need to resize or truncate
 			self.sizer.SetItemMinSize(i, i.GetSize())
 		self.pagesizer.Layout()
-		self.setClients(parent.setup.getClients(selection))
+		self.setInstruments(parent.setup.getHosts(selection, 'pyscope'))
+		self.setLaunchers(parent.setup.getHosts(selection, 'launcher'))
 
 	def setSessionNames(self, names):
 		if self.limitcheckbox.IsChecked():
@@ -547,7 +580,6 @@ class SessionCreatePage(WizardPage):
 			textsizer.Add(self.projecttext, (0, 1), (1, 1),
 															wx.ALIGN_CENTER_VERTICAL)
 
-
 		textsizer.Add(wx.StaticText(self, -1, 'Image Directory:'), (1, 0), (1, 1),
 														wx.ALIGN_CENTER_VERTICAL)
 		self.imagedirectorytext = wx.StaticText(self, -1, '')
@@ -556,21 +588,33 @@ class SessionCreatePage(WizardPage):
 
 		self.sizer.Add(textsizer, (3, 0), (1, 2), wx.ALIGN_CENTER)
 
-		clientssizer = wx.GridBagSizer(5, 5)
-		self.clientslabel = wx.StaticText(self, -1, '')
-		self.setClients([])
-		clientssizer.Add(self.clientslabel, (0, 0), (1, 1),
+		instrumentsizer = wx.GridBagSizer(5, 5)
+		self.instrumentslabel = wx.StaticText(self, -1, '')
+		self.setInstruments([])
+		instrumentsizer.Add(self.instrumentslabel, (0, 0), (1, 1),
 											wx.ALIGN_CENTER_VERTICAL)
-		editclientsbutton = wx.Button(self, -1, 'Edit...')
-		clientssizer.Add(editclientsbutton, (0, 1), (1, 1),
+		editinstrumentsbutton = wx.Button(self, -1, 'Edit...')
+		instrumentsizer.Add(editinstrumentsbutton, (0, 1), (1, 1),
 											wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
-		clientssizer.AddGrowableCol(0)
-		clientssizer.AddGrowableCol(1)
-		self.sizer.Add(clientssizer, (5, 0), (1, 2), wx.EXPAND)
+		instrumentsizer.AddGrowableCol(0)
+		instrumentsizer.AddGrowableCol(1)
+		self.sizer.Add(instrumentsizer, (5, 0), (1, 2), wx.EXPAND)
+
+		launchersizer = wx.GridBagSizer(5, 5)
+		self.launcherslabel = wx.StaticText(self, -1, '')
+		self.setLaunchers([])
+		launchersizer.Add(self.launcherslabel, (0, 0), (1, 1),
+											wx.ALIGN_CENTER_VERTICAL)
+		editlaunchersbutton = wx.Button(self, -1, 'Edit...')
+		launchersizer.Add(editlaunchersbutton, (0, 1), (1, 1),
+											wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
+		launchersizer.AddGrowableCol(0)
+		launchersizer.AddGrowableCol(1)
+		self.sizer.Add(launchersizer, (6, 0), (1, 2), wx.EXPAND)
 
 		self.sizer.Add(wx.StaticText(self, -1,
 					'Please press the "Finish" button if these settings are correct.'),
-									(7, 0), (1, 2))
+									(8, 0), (1, 2))
 
 		self.pagesizer.Add(self.sizer, (0, 0), (1, 1), wx.ALIGN_CENTER)
 		self.pagesizer.AddGrowableRow(0)
@@ -578,25 +622,45 @@ class SessionCreatePage(WizardPage):
 
 		self.SetSizerAndFit(self.pagesizer)
 
-		self.Bind(wx.EVT_BUTTON, self.onEditClientsButton, editclientsbutton)
+		self.Bind(wx.EVT_BUTTON, self.onEditInstrumentsButton, editinstrumentsbutton)
+		self.Bind(wx.EVT_BUTTON, self.onEditLaunchersButton, editlaunchersbutton)
 
-	def setClients(self, clients):
-		self.clients = clients
-		self.history = self.GetParent().setup.getRecentClients()
-		label = 'Connect to clients: '
-		if clients:
-			for i in clients:
+	def setLaunchers(self, launcherhosts):
+		self.launcherhosts = launcherhosts
+		self.launcherhistory = self.GetParent().setup.getRecentHosts('launcher')
+		label = 'Connect to launchers: '
+		if launcherhosts:
+			for i in launcherhosts:
 				label += i
 				label += ', '
 			label = label[:-2]
 		else:
-			label += '(no clients selected)'
-		self.clientslabel.SetLabel(label)
+			label += '(no launchers selected)'
+		self.launcherslabel.SetLabel(label)
 
-	def onEditClientsButton(self, evt):
-		dialog = EditClientsDialog(self, self.clients, self.history)
+	def onEditLaunchersButton(self, evt):
+		dialog = EditHostsDialog(self, self.launcherhosts, self.launcherhistory, 'Edit Launchers')
 		if dialog.ShowModal() == wx.ID_OK:
-			self.setClients(dialog.listbox.getValues())
+			self.setLaunchers(dialog.listbox.getValues())
+		dialog.Destroy()
+
+	def setInstruments(self, pyscopehosts):
+		self.pyscopehosts = pyscopehosts
+		self.pyscopehistory = self.GetParent().setup.getRecentHosts('pyscope')
+		label = 'Connect to instruments: '
+		if pyscopehosts:
+			for i in pyscopehosts:
+				label += i
+				label += ', '
+			label = label[:-2]
+		else:
+			label += '(no instruments selected)'
+		self.instrumentslabel.SetLabel(label)
+
+	def onEditInstrumentsButton(self, evt):
+		dialog = EditHostsDialog(self, self.pyscopehosts, self.pyscopehistory, 'Edit Instruments')
+		if dialog.ShowModal() == wx.ID_OK:
+			self.setInstruments(dialog.listbox.getValues())
 		dialog.Destroy()
 
 	def GetPrev(self):
@@ -609,7 +673,8 @@ class SetupWizard(wx.wizard.Wizard):
 		self.setup = Setup(manager.research, manager.publish)
 		self.publish = manager.publish
 		self.session = None
-		self.clients = []
+		self.pyscopehosts = []
+		self.launcherhosts = []
 		image = wx.Image(leginon.icons.getPath('setup.png'))
 		bitmap = wx.BitmapFromImage(image)
 		wx.wizard.Wizard.__init__(self, parent, -1, 'Leginon Setup', bitmap=bitmap)
@@ -679,9 +744,11 @@ class SetupWizard(wx.wizard.Wizard):
 				self.namepage.nameExistsDialog()
 		elif page is self.sessionselectpage:
 			self.session = self.sessionselectpage.getSelectedSession()
-			self.clients = self.sessionselectpage.clients
-			self.history = self.sessionselectpage.history
-			self.setup.saveClients(self.session, self.clients)
+			self.pyscopehosts = self.sessionselectpage.pyscopehosts
+			self.launcherhosts = self.sessionselectpage.launcherhosts
+			self.pyscopehistory = self.sessionselectpage.pyscopehistory
+			self.launcherhistory = self.sessionselectpage.launcherhistory
+			self.setup.saveHosts(self.session, self.launcherhosts, self.pyscopehosts)
 		elif page is self.sessioncreatepage:
 			user = self.userpage.getSelectedUser()
 			name = self.namepage.nametextctrl.GetValue()
@@ -697,9 +764,11 @@ class SetupWizard(wx.wizard.Wizard):
 				projectid = self.projectpage.getSelectedProjectId()
 				project_experiment = self.setup.linkSessionProject(self.session['name'], projectid)
 				self.publish(project_experiment, database=True)
-			self.clients = self.sessioncreatepage.clients
-			self.history = self.sessioncreatepage.history
-			self.setup.saveClients(self.session, self.clients)
+			self.pyscopehosts = self.sessioncreatepage.pyscopehosts
+			self.pyscopehistory = self.sessioncreatepage.pyscopehistory
+			self.launcherhosts = self.sessioncreatepage.launcherhosts
+			self.launcherhistory = self.sessioncreatepage.launcherhistory
+			self.setup.saveHosts(self.session, self.launcherhosts, self.pyscopehosts)
 
 	def onPageChanged(self, evt):
 		page = evt.GetPage()
@@ -805,34 +874,34 @@ class Setup(object):
 			settings = settingsclass(initializer=defaultsettings)
 		return settings
 
-	def getClients(self, name):
-		sessiondata = leginon.leginondata.SessionData(initializer={'name': name})
-		querydata = leginon.leginondata.ConnectToClientsData(session=sessiondata)
+	def getHosts(self, session_name, host_type):
+		sessiondata = leginon.leginondata.SessionData(initializer={'name': session_name})
+		querydata = leginon.leginondata.ConnectToHostsData(session=sessiondata)
 		try:
-			return self.research(querydata, results=1)[0]['clients']
+			return self.research(querydata, results=1)[0][host_type]
 		except IndexError:
 			return []
 
-	def getRecentClients(self):
+	def getRecentHosts(self, field):
 		try:
-			results = self.research(leginon.leginondata.ConnectToClientsData(), results=500)
+			results = self.research(leginon.leginondata.ConnectToHostsData(), results=500)
 		except IndexError:
 			results = []
-		clients = {}
+		hosts = {}
 		for result in results:
-			for client in result['clients']:
-				clients[str(client)] = None
-		clients = clients.keys()
-		clients.sort()
-		return clients
+			for host in result[field]:
+				hosts[str(host)] = None
+		hosts = hosts.keys()
+		hosts.sort()
+		return hosts
 
-	def saveClients(self, session, clients):
+	def saveHosts(self, session, launcher_hosts, pyscope_hosts):
 		ver = leginon.version.getVersion()
 		loc = leginon.version.getInstalledLocation()
 		host = socket.gethostname()
-		initializer = {'session': session, 'clients': clients, 'localhost':host, 'version': ver, 'installation': loc}
-		clientsdata = leginon.leginondata.ConnectToClientsData(initializer=initializer)
-		self.publish(clientsdata, database=True, dbforce=True)
+		initializer = {'session': session, 'launcher': launcher_hosts, 'pyscope': pyscope_hosts, 'localhost':host, 'version': ver, 'installation': loc}
+		hostsdata = leginon.leginondata.ConnectToHostsData(initializer=initializer)
+		self.publish(hostsdata, database=True, dbforce=True)
 
 	def saveSettings(self, sessiondata, initializer):
 		settingsclass = leginon.leginondata.SetupWizardSettingsData
@@ -895,15 +964,15 @@ class Setup(object):
 		projeq['project'] = projdata
 		return projeq
 
-class EditClientsDialog(leginon.gui.wx.Dialog.Dialog):
-	def __init__(self, parent, clients, history):
-		self.clients = clients
+class EditHostsDialog(leginon.gui.wx.Dialog.Dialog):
+	def __init__(self, parent, hosts, history, title):
+		self.hosts = hosts
 		self.history = history
-		leginon.gui.wx.Dialog.Dialog.__init__(self, parent, 'Edit Clients')
+		leginon.gui.wx.Dialog.Dialog.__init__(self, parent, title)
 
 	def onInitialize(self):
-		self.listbox = leginon.gui.wx.ListBox.EditListBox(self, -1, 'Clients', choices=self.history)
-		self.listbox.setValues(self.clients)
+		self.listbox = leginon.gui.wx.ListBox.EditListBox(self, -1, 'Hosts', choices=self.history)
+		self.listbox.setValues(self.hosts)
 		self.sz.Add(self.listbox, (0, 0), (1, 1), wx.EXPAND)
 		self.sz.AddGrowableRow(0)
 		self.sz.AddGrowableCol(0)

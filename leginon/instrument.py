@@ -1,5 +1,6 @@
 import leginondata
 import pyscope.remote
+import socket
 
 class InstrumentError(Exception):
 	pass
@@ -12,7 +13,7 @@ class RemoteInstrument(object):
 		self.remoteclient = remoteclient
 		self.name = name
 		caps = remoteclient.getCapabilities()
-		self.class = caps['class']
+		self.instrumentclass = caps['class']
 		self.caps = caps['caps']
 
 	def __getattr__(self, name):
@@ -24,8 +25,6 @@ class RemoteInstrument(object):
 		## search caps for property, then set
 		return self.remoteclient.set(self.name, {name: value})
 
-	def 
-
 class Connections(object):
 	def __init__(self):
 		self.clients = {}
@@ -35,14 +34,16 @@ class Connections(object):
 		self.tems = {}
 		self.cameras = {}
 
-	def connect(self, login, status, hostname, port=pyscope.remote.PYSCOPE_PORT):
-		client = pyscope.remote.Client(login, status, hostname, port)
-
+	def connect(self, hostname, login, status):
+		if hostname == 'localhost':
+			hostname = socket.gethostname()
+		client = pyscope.remote.Client(hostname, login, status)
+		port = client.port  # get default port that was connected to
 		server = leginondata.PyscopeServer(hostname=hostname, port=port)
 		server.insert()
 
 		allcaps = client.getCapabilities()
-		for name,instrumentcaps in allcaps:
+		for name,instrumentcaps in allcaps.items():
 			instrument = leginondata.PyscopeInstrument()
 			instrument['server'] = server
 			instrument['name'] = name
@@ -56,8 +57,8 @@ class Connections(object):
 				self.tems[key] = client
 			elif instrument['class'] == 'Camera':
 				subinstrument = leginondata.Camera(instrument=instrument)
+				self.cameras[key] = client
 			subinstrument.insert()
-		self.
 
 connections = Connections()
 
