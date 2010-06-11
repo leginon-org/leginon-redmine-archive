@@ -30,7 +30,7 @@ class RasterTargetFilter(targetfilter.TargetFilter):
 	def __init__(self, *args, **kwargs):
 		targetfilter.TargetFilter.__init__(self, *args, **kwargs)
 
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 		self.presetsclient = presets.PresetsClient(self)
 		self.calclients = {
 			'image shift': calibrationclient.ImageShiftCalibrationClient(self),

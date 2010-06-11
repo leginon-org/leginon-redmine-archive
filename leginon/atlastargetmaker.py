@@ -112,7 +112,7 @@ class AtlasTargetMaker(node.Node, targethandler.TargetHandler):
 
 		node.Node.__init__(self, *args, **kwargs)
 
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 		self.calibrationclients = {
 			'stage position': calibrationclient.StageCalibrationClient(self),
 		}

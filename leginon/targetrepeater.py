@@ -30,7 +30,7 @@ class TargetRepeater(node.Node, targethandler.TargetWaitHandler):
 		node.Node.__init__(self, id, session, managerlocation, **kwargs)
 		self.userpause = threading.Event()
 		targethandler.TargetWaitHandler.__init__(self)
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 
 		self.addEventInput(event.ImageTargetListPublishEvent, self.handleTargetListPublish)
 		self.player = player.Player(callback=self.onPlayer)

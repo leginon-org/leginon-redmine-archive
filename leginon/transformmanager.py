@@ -269,8 +269,7 @@ class TransformManager(node.Node, TargetTransformer):
 
 		self.correlator = correlator.Correlator()
 		self.peakfinder = peakfinder.PeakFinder()
-		self.instrument = instrument.Proxy(self.objectservice, self.session,
-																				self.panel)
+		self.instrument = instrument.Proxy(self.session)
 		self.calclients = ordereddict.OrderedDict()
 		self.calclients['image shift'] = calibrationclient.ImageShiftCalibrationClient(self)
 		self.calclients['stage position'] = calibrationclient.StageCalibrationClient(self)

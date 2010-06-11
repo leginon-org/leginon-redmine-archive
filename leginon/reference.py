@@ -46,7 +46,7 @@ class Reference(watcher.Watcher, targethandler.TargetHandler):
 		watcher.Watcher.__init__(self, *args, **kwargs)
 		targethandler.TargetHandler.__init__(self)
 
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 
 		self.calibration_clients = {
 			'image shift': calibrationclient.ImageShiftCalibrationClient(self),

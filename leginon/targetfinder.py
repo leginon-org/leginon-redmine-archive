@@ -59,7 +59,7 @@ class TargetFinder(imagewatcher.ImageWatcher, targethandler.TargetWaitHandler):
 		imagewatcher.ImageWatcher.__init__(self, id, session, managerlocation,
 																				**kwargs)
 		targethandler.TargetWaitHandler.__init__(self)
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 		self.presetsclient = presets.PresetsClient(self)
 		self.calclients = {
 			'image shift': calibrationclient.ImageShiftCalibrationClient(self),

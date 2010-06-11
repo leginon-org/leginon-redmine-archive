@@ -174,7 +174,7 @@ class Acquisition(targetwatcher.TargetWatcher):
 		self.addEventInput(event.MakeTargetListEvent, self.setGrid)
 		self.driftdone = threading.Event()
 		self.driftimagedone = threading.Event()
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 
 		self.calclients = ordereddict.OrderedDict()
 		self.calclients['image shift'] = calibrationclient.ImageShiftCalibrationClient(self)

@@ -235,7 +235,7 @@ class RobotAtlasTargetFinder(node.Node, targethandler.TargetWaitHandler):
 
 		targethandler.TargetWaitHandler.__init__(self)
 
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 		self.presetsclient = presets.PresetsClient(self)
 		self.abortevent = threading.Event()
 

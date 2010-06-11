@@ -75,9 +75,7 @@ class ManualAcquisition(node.Node):
 		self.grid = None
 		self.gridlabel = None
 
-		self.instrument = instrument.Proxy(self.objectservice,
-																				self.session,
-																				self.panel)
+		self.instrument = instrument.Proxy(self.session)
 
 		self.dosecal = calibrationclient.DoseCalibrationClient(self)
 

@@ -57,8 +57,7 @@ class DriftManager(watcher.Watcher):
 
 		self.correlator = correlator.Correlator()
 		self.peakfinder = peakfinder.PeakFinder()
-		self.instrument = instrument.Proxy(self.objectservice, self.session,
-																				self.panel)
+		self.instrument = instrument.Proxy(self.session)
 		self.pixsizeclient = calibrationclient.PixelSizeCalibrationClient(self)
 		self.presetsclient = presets.PresetsClient(self)
 

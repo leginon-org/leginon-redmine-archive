@@ -51,7 +51,7 @@ class Corrector(imagewatcher.ImageWatcher):
 	eventoutputs = imagewatcher.ImageWatcher.eventoutputs + [event.DarkImagePublishEvent, event.BrightImagePublishEvent]
 	def __init__(self, name, session, managerlocation, **kwargs):
 		imagewatcher.ImageWatcher.__init__(self, name, session, managerlocation, **kwargs)
-		self.instrument = instrument.Proxy(self.objectservice, self.session, self.panel)
+		self.instrument = instrument.Proxy(self.session)
 		self.start()
 
 	def retrieveCorrectorImageFromSettings(self, reftype, channel):

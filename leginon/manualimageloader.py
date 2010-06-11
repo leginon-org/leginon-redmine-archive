@@ -46,9 +46,7 @@ class ManualImageLoader(manualacquisition.ManualAcquisition):
 		node.Node.__init__(self, id, session, managerlocation, **kwargs)
 
 		self.defocus = None
-		self.instrument = instrument.Proxy(self.objectservice,
-																				self.session,
-																				self.panel)
+		self.instrument = instrument.Proxy(self.session)
 
 		self.calclient = calibrationclient.PixelSizeCalibrationClient(self)
 

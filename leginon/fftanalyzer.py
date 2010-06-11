@@ -35,7 +35,7 @@ class FFTAnalyzer(fftmaker.FFTMaker):
 	def __init__(self, id, session, managerlocation, **kwargs):
 		fftmaker.FFTMaker.__init__(self, id, session, managerlocation, **kwargs)
 
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 		self.calclient = calibrationclient.CalibrationClient(self)
 		self.start()
 

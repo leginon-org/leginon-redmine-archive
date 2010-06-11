@@ -307,9 +307,7 @@ class Corrector(node.Node):
 		self.corclient = CorrectorClient(self)
 		self.corclient.channel = 0
 
-		self.instrument = instrument.Proxy(self.objectservice,
-																				self.session,
-																				self.panel)
+		self.instrument = instrument.Proxy(self.session)
 		self.correctionobject = ImageCorrection(self)
 		self.objectservice._addObject('Image Correction', self.correctionobject)
 

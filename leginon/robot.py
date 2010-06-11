@@ -150,7 +150,7 @@ class Robot(node.Node):
 
 
 		node.Node.__init__(self, id, session, managerlocation, **kwargs)
-		self.instrument = instrument.Proxy(self.objectservice, self.session)
+		self.instrument = instrument.Proxy(self.session)
 
 		self.timings = {}
 

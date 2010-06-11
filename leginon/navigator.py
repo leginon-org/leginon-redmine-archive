@@ -92,8 +92,7 @@ class Navigator(node.Node):
 
 	def __init__(self, id, session, managerlocation, **kwargs):
 		node.Node.__init__(self, id, session, managerlocation, **kwargs)
-		self.instrument = instrument.Proxy(self.objectservice, self.session,
-																				self.panel)
+		self.instrument = instrument.Proxy(self.session)
 		self.calclients = ordereddict.OrderedDict()
 		self.calclients['image shift'] = calibrationclient.ImageShiftCalibrationClient(self)
 		self.calclients['stage position'] = calibrationclient.StageCalibrationClient(self)
