@@ -1,4 +1,4 @@
 #!/usr/bin/env python
 
-import remote
-remote.startServer()
+import pyscope.remote
+pyscope.remote.startServer()
