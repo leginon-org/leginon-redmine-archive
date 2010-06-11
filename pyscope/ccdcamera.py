@@ -6,15 +6,15 @@
 
 import time
 import threading
-import baseinstrument
+import camera
 
 class GeometryError(Exception):
 	pass
 
-class CCDCamera(baseinstrument.BaseInstrument):
+class CCDCamera(camera.Camera):
 	name = 'CCD Camera'
 
-	capabilities = baseinstrument.BaseInstrument.capabilities + (
+	capabilities = camera.Camera.capabilities + (
 		{'name': 'PixelSize', 'type': 'property'},
 		{'name': 'Retractable', 'type': 'property'},
 		{'name': 'ExposureTypes', 'type': 'property'},
