@@ -153,10 +153,11 @@ class Manager(node.Node):
 
 		for pyscopehost in pyscopehosts:
 			try:
-				instrument.connections.connect(pyscopehost, self.session['user']['username'], 'controller')
+				instrument.instruments.connect(pyscopehost, self.session['user']['username'], 'controller')
 			except socket.error:
 				print 'Server %s may not be running or is unreachable.' % (pyscopehost,)
 			except Exception, e:
+				raise
 				print 'pyscope host: %s: %s' % (pyscopehost, str(e))
 
 		if prevapp:
