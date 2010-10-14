@@ -32,6 +32,7 @@ class DTFinder(targetfinder.TargetFinder):
 		'angle increment': 5,
 		'snr threshold': 6.0,
 	})
+	displaytypes = ('acquisition', 'focus', 'meter')
 	def __init__(self, id, session, managerlocation, **kwargs):
 		targetfinder.TargetFinder.__init__(self, id, session, managerlocation, **kwargs)
 		self.images = {
@@ -228,9 +229,10 @@ class DTFinder(targetfinder.TargetFinder):
 			print '  %s:  %s' % (key, peakinfo[key])
 
 	def makeFinalTargets(self):
+		# one of each display type at the peak position
 		targets = self.panel.getTargetPositions('peak')
-		self.setTargets(targets, 'acquisition', block=True)
-		self.setTargets(targets, 'focus', block=True)
+		for targettype in self.displaytypes:
+			self.setTargets(targets, targettype, block=True)
 
 	def storeTemplateInfo(self, imagedata, row, column, peakinfo):
 		temp = leginondata.DynamicTemplateData()
@@ -243,8 +245,8 @@ class DTFinder(targetfinder.TargetFinder):
 		temp.insert(force=True)
 
 	def bypass(self):
-		self.setTargets([], 'acquisition', block=True)
-		self.setTargets([], 'focus', block=True)
+		for targettype in self.displaytypes:
+			self.setTargets([], targettype, block=True)
 
 	def everything(self):
 		templateA = self.makeTemplateA()
@@ -296,6 +298,12 @@ class DTFinder(targetfinder.TargetFinder):
 			self.logger.info('No acquisition target, no new template info stored')
 
 		self.logger.info('Publishing targets...')
-		self.publishTargets(imdata, 'acquisition', targetlist)
-		self.publishTargets(imdata, 'focus', targetlist)
+		for targettype in self.displaytypes:
+			self.publishTargets(imdata, targettype, targetlist)
 		self.setStatus('idle')
+
+	def autoShapeCenter(self,params):
+		centers = []
+		disptarget = params['center'][0],params['center'][1]
+		centers.append(disptarget)
+		self.setTargets(centers, 'acquisition')	

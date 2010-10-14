@@ -35,7 +35,7 @@ class CameraPanel(wx.Panel):
 		self.sbsz = wx.StaticBoxSizer(sb, wx.VERTICAL)
 		self.size = None
 		self.geometry = None
-		self.binnings = {'x': [1,2,3,4,8,16], 'y': [1,2,3,4,8,16]}
+		self.binnings = {'x': [1,2,3,4,6,8], 'y': [1,2,3,4,6,8]}
 		self.defaultexptime = 1000.0
 		self.common = {}
 
@@ -185,7 +185,7 @@ class CameraPanel(wx.Panel):
 
 	def onCommonChoice(self, evt):
 		key = evt.GetString()
-		if key == '(Custom)':
+		if key == '(Custom)' or key.startswith('-'):
 			return
 		if self.setGeometry(self.common[key]):
 			self.onConfigurationChanged()
@@ -204,7 +204,7 @@ class CameraPanel(wx.Panel):
 	def getCenteredGeometry(self, dimension, binning):
 		offset ={}
 		for axis in ['x','y']:
-			offset[axis] = (self.size[axis]/binning - dimension)/2
+			offset[axis] = int((self.size[axis]/binning - dimension)/2)
 
 		geometry = {'dimension': {'x': dimension, 'y': dimension},
 								'offset': {'x': offset['x'], 'y': offset['y']},
@@ -212,7 +212,11 @@ class CameraPanel(wx.Panel):
 		return geometry
 
 	def getFullGeometry(self,binning):
-		geometry = {'dimension': {'x': self.size['x'], 'y': self.size['y']},
+		if (self.size['x'] % binning) or (self.size['y'] % binning):
+			return None
+		dimx = self.size['x'] / binning
+		dimy = self.size['y'] / binning
+		geometry = {'dimension': {'x': dimx, 'y': dimy},
 								'offset': {'x': 0, 'y': 0},
 								'binning': {'x': binning, 'y': binning}}
 		return geometry
@@ -220,10 +224,18 @@ class CameraPanel(wx.Panel):
 	def getCenteredGeometries(self):
 		geometries = {}
 		keys = []
+		show_sections = False
 		if self.size['x'] != self.size['y']:
-			key = '(%d x %d) x 1' % (self.size['x'],self.size['y'])
-			geometries[key] = self.getFullGeometry(1)
-			keys.append(key)
+			show_sections = True
+			keys.append('--- Full ---')
+			for binning in range(1,9):
+				dimx = self.size['x'] / binning
+				dimy = self.size['y'] / binning
+				key = '%d x %d bin %d' % (dimx,dimy,binning)
+				geo = self.getFullGeometry(binning)
+				if geo is not None:
+					geometries[key] = geo
+					keys.append(key)
 		if self.binnings['x'] != self.binnings['y']:
 			return geometries
 		self.minsize = min(self.size['x'],self.size['y'])
@@ -238,14 +250,18 @@ class CameraPanel(wx.Panel):
 			return result
 		mask = [good(dim) for dim in dimensions]
 		dimensions = filtergood(dimensions, mask)
+		def minsize(size):
+			return size >= 512
+		dimensions = filter(minsize, dimensions)
 		binnings = filtergood(self.binnings['x'], mask)
 
 		dimensions.reverse()
+		if show_sections:
+			keys.append('--- Center ---')
 		for d in dimensions:
 			for b in binnings:
 				if d*b <= self.minsize:
-					#key = '%d² × %d' % (d, b)
-					key = '%d x %d' % (d, b)
+					key = '%d x %d bin %d' % (d, d, b)
 					geometries[key] = self.getCenteredGeometry(d, b)
 					keys.append(key)
 				else:

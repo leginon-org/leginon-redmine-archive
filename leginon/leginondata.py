@@ -193,6 +193,7 @@ camera_params = (
 	('energy filtered', bool),
 	('energy filter', bool),
 	('energy filter width', float),
+	('nframes', int),
 )
 
 class ScopeEMData(EMData):
@@ -1307,7 +1308,15 @@ class ClickTargetFinderSettingsData(TargetFinderSettingsData):
 class MatlabTargetFinderSettingsData(TargetFinderSettingsData):
 	def typemap(cls):
 		return TargetFinderSettingsData.typemap() + (
+			('test image', str),
 			('module path', str),
+		)
+	typemap = classmethod(typemap)
+
+class TestTargetFinderSettingsData(TargetFinderSettingsData):
+	def typemap(cls):
+		return TargetFinderSettingsData.typemap() + (
+			('test image', str),
 		)
 	typemap = classmethod(typemap)
 
@@ -1678,6 +1687,14 @@ class FocuserSettingsData(AcquisitionSettingsData):
 		)
 	typemap = classmethod(typemap)
 
+class AutoExposureSettingsData(AcquisitionSettingsData):
+	def typemap(cls):
+		return AcquisitionSettingsData.typemap() + (
+			('mean intensity', float),
+			('mean intensity tolerance', float),
+		)
+	typemap = classmethod(typemap)
+
 class CalibratorSettingsData(SettingsData):
 	def typemap(cls):
 		return SettingsData.typemap() + (
@@ -1970,6 +1987,9 @@ class TargetRepeaterSettingsData(SettingsData):
 	def typemap(cls):
 		return SettingsData.typemap() + (
 			('bypass', bool),
+			('reset a', bool),
+			('reset z', bool),
+			('reset xy', bool),
 		)
 	typemap = classmethod(typemap)
 
@@ -2009,6 +2029,7 @@ class RasterTargetFilterSettingsData(TargetFilterSettingsData):
 			('ellipse angle', float),
 			('ellipse a', float),
 			('ellipse b', float),
+			('limiting shape', str),
 		)
 	typemap = classmethod(typemap)
 

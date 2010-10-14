@@ -83,17 +83,30 @@ class Corrector(imagewatcher.ImageWatcher):
 		plan = self.retrieveCorrectorPlan(cameradata)
 		return plan
 
+	def changeScreenPosition(self,state):
+		try:
+			self.instrument.tem.MainScreenPosition = state
+			time.sleep(2)
+			self.logger.info('screen %s' % state)
+		except:
+			self.logger.info('screen %s failed (may be unsupported)' % state)
+
 	def acquireDark(self, channels):
+		cameraname = self.instrument.getCCDCameraName()
+		if cameraname == 'DE12':
+			self.changeScreenPosition('down')
 		for channel in channels:
 			try:
 				imagedata = self.acquireReference(type='dark', channel=channel)
 			except Exception, e:
 				raise
-				self.logger.exception('Cannot acquire dark reference: %s' % e)
+				self.logger.exception('Cannot acquire dark reference: %s' % (e,))
 			else:
 				self.displayImage(imagedata)
 				self.currentimage = imagedata
 				self.beep()
+		if cameraname == 'DE12':
+			self.changeScreenPosition('up')
 		self.panel.acquisitionDone()
 
 	def acquireBright(self, channels):
@@ -102,7 +115,7 @@ class Corrector(imagewatcher.ImageWatcher):
 				imagedata = self.acquireReference(type='bright', channel=channel)
 			except Exception, e:
 				raise
-				self.logger.exception('Cannot acquire bright reference: %s' % e)
+				self.logger.exception('Cannot acquire bright reference: %s' % (e,))
 			else:
 				self.displayImage(imagedata)
 				self.currentimage = imagedata
@@ -120,7 +133,7 @@ class Corrector(imagewatcher.ImageWatcher):
 			self.stopTimer('get image')
 		except Exception, e:
                         raise
-			self.logger.exception('Raw acquisition failed: %s' % e)
+			self.logger.exception('Raw acquisition failed: %s' % (e,))
 		else:
 			self.displayImage(image)
 			self.currentimage = image
@@ -184,14 +197,19 @@ class Corrector(imagewatcher.ImageWatcher):
 				typekey = 'bright'
 				self.logger.info('Acquiring bright references...')
 		except Exception, e:
-			self.logger.error('Reference acquisition failed: %s' % e)
+			self.logger.error('Reference acquisition failed: %s' % (e,))
 			self.instrument.ccdcamera.ExposureType = 'normal'
 			return None
+
+		## doing this before acquireSeries because of a bug where
+		## something interrupts this method before it completes
+		scopedata = self.instrument.getData(leginondata.ScopeEMData)
+		cameradata = self.instrument.getData(leginondata.CameraEMData)
 
 		try:
 			series = self.acquireSeries(self.settings['n average'])
 		except Exception, e:
-			self.logger.error('Reference acquisition failed: %s' % e)
+			self.logger.error('Reference acquisition failed: %s' % (e,))
 			self.instrument.ccdcamera.ExposureType = 'normal'
 			return None
 
@@ -208,9 +226,6 @@ class Corrector(imagewatcher.ImageWatcher):
 		## make if float so we can do float math later
 		ref = numpy.asarray(ref, numpy.float32)
 
-		scopedata = self.instrument.getData(leginondata.ScopeEMData)
-		cameradata = self.instrument.getData(leginondata.CameraEMData)
-
 		refimagedata = self.storeCorrectorImageData(ref, typekey, scopedata, cameradata, channel)
 		if refimagedata is not None:
 			self.logger.info('Got reference image, calculating normalization')
@@ -219,7 +234,7 @@ class Corrector(imagewatcher.ImageWatcher):
 		try:
 			self.instrument.ccdcamera.ExposureType = exposuretype
 		except Exception, e:
-			self.logger.error('Reference acquisition failed: %s' % e)
+			self.logger.error('Reference acquisition failed: %s' % (e,))
 			self.instrument.ccdcamera.ExposureType = 'normal'
 			return None
 
@@ -243,12 +258,11 @@ class Corrector(imagewatcher.ImageWatcher):
 				self.logger.warning('No dark reference image for normalization calculations')
 				return
 		try:
-			darkarray = dark['image']
+			darkarray = self.prepareDark(dark, bright)
 		except:
 			self.logger.warning('Unable to load dark image from %s' % dark['session']['image path'])
 			return
 		try:
-			darkarray = dark['image']
 			brightarray = bright['image']
 		except:
 			self.logger.warning('Unable to load bright image from %s' % bright['session']['image path'])

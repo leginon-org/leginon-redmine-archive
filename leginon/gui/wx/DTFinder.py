@@ -23,17 +23,22 @@ class Panel(leginon.gui.wx.TargetFinder.Panel):
 		leginon.gui.wx.TargetFinder.Panel.initialize(self)
 		self.SettingsDialog = SettingsDialog
 
-		self.imagepanel = leginon.gui.wx.TargetPanel.TargetImagePanel(self, -1)
+		self.imagepanel = leginon.gui.wx.TargetPanel.ShapeTargetImagePanel(self, -1)
 		self.imagepanel.addTypeTool('Original', display=True, settings=True)
 		self.imagepanel.selectiontool.setDisplayed('Original', True)
 		self.imagepanel.addTypeTool('templateA', display=True, settings=True)
 		self.imagepanel.addTypeTool('templateB', display=True, settings=True)
 		self.imagepanel.addTypeTool('correlation', display=True, settings=False)
-		self.imagepanel.addTargetTool('peak', wx.Color(255,128,0), target=True, settings=False, numbers=False)
-		self.imagepanel.addTargetTool('acquisition', wx.GREEN, target=True, settings=True, numbers=True)
+		self.imagepanel.addTargetTool('peak', target=True, settings=False, numbers=False)
+
+		self.imagepanel.addTargetTool('acquisition', target=True, settings=True, numbers=True)
 		self.imagepanel.selectiontool.setDisplayed('acquisition', True)
-		self.imagepanel.addTargetTool('focus', wx.BLUE, target=True, settings=True, numbers=True)
+		self.imagepanel.addTargetTool('focus', target=True, settings=True, numbers=True)
 		self.imagepanel.selectiontool.setDisplayed('focus', True)
+		self.imagepanel.addTargetTool('meter', target=True)
+		self.imagepanel.selectiontool.setDisplayed('meter', True)
+
+		self.Bind(leginon.gui.wx.ImagePanelTools.EVT_SHAPE_FOUND, self.onShapeFound, self.imagepanel)
 
 		self.szmain.Add(self.imagepanel, (1, 0), (1, 1), wx.EXPAND)
 		self.szmain.AddGrowableRow(1)
@@ -69,6 +74,8 @@ class Panel(leginon.gui.wx.TargetFinder.Panel):
 		dialog.ShowModal()
 		dialog.Destroy()
 
+	def onShapeFound(self, evt):
+		threading.Thread(target=self.node.autoShapeCenter, args=(evt.params,)).start()
 
 class OriginalSettingsDialog(leginon.gui.wx.Settings.Dialog):
 	def initialize(self):
@@ -221,6 +228,7 @@ class FinalScrolledSettings(leginon.gui.wx.Settings.ScrolledDialog):
 		self.dialog.setNodeSettings()
 		self.node.clearTargets('acquisition')
 		self.node.clearTargets('focus')
+		self.node.clearTargets('meter')
 
 	def onTestButton(self, evt):
 		self.dialog.setNodeSettings()

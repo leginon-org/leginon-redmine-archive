@@ -11,7 +11,7 @@ The TargetFilter node takes a list of targets and produces a new list of targets
 It would typically be placed between a TargetFinder and an Acquisition node.
 Subclasses need to implement the filterTargets method.
 '''
-
+import math
 import node
 import leginondata
 import event
@@ -29,6 +29,7 @@ class TargetFilter(node.Node, targethandler.TargetWaitHandler):
 	}
 	eventinputs = node.Node.eventinputs + targethandler.TargetWaitHandler.eventinputs + [event.ImageTargetListPublishEvent]
 	eventoutputs = node.Node.eventoutputs + targethandler.TargetWaitHandler.eventoutputs + [event.TargetListDoneEvent]
+	displaytypes = ('acquisition', 'focus', 'preview', 'meter')
 										
 	def __init__(self, id, session, managerlocation, **kwargs):
 		node.Node.__init__(self, id, session, managerlocation, **kwargs)
@@ -86,6 +87,7 @@ class TargetFilter(node.Node, targethandler.TargetWaitHandler):
 			alltargets = self.researchTargets(list=targetlistdata)
 			self.alltargets = alltargets
 			goodoldtargets = []
+			self.newtesttargets = False
 			for oldtarget in oldtargets:
 				if oldtarget['status'] not in ('done', 'aborted'):
 					goodoldtargets.append(oldtarget)
@@ -105,15 +107,19 @@ class TargetFilter(node.Node, targethandler.TargetWaitHandler):
 				self.panel.enableSubmitTargets()
 				self.userpause.clear()
 				self.userpause.wait()
+				if self.newtesttargets:
+					# newtargets need to be reset to the results of the new testing
+					newtargets = self.newtesttargets
+					self.newtesttargets = False
 				self.setStatus('processing')
 				if self.abort:
 					self.markTargetsDone(alltargets)
 					self.abort = False
 					return targetlistdata
-				newtargets = self.onTest()
-				newtargets = self.appendOtherTargets(alltargets,newtargets)
+				newtargets = self.removeDeletedTargetsOnImage(newtargets)
 			self.newtargets = newtargets
 			self.targetlistdata = targetlistdata
+			self.displayTargets(newtargets,targetlistdata)
 			newtargetlistdata = self.submitTargets()
 			return newtargetlistdata
 
@@ -147,15 +153,12 @@ class TargetFilter(node.Node, targethandler.TargetWaitHandler):
 				newtarget = leginondata.AcquisitionImageTargetData(initializer=target)
 				newtarget['delta row'] = target['delta row']
 				newtarget['delta column'] = target['delta column']
-				newtargets.append(newtarget)
+				if newtarget not in newtargets:
+					newtargets.append(newtarget)
 		return newtargets
 		
 	def displayTargets(self,targets,oldtargetlistdata):
-		done = []
-		acq = []
-		foc = []
-		preview = []
-		original = []
+		targets_by_type = dict([(displaytype,[]) for displaytype in self.displaytypes])
 		if oldtargetlistdata['image'] is not None:
 			halfrows = oldtargetlistdata['image']['camera']['dimension']['y'] / 2
 			halfcols = oldtargetlistdata['image']['camera']['dimension']['x'] / 2
@@ -174,16 +177,13 @@ class TargetFilter(node.Node, targethandler.TargetWaitHandler):
 			y = drow + halfrows
 			disptarget = x,y
 			if target['status'] in ('done', 'aborted'):
-				done.append(disptarget)
-			elif target['type'] == 'acquisition':
-				acq.append(disptarget)
-			elif target['type'] == 'preview':
-				preview.append(disptarget)
-			elif target['type'] == 'focus':
-				foc.append(disptarget)
-		self.setTargets(acq, 'acquisition', block=True)
-		self.setTargets(foc, 'focus', block=True)
-		self.setTargets(preview, 'preview', block=True)
+				continue
+			elif target['type'] in self.displaytypes:
+				targets_by_type[target['type']].append(disptarget)
+		for targettype in self.displaytypes:
+			self.setTargets(targets_by_type[targettype], targettype, block=True)
+
+		original = []
 		for oldtarget in self.goodoldtargets:
 			drow = oldtarget['delta row']
 			dcol = oldtarget['delta column']
@@ -215,5 +215,46 @@ class TargetFilter(node.Node, targethandler.TargetWaitHandler):
 		self.logger.info('Filter input: %d' % (len(goodoldtargets),))
 		newtargets = self.filterTargets(goodoldtargets)
 		self.logger.info('Filter output: %d' % (len(newtargets),))
+		# append other targets here so that they don't get lost on the display
+		newtargets = self.appendOtherTargets(self.alltargets, newtargets)
 		self.displayTargets(newtargets,{'image':None})
+		self.newtesttargets = newtargets
+		return newtargets
+
+	def distance(self,position1,position2):
+		return abs(math.hypot(position1[0]-position2[0],position1[1]-position2[1]))
+
+	def removeDeletedTargetsOnImage(self,oldtargets):
+		'''
+			This removes targets that user removed by right-click on the image panel.
+			It will ignore all new targets added by the user.  By modifying the old targets,
+			this function retains the parentage of the targets from filterTarget function.
+		'''
+		if len(oldtargets) == 0:
+			return
+		newtargets = []
+		parentimage = oldtargets[0]['image']
+		dimension = parentimage['camera']['dimension']
+		imgcenter = {'x':dimension['x']/2, 'y':dimension['y']/2}
+		binning = parentimage['camera']['binning']
+		positions = {}
+		for typename in self.displaytypes:
+			positions[typename] = []
+			imagetargets = self.panel.getTargetPositions(typename)
+			for imgtarget in imagetargets:
+				delta_row = (imgtarget[1] - imgcenter['y'])
+				delta_col = (imgtarget[0] - imgcenter['x'])
+				positions[typename].append((delta_col,delta_row))
+		for target in oldtargets:
+			targetdelta = (target['delta column'],target['delta row']) 
+			for i,position in enumerate(positions[target['type']]):
+				# check distance with larger tolerance on larger image because it might
+				# give truncation error when display on to image panel
+				if self.distance(targetdelta,position) <= dimension['x']/512.0:
+					newtargets.append(target)
+					del positions[target['type']][i]
+					break
+		for typename in self.displaytypes:
+			if len(positions[typename]) > 0:
+				self.logger.warning('%s targets added manually will not be processed' % typename)
 		return newtargets

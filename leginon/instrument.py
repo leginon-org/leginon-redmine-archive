@@ -390,6 +390,7 @@ parametermapping = (
 	('energy filtered', 'EnergyFiltered'),
 	('energy filter', 'EnergyFilter'),
 	('energy filter width', 'EnergyFilterWidth'),
+	('nframes', 'NumberOfFrames'),
 )
 
 ## dicts to map in either direction
