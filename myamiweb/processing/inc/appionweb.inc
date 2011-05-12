@@ -47,13 +47,6 @@ class appionweb{
 		
 		$projectId = getProjectId();
 		$currentproject = $projectdata->getProjectInfo($projectId);
-		var_dump($sessioninfo);
-		var_dump($sessions);
-		var_dump($currentproject);
-
-
-		
-
 	
 	}
 	
