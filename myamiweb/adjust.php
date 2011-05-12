@@ -480,14 +480,14 @@ display:block;
 	<span style="margin-left:10px">min</span>
 	<span style="margin-left:25px">max</span>
 	</p>
-	<p style="margin:0px 0px 0px 25px; padding:0">
-	<input class="b" id="pminrel" size="3" value="<?=$min?>" type="text"  <?=$state?> onclick="selectradio('minmax')" onchange="setpmin()" ><span style="margin-left:8px">&nbsp;</span>
-  <input class="b" id="pmaxrel" size="3" value="<?=$max?>" type="text"  <?=$state?> onclick="selectradio('minmax')" onchange="setpmax()" > 
-	image value</p>
+	
+	<input class="b" id="pminrel" value="<?=$min?>" type="hidden" <?=$state?> onclick="selectradio('minmax')" onchange="setpmin()" >
+	<input class="b" id="pmaxrel" value="<?=$max?>" type="hidden" <?=$state?> onclick="selectradio('minmax')" onchange="setpmax()" > 
+
 	<p style="margin:1px 0px 0px 25px; padding:0">
 	<input class="b" id="pmin" size="3" value="<?=$min?>" type="text"  <?=$state?> onclick="selectradio('minmax')" onchange="setpminrel()" >%
-  <input class="b" id="pmax" size="3" value="<?=$max?>" type="text"  <?=$state?> onclick="selectradio('minmax')" onchange="setpmaxrel()" >% 
-	relative value</p>
+  	<input class="b" id="pmax" size="3" value="<?=$max?>" type="text"  <?=$state?> onclick="selectradio('minmax')" onchange="setpmaxrel()" >% 
+	<br />relative value (0 ~ 100)</p>
 	</div>
 	</div>
 	<li>

@@ -117,6 +117,7 @@ if ($g) {
 		$img = $mosaic->getMosaic();
 	} else {
 		$img = getImage($sessionId, $id, $preset, $params);
+
 	}
 
 	if (!$img) {
@@ -126,7 +127,7 @@ if ($g) {
 		imagedestroy($blkimg);
 		exit();
 	}
-
+	
 	$nimgId = $leginondata->findImage($id, $preset);
 	list($res) = $leginondata->getFilename($nimgId['id']);
 	$filename = $res['filename'];

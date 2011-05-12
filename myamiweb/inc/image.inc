@@ -7,7 +7,6 @@
  *	Tools to display images / mosaic
  *	
  */
-
 require_once "config.php";
 require_once "inc/util.inc";
 require_once "inc/filter.inc";
@@ -15,11 +14,12 @@ require_once "inc/graphutil.inc";
 require_once "inc/scalebar.inc";
 require_once "inc/scalering.inc";
 require_once "inc/cachedb.inc";
-
+require_once "inc/redux.inc";
 
 
 function getImage($sessionId, $imageId, $preset, $params = array()) {
-
+	// autoscale => $scaleMin, $scaleMax, $scaleType
+	//var_dump($params);
 	$p = array (
 		'size'=> '',
 		'minpix' => 0,
@@ -70,8 +70,63 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 	}
 
 	$pic = $path.$filename;
+	
+	// create redux and imageUtil instances to begin.
+	$redux = new redux($pic);
+	$imageUtil = new imageUtil();
+
+	$imginfo = $leginondata->getImageInfo($imageId);
+	$dimx = $imginfo['dimx'];
+	$dimy = $imginfo['dimy'];
+	
+	// find out the proper x, y for display
+	$xyDim = $imageUtil->imageBinning($dimx, $dimy, $binning);
+	$redux->setShape($xyDim);
+
+	if ($p['autoscale']) 
+		list($type,$arg1, $arg2)=explode(";", $p['autoscale']);
+	else $type = '0';
+	
+	switch($type){
+		// when scale type is 'minmax'
+		case ('0'):
+			//$redux->setScaleType("minmax");
+			$redux->setScaleType("pctminmax");
+			$pctminmax = $imageUtil->scaleMinMaxConvert($p['minpix'], $p['maxpix']);
+			$arg1 = $pctminmax['minpix'];
+			$arg2 = $pctminmax['maxpix'];
+			break;
+		// when scale type is 'cdf'
+		case ('c'):
+			$redux->setScaleType("cdf");
+			break;
+		// when scale type is 'stdev'
+		default:
+			$redux->setScaleType("stdev");
+			$arg2=($arg1>=1) ? $arg1 : 3;
+			$arg1= -1 * $arg1;
+			break;
+	}
+	
+	$redux->setScaleMin($arg1);
+	$redux->setScaleMax($arg2);
+	
+	
+	$redux->setPower((bool)$p['fft']);
+
+	$img = $redux->requestImage();
+	header('Content-Type: image/jpeg');
+	echo($img);
+
+	exit;	
+	
+/* There are still php-gd part need to convert */
+		
+	// if we found the file //
 	if (@is_file($pic)) {
+
 		$imginfo = $leginondata->getImageInfo($imageId);
+
 		$dimx = $imginfo['dimx'];
 		// binning is determined in the x direction to preserve perspectives
 		if ($binning=='auto') {
@@ -79,8 +134,14 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 			if ($p['fft'] && $p['fftbin']=='b')
 				$binning = ($dimx > 2048) ? 2 : 1;
 		}
-
+		
+		/*
+		$binning => 1024 x 1024; (shape x,shape y)
+		*/
+		
+		// fft => power
 		if ($p['loadjpg'] && !$p['fft']) {
+
 			$sessioninfo=$leginondata->getSessionInfo($sessionId);
 			$session=$sessioninfo['Name'];
 			$jpgfilename = ereg_replace('mrc$', 'jpg', $filename);
@@ -89,8 +150,10 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 		}
 		if (@is_file($jpgpic)) {
 			$img = imagecreatefromjpeg($jpgpic);
+			// found at the binning = original mrc image size / size of the JPEG image
 			$binning=$dimx/imagesx($img);
 		} else {
+			//This is for autoscale = c or s, when using customize size do not run this if statement.
 			if ($p['autoscale']) {
 				list($type,$arg1, $arg2)=explode(";", $p['autoscale']);
 			
@@ -99,6 +162,7 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 					$mrcimg = mrcread($pic);
 					mrcupdateheader($mrcimg);
 					list($p['minpix'], $p['maxpix'])=mrccdfscale($mrcimg, $arg1, $arg2);
+
 					mrcdestroy($mrcimg);
 				
 				} else {
@@ -115,7 +179,6 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 						$info = mrcgetinfo($mrcimg);
 						mrcdestroy($mrcimg);
 						$minval = $info['amin'];
-						$minval = $info['amin'];
 						$maxval = $info['amax'];
 						$meanval = $info['amean'];
 						$stdev = $info['rms'];
@@ -124,37 +187,44 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 						$nstdev=($arg1>=1) ? $arg1 : 3;
 						$p['minpix'] = (($meanval - $nstdev*$stdev)-$minval)*$densitymax/($maxval-$minval);
 						$p['maxpix'] = (($meanval + $nstdev*$stdev)-$minval)*$densitymax/($maxval-$minval);
+						
 					}
 				}
 			}
-				
+
 			if ($p['loadtime'])
 				$begin=getmicrotime();
-
+			
+			// does not matter for now.
 			if ($p['mrc']) {
 				$imgmrc = mrcread($pic);
 				mrcbinning($imgmrc, $binning);
 				return $imgmrc;
 			}
+			
+			// fft => power
 			if ($p['fft']) {
 				$img = getfft($pic, $p['minpix'], $p['maxpix'], $binning, $p['autoscale'],$p['fftbin']);
 			}
 
-			else if (function_exists($p['filter']))
+			else if (function_exists($p['filter'])){
+			// we need to find out the translation for smooth1 .... to redux lpf.
 				$img = $p['filter']($pic, $p['minpix'], $p['maxpix'], $binning);
-
+			}
 			else
 				$img = getdefault($pic, $p['minpix'], $p['maxpix'], $binning);
 
 		}
 
 		$scalefactor=1;
+		// $size => $shape
 		if ($size) {
 			//scalefactor is the ratio before the display and loaded image
 			$scalefactor = (imagesx($img)) ? $size/imagesx($img) : 1;
 			myimagescale($img, $scalefactor);
 			//$img is now at the display size
 		}
+		// feature redux tool.....
 		if ($p['gradient']) {
 			require "inc/gradient.php";
 			if ($gradient=getGradient($p['gradient'])) {
@@ -279,13 +349,6 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 					$d[$tgn][] = array('x'=>$cx,'y'=>$cy);
 				}
 				foreach($d as $point) {
-					/*
-					$li = count($d[$n])-1;
-					$cx1 = $d[$n][0]['x'];
-					$cy1 = $d[$n][0]['y'];
-					$cx = $d[$n][$li]['x'];
-					$cy = $d[$n][$li]['y'];
-					*/
 					$li = count($point)-1;
 					$cx1 = $point[0]['x'];
 					$cy1 = $point[0]['y'];
@@ -464,10 +527,11 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 
 	} else {
 		//image file not found
-		//$img = blankimage();
+		$img = blankimage();
 		//instead to create a blankimge(). We need to return false.
 		return false;
 	}
+
 	return $img;
 
 }
@@ -549,16 +613,17 @@ function getImageXML($xmlfile, $imageId, $preset, $params = array()) {
 			mrcbinning($imgmrc, $binning);
 			return $imgmrc;
 		}
+
 		if ($p['fft']) {
 			$img = getfft($pic, $p['minpix'], $p['maxpix'], $binning, $p['autoscale'], $p['fftbin']);
 		}
-
-		else if (function_exists($p['filter']))
+		else if (function_exists($p['filter'])){
+			// filter => $lpf
 			$img = $p['filter']($pic, $p['minpix'], $p['maxpix'], $binning);
 
-		else
+		}else{
 			$img = getdefault($pic, $p['minpix'], $p['maxpix'], $binning);
-
+		}
 
 		$scalefactor=1;
 		if ($size) {
@@ -642,6 +707,59 @@ function resample($source, $new_width="", $new_height="") {
 	} else imagepng($source);
 
 	imagedestroy($source);
+}
+
+class imageUtil{
+
+	/* return an array of x, y dimensions by the following rule
+	 * when bin is set to auto:
+	 * if either x or y bigger than 1024, then use 1024
+	 * and resize the base on their ratio
+	 * otherwise use their original image size.
+	 * When binning has been set, find x, y by given binning.
+	 */
+	function imageBinning($dimx, $dimy, $bin){
+		
+		if($bin == 'auto'){
+			$dimMax = max((int)$dimx, (int)$dimy);
+
+			if($dimMax > 1024){
+				$xyRatio = $dimx / $dimy;
+				switch($xyRatio){
+					case ($xyRatio < 1):
+						$dimy = 1024;
+						$dimx = $dimy * $xyRatio;
+						break;
+					case ($xyRatio > 1):
+						$dimx = 1024;
+						$dimy = $dimx / $xyRatio;
+						break;
+					default:
+						$dimx = 1024;
+						$dimy = 1024;
+						break;
+				}
+			}
+		}
+		else{
+			$dimx = $dimx / $bin;
+			$dimy = $dimy / $bin;
+		}
+		return array($dimx, $dimy);
+	}
+	
+	/*
+	 * We need to convert the original min and max ratio
+	 * to percentage. Original passed from web is between
+	 * 0 to 255, so need to convert to between 
+	 * 0 to 100
+	 * return: an array of the percentage of scaleMin and scaleMax
+	 */
+	function scaleMinMaxConvert($min, $max){
+		$min = (255/100) * $min;
+		$max = (255/100) * $max;
+		return array('minpix'=>$min, 'maxpix'=>$max);
+	}
 }
 
 class Mosaic {

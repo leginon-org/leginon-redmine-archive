@@ -180,7 +180,7 @@ class redux{
 	}
 	
 	/*
-	 * choices ("minmax", "stdev", "cdf")
+	 * choices ("minmax", "pctminmax, "stdev", "cdf")
 	 */
 	function setScaleType($scaleType){ 
 		
@@ -189,11 +189,12 @@ class redux{
 		
 		switch($scaleType){
 			case "minmax":
+			case "pctminmax":
 			case "stdev":
 			case "cdf":
 				break;
 			default:
-				$validator->setErrorMessage("scaleType", "Image scale type can only be \"minmax\", \"stdev\", or \"cdf\".");
+				$validator->setErrorMessage("scaleType", "Image scale type can only be \"minmax\", \"pctminmax\", \"stdev\", or \"cdf\".");
 		}
 		
 		
@@ -228,7 +229,7 @@ class redux{
 	}
 	
 	function constructRequestString(){
-		/* Comment out some functions because Redux server has not fully test yet */
+		/* Comment out some functions because Redux server has not fully tested yet */
 		
 		$str = 'filename=' . $this->getFilename();
 		//$str .= empty($this->padShape) ? '' : '&padshape=' . $this->getPadShape();
