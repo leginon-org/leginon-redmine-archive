@@ -1,10 +1,5 @@
 <?php
 /*
- * Date: 3/10/2011
- * Author: Eric Hou
- * 
- * Test redux url: http://bnc16/redux.php
- * 
  * example: filename=/ami/exdata/leginon/10mar30z/rawdata/Data0308.mrc
  * 					&padshape=4096x4096&power=1&maskradius=50&shape=512x512
  * 					&scaletype=cdf&scalemin=0.8&scalemax=0.98&oformat=JPEG
