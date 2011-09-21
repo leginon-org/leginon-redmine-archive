@@ -38,6 +38,27 @@ echo "<table border='1' class='tableborder' width='640'>\n";
 
 
 /*
+** Xmipp Clustering 2D Reference Free Alignment
+*/
+
+echo "<tr><td width='100' align='center'>\n";
+echo "  <img src='img/xmipp_logo.png' width='64'>\n";
+echo "</td><td>\n";
+echo "  <h3><a href='runCL2DAlign.php?expId=$expId'>Xmipp Clustering 2D Alignment</a></h3>\n";
+echo " <p> this method builds a hierarchical classification of particles"
+	." It uses the "
+	."<a href='http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/ClassAverages'>Xmipp cl2d</a>"
+	."&nbsp;<img src='img/external.png'>"
+	." program to perform alignments. "
+	."It is a relatively fast method that aligns and classify the images at the same time. "
+	."The method starts by estimating a few classes that are further subdivided till the desired number of classes is reached. "
+	."Every time an image is compared to the class averages it is aligned before-hand. <b> NOTE: in Xmipp 2.4 the alignment "
+	."parameters are not saved in the database, and therefore this method cannot be used for RCT / OTR reconstructions.</b>"
+	."</p>\n";
+//echo "  <img src='img/align-smr.png' width='250'><br/>\n";
+echo "</td></tr>\n";
+
+/*
 ** Xmipp Maximum Likelihood Reference Free Alignment
 */
 
@@ -165,12 +186,13 @@ if (!HIDE_FEATURE)
 	echo "<tr><td width='100' align='center'>\n";
 	echo "  <img src='img/canimg.png' width='64'>\n";
 	echo "</td><td>\n";
-	echo "  <h3><a href='runTopolAlign.php?expId=$expId'>CAN Reference-free alignment</a></h3>\n";
-	echo "<p>Fast & easy 2D ref-free alignment by iterative classification using "
-		."a topology-representing network, followed by multi-reference alignment. "
-		."The classification is performed by Vince Ramey's implementation of "
-		."<a target='blank' href='http://www.ncbi.nlm.nih.gov/pubmed/14572474'>"
-		."Ogura et al. JSB (2003)</a>"
+	echo "  <h3><a href='runTopolAlign.php?expId=$expId'>Iterative MSA/MRA</a></h3>\n";
+	echo "<p>Fast & easy 2D ref-free alignment by iterative MSA/MRA.  Classification "
+		." can be performed using a topology-representing network or IMAGIC MSA."
+		." Multi-reference alignment can be performed using IMAGIC or EMAN. </a>" 
+#		."The classification is performed by Vince Ramey's implementation of "
+#		."<a target='blank' href='http://www.ncbi.nlm.nih.gov/pubmed/14572474'>"
+#		."Ogura et al. JSB (2003)</a>"
 		."</p>\n";
 	echo "</td></tr>\n";
 }
@@ -179,7 +201,7 @@ if (!HIDE_FEATURE)
 if (!HIDE_FEATURE)
 {
 	/*
-	** Topology representing network alignment
+	** EMAN reference-free alignment
 	*/
 	echo "<tr><td width='100' align='center'>\n";
 	echo "  <img src='img/eman_logo.png' width='64'>\n";

@@ -27,6 +27,7 @@ if ($_POST['process']) {
 else {
 	createAppionScriptForm();
 }
+
 function createAppionScriptForm($extra=false, $title=FORM_TITLE, $heading=FORM_HEADING) {
 	$particle = new particledata();
 	// check if coming directly from a session
@@ -62,12 +63,20 @@ function createAppionScriptForm($extra=false, $title=FORM_TITLE, $heading=FORM_H
 	$outdir = ($_POST['outdir']) ? $_POST['outdir']: $outdir;
 	$description = ($_POST['description']) ? $_POST['description']: $description;
 	$wait = ($_POST['wait']=="on") ? "CHECKED" : "";
-	$protomocheck = ($_POST['alignmethod'] == 'protomo' || !($_POST['alignmethod'])) ? "CHECKED" : "";
+	$protomocheck = ($_POST['alignmethod'] == 'protomo' ) ? "CHECKED" : "";
 	$imodcheck = ($_POST['alignmethod'] == 'imod-shift') ? "CHECKED" : "";
+	$raptorcheck = ($_POST['alignmethod'] == 'raptor'|| !($_POST['alignmethod'])) ? "CHECKED" : "";
 	$sample = ($_POST['sample']) ? $_POST['sample'] : 4;
 	$region = ($_POST['region']) ? $_POST['region'] : 50;
 	$extrabin = ($_POST['extrabin']) ? $_POST['extrabin'] : '1';
 	$thickness = ($_POST['thickness']) ? $_POST['thickness'] : '200';
+	$timeout = ($_POST['timeout']) ? $_POST['timeout'] : '180';
+	$imagelimit = ($_POST['imagelimit']) ? $_POST['imagelimit'] : '50';
+	//raptor parameters
+	$markersize = ($_POST['markersize']) ? $_POST['markersize'] : 10;
+	$markernumber = ($_POST['markernumber']) ? $_POST['markernumber'] : 0;
+	if ($raptorcheck) 
+	  $extrabin = ($_POST['extrabin']) ? $_POST['extrabin'] : '2';
 
 	//Build input table
 	echo"
@@ -86,7 +95,13 @@ function createAppionScriptForm($extra=false, $title=FORM_TITLE, $heading=FORM_H
 	echo "<textarea name='description' rows='2' cols='50'>$description</textarea>\n";
 	echo "<br>\n";
 	echo "<input type='checkbox' name='wait' $wait>\n";
-	echo docpop('nowait','Wait for more tilt series after finishing');
+	echo docpop('nowait','Wait for more tilt series after finishing.');
+	echo docpop('timeout','Timeout');
+	echo " <input type='text' name='timeout' size='3' value='$timeout'>\n";
+	echo " min";
+	echo "<br /><br />\n";
+	echo docpop('imagelimit','<b>Minimum number of images in tilt series for processing:</b>');
+	echo " <input type='text' name='imagelimit' size='4' value='$imagelimit'>\n";
 	echo "<br />\n";
 	echo closeRoundBorder();
 	//Alignment Parameters
@@ -96,7 +111,9 @@ function createAppionScriptForm($extra=false, $title=FORM_TITLE, $heading=FORM_H
 	echo "Protomo refinement\n";
 	echo "&nbsp;<input type='radio' onClick=submit() name='alignmethod' value='imod-shift' $imodcheck>\n";
 	echo "Imod shift-only alignment\n";
- if ($protomocheck) {
+	echo "&nbsp;<input type='radio' onClick=submit() name='alignmethod' value='raptor' $raptorcheck>\n";
+	echo "Raptor alignment\n";
+	if ($protomocheck) {
 		echo "<p>
       <input type='text' name='sample' size='5' value='$sample'>\n";
 		echo docpop('protomosample','Alignment Sampling');
@@ -106,6 +123,19 @@ function createAppionScriptForm($extra=false, $title=FORM_TITLE, $heading=FORM_H
 		echo docpop('protomoregion','Protomo Alignment Region');
 		echo "<font>(% of image length (<100))</font>
 		<p>";
+	}
+	if ($raptorcheck) {
+		echo "<P>";
+		echo " <input type='text' name='markersize' size='5' value='$markersize'>\n";
+		echo docpop('markersize','Marker Size (nm)');
+		echo "<P>";
+		echo " <input type='text' name='markernumber' size='5' value='$markernumber'>\n";
+		echo docpop('tomomarkersize','Number of Markers to be used');
+		echo "<font>(0 means automatically determined)</font>";
+		//echo "<P>";
+		//echo " <input type='text' name='reconbin' size='5' value='$reconbin'>\n";
+		//echo docpop('extrabin','Reconstruction Binning');
+		echo "<P>";
 	}
 	echo"
 		</TD>
@@ -119,12 +149,12 @@ function createAppionScriptForm($extra=false, $title=FORM_TITLE, $heading=FORM_H
 			<P>
 			<input type='text' name='extrabin' size='5' value='$extrabin'>\n";
 	echo docpop('extrabin','Binning');
-	echo "<font>(additional binning in tomogram)</font>
-			<p>
-			<input type='text' name='thickness' size='8' value='$thickness'>\n";
+	echo "<font>(additional binning in tomogram)</font>";
+	echo "<p>
+		<input type='text' name='thickness' size='8' value='$thickness'>\n";
 	echo docpop('tomothickness','Tomogram Thickness');
-	echo "<font>(pixels in tilt images)</font>
-			<p><br />";
+	echo "<font>(pixels in tilt images)</font>";
+	echo"<p><br />";
 	echo"
 		</TD>
   </TR>
@@ -158,10 +188,20 @@ function runAppionScript() {
 	$runname=$_POST['runname'];
 	$wait=$_POST['wait'];
 	$alignmethod = $_POST['alignmethod'];
-	$alignsample=$_POST['sample'];
-	$alignregion=$_POST['region'];
+	if ($alignmethod == 'protomo') {
+		$alignsample=$_POST['sample'];
+		$alignregion=$_POST['region'];
+	} else {
+		$alignsample = 1;
+		$alignregion = 100;
+	}
 	$reconbin=$_POST['extrabin'];
 	$thickness=$_POST['thickness'];
+	$timeout=$_POST['timeout'];
+	$imagelimit=$_POST['imagelimit'];
+	//for Raptor
+	$markersize=$_POST['markersize'];
+	$markernumber=$_POST['markernumber'];
 
 	/* *******************
 	PART 2: Check for conflicts, if there is an error display the form again
@@ -183,14 +223,18 @@ function runAppionScript() {
 	$command.="--runname=$runname ";
 	$command.="--rundir=".$outdir.'/'.$runname." ";
 	$command.="--alignmethod=$alignmethod ";
-	if ($alignmethod != 'imod-shift') {
-		$command.="--alignsample=$alignsample ";
-		$command.="--alignregion=$alignregion ";
-	}
+	$command.="--alignsample=$alignsample ";
+	$command.="--alignregion=$alignregion ";
 	$command.="--reconbin=$reconbin ";
 	$command.="--reconthickness=$thickness ";
 	$command.="--description=\"$description\" ";
+	$command.="--imagelimit=$imagelimit ";
+	if ($alignmethod == 'raptor') {
+		$command .="--markersize=".(int)$markersize." ";
+		$command .="--markernumber=".(int)$markernumber." ";
+	} 
 	if (!$wait) $command.=" --no-wait ";
+	if ($wait) $command.="--timeout=$timeout ";
 	$command.="--commit ";
 
 	/* *******************

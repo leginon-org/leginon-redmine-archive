@@ -150,6 +150,52 @@ class leginondata {
 		return $this->mysql->getSQLResult($q);
 	}
 
+	function checkSessionNameExistance($like,$projectId=false) {
+		// This is a simpler function than getSessions that will count sessions without image saved as existing.
+		// A session with only gain reference images do not have AcquisitionImageData.
+		// Mainly used to prevent overwriting existing sessions during image upload
+		if ($projectId) {
+			$joinproject = "left join ".DB_PROJECT.".`projectexperiments` p "
+				."on s.`DEF_id` = p.`REF|leginondata|SessionData|session` ";
+			$whereproject = "and p.`REF|projects|project` = ".$projectId." ";
+		} else {
+			$joinproject = " ";
+			$whereproject = " ";
+		}
+		$q = "select s.* from SessionData s "
+			.$joinproject
+			."where s.name like '".$like."' "
+			.$whereproject;
+		$r = $this->mysql->getSQLResult($q);
+		return $r;
+	}
+
+	function checkSessionReservation($name) {
+		$has_SessionReservationData = $this->mysql->isTable('SessionReservationData'); 
+		if ($has_SessionReservationData) {
+			$q = "select * from SessionReservationData "
+				."where name like '".$name."' order by `DEF_timestamp` DESC limit 1";
+			$r = $this->mysql->getSQLResult($q);
+			if (is_array($r) && count($r)) {
+				return ($r[0]['reserved']) ? true:false;
+			} else {
+				return false;
+			}
+		}
+	}
+
+	function makeSessionReservation($name) {
+		$has_SessionReservationData = $this->mysql->isTable('SessionReservationData'); 
+		if ($has_SessionReservationData) {
+			$q = "insert into SessionReservationData (name, reserved)
+				values('$name', 1)";
+			$result = $this->mysql->SQLQuery($q, true);
+		}
+		if(!$result)
+			return false;
+		return true;
+	}
+		
 	function getSessionInfo($name) {
 
 		if (!is_array($name)) {
@@ -2946,6 +2992,7 @@ class leginondata {
 	}
 
 	function getTargetListIds($sessionId,$qtype,$limit=100) {
+		$whereqtype = "";
 		if ($qtype) 
 			$whereqtype = ""
 			."AND "
@@ -3211,7 +3258,26 @@ class leginondata {
 			return false;
 		}
 	}
+
+	function getCsValueFromSession($sessionId) {
+		// return Cs value in mm
+		$sql = 'SELECT i.cs '
+			.'from '
+			.'`InstrumentData` i '
+			.'left join `ScopeEMData` s '
+			.'on s.`REF|InstrumentData|tem` = i.`DEF_id` '
+			.'where s.`REF|SessionData|session` = '.$sessionId.' '
+			.'group by i.cs ';
+		$results = $this->mysql->getSQLResult($sql);
+		if (is_array($results) && count($results) == 1) {
+			return $results[0]['cs']*1e3;
+		} else {
+			// There should only be one Cs value per session
+			return false;
+		}
+	}
 }
+
 function rsum($v, $w) {
 	$v += $w;
 	return $v;

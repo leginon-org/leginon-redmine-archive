@@ -26,6 +26,9 @@ class UploadImages(appionScript.AppionScript):
 		self.parser.add_option("--kv", dest="kv", type="int", metavar="INT",
 			help="high tension (in kilovolts), e.g., --kv=120")
 
+		self.parser.add_option("--cs", dest="cs", type="float", metavar="#.#",
+			default=2.0, help="spherical aberration constant (in mm), e.g., --cs=2.0")
+
 		self.parser.add_option("--image-dir", dest="imagedir",
 			help="Directory that contains MRC files to upload", metavar="DIR")
 
@@ -211,18 +214,13 @@ class UploadImages(appionScript.AppionScript):
 		instrumentq = leginon.leginondata.InstrumentData()
 		instrumentq['hostname'] = "appion"
 		instrumentq['name'] = "AppionTEM"
-		instrumentdatas = instrumentq.query(results=1)
-		if not instrumentdatas:
-			apDisplay.printError("Could not find the default Appion TEM in Leginon")
-		self.temdata = instrumentdatas[0]
+		instrumentq['cs'] = self.params['cs'] * 1e-3
+		self.temdata = instrumentq
 		
 		instrumentq = leginon.leginondata.InstrumentData()
 		instrumentq['hostname'] = "appion"
 		instrumentq['name'] = "AppionCamera"
-		instrumentdatas = instrumentq.query(results=1)
-		if not instrumentdatas:
-			apDisplay.printError("Could not find the default Appion Camera in Leginon")
-		self.camdata = instrumentdatas[0]
+		self.camdata = instrumentq
 		return
 
 	#=====================

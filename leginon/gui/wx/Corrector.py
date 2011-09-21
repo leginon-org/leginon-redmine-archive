@@ -125,6 +125,7 @@ class Panel(leginon.gui.wx.Node.Panel, leginon.gui.wx.Instrument.SelectionMixin)
 		choices = [
 			'Dark',
 			'Bright',
+			'Bright-Dark',
 			'Norm',
 			'Raw',
 			'Corrected'
@@ -150,7 +151,6 @@ class Panel(leginon.gui.wx.Node.Panel, leginon.gui.wx.Instrument.SelectionMixin)
 		self.toolbar.AddTool(leginon.gui.wx.ToolBar.ID_PLUS,'plus',shortHelpString='Add Region To Bad Pixel List')
 		self.toolbar.AddTool(leginon.gui.wx.ToolBar.ID_STAGE_LOCATIONS,'stagelocations',shortHelpString='Add Extreme Points To Bad Pixel List')
 		self.toolbar.AddTool(leginon.gui.wx.ToolBar.ID_REFRESH,'display',shortHelpString='Display Normalization Image')
-		self.toolbar.Realize()
 
 		# settings
 		self.szplan = self._getStaticBoxSizer('Plan', (0, 0), (1, 1), wx.ALIGN_TOP)
@@ -181,10 +181,10 @@ class Panel(leginon.gui.wx.Node.Panel, leginon.gui.wx.Instrument.SelectionMixin)
 
 		# image
 		self.imagepanel = leginon.gui.wx.TargetPanel.TargetImagePanel(self, -1)
-		self.imagepanel.addTargetTool('Bad_Pixels', wx.Color(255, 0, 0), target=True, shape='.')
+		self.imagepanel.addTargetTool('Bad_Pixels', wx.Colour(255, 0, 0), target=True, shape='.')
 		self.imagepanel.selectiontool.setDisplayed('Bad_Pixels', True)
 		self.imagepanel.setTargets('Bad_Pixels', [])
-		self.imagepanel.addTargetTool('Bad_Region', wx.Color(0, 255, 255), target=True, shape='polygon', display=True)
+		self.imagepanel.addTargetTool('Bad_Region', wx.Colour(0, 255, 255), target=True, shape='polygon', display=True)
 		self.imagepanel.selectiontool.setDisplayed('Bad_Region', True)
 		self.imagepanel.setTargets('Bad_Region', [])
 
@@ -269,6 +269,8 @@ class Panel(leginon.gui.wx.Node.Panel, leginon.gui.wx.Instrument.SelectionMixin)
 			reftype = 'bright'
 		elif acqtype == 'Norm':
 			reftype = 'norm'
+		elif acqtype == 'Bright-Dark':
+			reftype = 'dark-subtracted'
 		else:
 			return
 		chanstr = self.cchannel.GetStringSelection()
@@ -440,7 +442,7 @@ class EditPlanDialog(wx.Dialog):
 		
 		strows = wx.StaticText(self, -1, 'Bad rows:')
 		stcolumns = wx.StaticText(self, -1, 'Bad columns:')
-		stpixels = wx.StaticText(self, -1, 'Bad Pixels:')
+		stpixels = wx.StaticText(self, -1, 'Bad Pixel (x,y):')
 
 		pixels = ', '.join(map(str,self.plan['pixels']))
 		rows = ', '.join(map(str,self.plan['rows']))

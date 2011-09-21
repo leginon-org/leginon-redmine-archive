@@ -4,6 +4,9 @@ require "inc/util.inc";
 require "inc/leginon.inc";
 require "inc/project.inc";
 require "inc/processing.inc";
+require_once "inc/refineJobsSingleModel.inc";
+require_once "inc/refineJobsMultiModel.inc";
+
 
 if ($_POST['checkjobs']) {
 	checkJobs($showjobs=True);
@@ -11,33 +14,10 @@ if ($_POST['checkjobs']) {
 	checkJobs();
 }
 
-function checkJobs($showjobs=True, $showall=False, $extra=False) {
+function checkJobs($showjobs=False, $showall=False, $extra=False) {
 	$expId= $_GET['expId'];
 	$particle = new particledata();
 	$projectId=getProjectId();
-
-	// Create DMF commands, this should move the default_cluster.php
-	$javafunc="  <script language='JavaScript'>\n";
-	$javafunc.="  function displayDMF(dmfdir,outdir,has_coran) {\n";
-	$javafunc.="  newwindow=window.open('','name','height=150, width=900')\n";
-	$javafunc.="  newwindow.document.write('<html><body>')\n";
-	$javafunc.="    newwindow.document.write('dmf get '+dmfdir+'/model.tar.gz '+outdir+'/.<br />')\n";
-	$javafunc.="    newwindow.document.write('dmf get '+dmfdir+'/results.tar.gz '+outdir+'/.<br />')\n";
-	$javafunc.="    newwindow.document.write('dmf get '+dmfdir+'/*.job '+outdir+'/.<br />')\n";
-	$javafunc.="    newwindow.document.write('tar -xvf '+outdir+'/model.tar.gz -C '+outdir+'<br />')\n";
-	$javafunc.="    newwindow.document.write('tar -xvf '+outdir+'/results.tar.gz -C '+outdir+'<br />')\n";
-	$javafunc.="  if (has_coran > 0) { \n";
-	$javafunc.="    newwindow.document.write('dmf get '+dmfdir+'/coran.tar.gz '+outdir+'/.<br />')\n";
-	$javafunc.="    newwindow.document.write('tar -xvf '+outdir+'/coran.tar.gz -C '+outdir+'<br />')\n";
-	$javafunc.="    newwindow.document.write('/bin/rm -vf '+outdir+'/coran.tar*<br />')\n";
-	$javafunc.="  } \n";
-	$javafunc.="    newwindow.document.write('/bin/rm -vf '+outdir+'/model.tar*<br />')\n";
-	$javafunc.="    newwindow.document.write('/bin/rm -vf '+outdir+'/results.tar*<br />')\n";
-	$javafunc.="    newwindow.document.write('echo done<br />')\n";
-	$javafunc.="    newwindow.document.write('<p>&nbsp;<br /></body></html>')\n";
-	$javafunc.="    newwindow.document.close()\n";
-	$javafunc.="  }\n";
-	$javafunc.="  </script>\n";
 
 	processing_header("Cluster Jobs", "Cluster Job Status", $javafunc);
 	// write out errors, if any came up:
@@ -53,42 +33,33 @@ function checkJobs($showjobs=True, $showall=False, $extra=False) {
 		echo "</form><br/>\n";
 	}
 
-	// change next line for different types of jobs
-	$xmipprefinejobs = $particle->getJobIdsFromSession($expId, 'xmipprecon');
-	$frealignjobs = $particle->getJobIdsFromSession($expId, 'runfrealign');
-	$emanjobs = $particle->getJobIdsFromSession($expId, 'emanrecon');
-	$jobs = array_merge($frealignjobs, $emanjobs, $xmipprefinejobs);
+	$type = $_GET['type'];
+	if ( $type == "multi" ) 
+	{
+		$refineJobs = new RefineJobsMultiModel($expId);
+	} else {
+		$refineJobs = new RefineJobsSingleModel($expId);
+	}
+	$jobs = $refineJobs->getUnfinishedRefineJobs($showall);
 
 	// if clicked button, list jobs in queue
 	if ($showjobs && $_SESSION['loggedin'] == true) {
 		showClusterJobTables($jobs);
 	}
-
+	
 	// loop over jobs and show info
 	foreach ($jobs as $job) {
 		$jobid = $job['DEF_id'];
-
-		// check if job has been uploaded
-		if ($particle->getReconIdFromAppionJobId($jobid)) {
-			//echo "recon $jobid";
-			continue;
-		}
-
 		$jobinfo = $particle->getJobInfoFromId($jobid);
-		// check if job has been aborted
-		if ($showall != True && $jobinfo['status'] == 'A') {
-			//echo "abort $jobid";
-			continue;
-		}
-
+		
 		// check if job has an associated jobfile
-		$jobfile = $jobinfo['appath'].'/'.$jobinfo['name'];
+		$jobfile = $job['appath'].'/'.$job['name'];
 		if (!file_exists($jobfile)) {
 			echo divisionHeader($jobinfo);
 			echo "<i>missing job file: $jobfile</i><br/><br/>\n";
 			continue;
 		}
-
+		
 		// display relevant info
 
 		$display_keys['job name'] = $jobinfo['name'];
@@ -133,6 +104,7 @@ function checkJobs($showjobs=True, $showall=False, $extra=False) {
 			}
 		}
 		echo "<br/><br/>\n\n";
+	
 	}
 	processing_footer();
 	exit;
@@ -219,6 +191,8 @@ function showStatus($jobinfo) {
 		$status='Running';
 	} elseif ($jobinfo['status']=='A') {
 		$status='Aborted';
+	} elseif ($jobinfo['status']=='E') {
+		$status='Error';
 	} elseif ($jobinfo['status']=='D') {
 		$has_coran = checkCoranTarGz($jobinfo);
 		$dlbuttons = "<input type='BUTTON' onclick=\"displayDMF('"
@@ -228,10 +202,17 @@ function showStatus($jobinfo) {
 				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload EMAN results'>&nbsp;\n";
 		} elseif ($jobinfo['jobtype'] == 'runfrealign') {
 			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
-				."uploadFrealign.php?expId=$expId&jobId=$jobid')\" value='Upload FREALIGN results'>&nbsp;\n";
+				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload FREALIGN results'>&nbsp;\n";
+//			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
+//				."uploadFrealign.php?expId=$expId&jobId=$jobid')\" value='Upload FREALIGN results'>&nbsp;\n";
 		} elseif ($jobinfo['jobtype'] == 'xmipprecon') {
+//			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
+//				."uploadXmippRecon.php?expId=$expId&jobId=$jobid')\" value='Upload Xmipp results'>&nbsp;\n";
 			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
-				."uploadXmippRecon.php?expId=$expId&jobId=$jobid')\" value='Upload Xmipp results'>&nbsp;\n";
+				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload Xmipp results'>&nbsp;\n";
+		} elseif ($jobinfo['jobtype'] == 'xmippml3d') {
+			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
+				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload Xmippml3d results'>&nbsp;\n";
 		}
 		if ($user == $job['user'] || is_null($job['user'])) {
 			$dlbuttons .= "&nbsp;<input type='BUTTON' onclick=\"parent.location="
@@ -489,6 +470,9 @@ function showEMANJobInfo($jobinfo) {
 							$cls = exec_over_ssh($jobinfo['cluster'],$user,$pass,$cmd, True);
 							$cls = trim($cls);
 							// find number of times cycled
+							// At certain point of the refinement cycle cls returns zero. 
+							// This next line  avoids division error
+							if (!is_numeric($cls) or $cls==0) $cls=1;
 							$numt = floor($r/$cls);
 							$m = $r%$cls;
 							$tran = "transforming slice: $m/$cls";

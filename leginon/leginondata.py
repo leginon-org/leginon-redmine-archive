@@ -28,6 +28,8 @@ class UserData(Data):
 			('username', str),
 			('firstname', str),
 			('lastname', str),
+			('password', str),
+			('email', str),
 			('group', GroupData),
 			('noleginon', bool),
 		)
@@ -581,6 +583,7 @@ class CameraImageData(ImageData):
 			('correction channel', int),
 			('channel', int),
 			('dark', DarkImageData),
+			('bright', BrightImageData),
 			('norm', NormImageData),
 			('use frames', tuple),
 		)
@@ -1245,6 +1248,7 @@ class MatlabTargetFinderSettingsData(TargetFinderSettingsData):
 		return TargetFinderSettingsData.typemap() + (
 			('test image', str),
 			('module path', str),
+			('parametergui path', str),
 		)
 	typemap = classmethod(typemap)
 
@@ -1386,6 +1390,21 @@ class RasterFinderSettingsData(TargetFinderSettingsData):
 		)
 	typemap = classmethod(typemap)
 
+# New node from William Nicholson:
+class RasterFCFinderSettingsData(RasterFinderSettingsData):
+	def typemap(cls):
+		return RasterFinderSettingsData.typemap() + (
+		('focus center x', float),
+		('focus center y', float),
+		('focus radius', float),
+		('focus box size', float),
+		('focus min mean', float),
+		('focus max mean', float),
+		('focus min std', float),
+		('focus max std', float),
+		)
+	typemap = classmethod(typemap)
+
 class PolyFinderSettingsData(TargetFinderSettingsData):
 	def typemap(cls):
 		return TargetFinderSettingsData.typemap() + (
@@ -1501,6 +1520,7 @@ class AcquisitionSettingsData(TargetWatcherSettingsData):
 	def typemap(cls):
 		return TargetWatcherSettingsData.typemap() + (
 			('pause time', float),
+			('pause between time', float),
 			('move type', str),
 			('preset order', list),
 			('correct image', bool),

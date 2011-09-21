@@ -10,6 +10,7 @@ import socket
 import string
 import inspect
 import subprocess
+import cPickle
 
 ## appion
 from appionlib import apDisplay
@@ -147,8 +148,9 @@ def getCPUVendor():
 
 #=====================
 def getGPUVendor():
-	cmd = "/sbin/lspci"
-	proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+	pciexe = getExecPath("lspci")	
+	if not pciexe: pciexe = getExecPath("/sbin/lspci")
+	proc = subprocess.Popen(pciexe, shell=True, stdout=subprocess.PIPE)
 	proc.wait()
 	lines = proc.stdout.readlines()
 	vendor = None
@@ -227,6 +229,23 @@ def getLogHeader():
 	host = getHostname()
 	logheader = "[ "+user+"@"+host+": "+time.asctime()+" ]\n"
 	return logheader
+
+#=====================
+def dumpParameters(parameters, paramfile):
+	''' uses cPickle to dump parameters (as a dictionary) to file '''
+	pf = open(paramfile, "w")
+	cPickle.dump(parameters, pf)
+	pf.close()
+	return 
+
+#=====================
+def readRunParameters(paramfile):
+	if not os.path.isfile(paramfile):
+		apDisplay.printError("Could not find run parameters file: "+paramfile)
+	pf = open(paramfile, "r")
+	runparams = cPickle.load(pf)
+	pf.close()
+	return runparams
 
 #=====================
 def writeFunctionLog(cmdlist, logfile=None, msg=True):
@@ -331,9 +350,9 @@ def createDirectory(path, mode=0775, warning=True):
 	return True
 
 #=====================
-def convertParserToParams(parser):
+def convertParserToParams(parser,optargs=sys.argv[1:]):
 	parser.disable_interspersed_args()
-	(options, args) = parser.parse_args()
+	(options, args) = parser.parse_args(optargs)
 	if len(args) > 0:
 		apDisplay.printError("Unknown commandline options: "+str(args))
 	if len(sys.argv) < 2:
@@ -344,6 +363,50 @@ def convertParserToParams(parser):
 	for i in parser.option_list:
 		if isinstance(i.dest, str):
 			params[i.dest] = getattr(options, i.dest)
+	return params
+
+#=====================
+def splitMultipleSets(param_str,numiter):
+	param_upper = param_str.upper()
+	fullparam = []
+	set_bits = param_upper.split(':')
+	position = 0
+	total_repeat = 0
+	for set in set_bits:
+		m_index = set.find('X')
+		if m_index == -1:
+			# no multiple
+			fullparam.append(tc(set))
+		else:
+			try:
+				repeat = int(set[:m_index])
+				fullparam.extend(map((lambda x:tc(param_str[position+m_index+1:position+len(set)])),range(repeat)))	
+			except:
+				raise
+				fullparam = map((lambda x: tc(param_str)),range(numiter))
+		position += len(set)+1
+	return fullparam
+
+def convertIterationParams(iterparams,params,numiter):
+	"""
+	Used by 3D refinement to specify iteration parameters
+	in format of xmipp i.e. 3x5:3x4:3:3
+	':','x','X' are used for splitting, not allowed in the values
+	"""
+	for name in iterparams:
+		param_str = str(params[name]).strip()
+		param_upper = param_str.upper()
+		multiple_bits = param_upper.split('X')
+		set_bits = param_upper.split(':')
+		if len(multiple_bits) <= 1 and len(set_bits) <= 1:
+			params[name] = map((lambda x: tc(param_str)),range(numiter))
+		else:
+			params[name] = splitMultipleSets(param_str,numiter)
+		if len(params[name]) < numiter:
+			addons = map((lambda x: params[name][len(params[name])-1]),range(numiter - len(params[name])+1))
+			params[name].extend(addons)
+		elif len(params[name]) > numiter:
+			params[name] = params[name][:numiter]
 	return params
 
 #=====================
@@ -581,6 +644,23 @@ def randomString(length):
 	for i in range(length):
 		mystr += random.choice(chars)
 	return mystr
+
+#================
+def tc(string):
+	"""
+	return in python type from according to string format
+	"""
+	try:
+		out = eval(string)
+	except:
+		string = string.strip()
+		if string.upper() in ('T','TRUE'):
+			out = True
+		elif string.upper() in ('F','FALSE'):
+			out = False
+		else:
+			out = string
+	return out
 
 ####
 # This is a low-level file with NO database connections

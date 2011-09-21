@@ -20,7 +20,7 @@ class DE12(ccdcamera.CCDCamera):
 		#update a few essential camera properties to default values
 		self.setProperty('Correction Mode', 'Uncorrected Raw')
 		self.setProperty('Ignore Number of Frames', 0)
-		self.setProperty('Preexposure Time', 0.043)		
+		self.setProperty('Preexposure Time (seconds)', 0.043)		
 
 	def __del__(self):
 		self.disconnect()
@@ -53,13 +53,14 @@ class DE12(ccdcamera.CCDCamera):
 		return value
 
 	def getExposureTime(self):
-		seconds = self.getProperty('Exposure Time')
+		seconds = self.getProperty('Exposure Time (seconds)')
 		ms = int(seconds * 1000.0)
 		return ms
 
 	def setExposureTime(self, ms):
 		seconds = ms / 1000.0
-		self.setProperty('Exposure Time', seconds)
+		print 'SETTING EXPTIME', time.time(), seconds
+		self.setProperty('Exposure Time (seconds)', seconds)
 
 	def getDictProp(self, name):		
 		x = int(self.server.getProperty(name + ' X'))
@@ -130,7 +131,7 @@ class DE12(ccdcamera.CCDCamera):
 		time.sleep(sleeptime)
 		
 	def getInserted(self):
-		de12value = self.getProperty('Camera Position')
+		de12value = self.getProperty('Camera Position Status')
 		return de12value == 'Extended'
 
 	def getExposureTypes(self):
@@ -164,12 +165,6 @@ class DE12(ccdcamera.CCDCamera):
 			value_string = 'Discard'
 		self.setProperty('Autosave Raw Frames', value_string)
 
-	def setNextRawFramesName(self, value):
-		self.setProperty('Autosave Raw Frames - Next Dataset Name', value)
-
-	def getNextRawFramesName(self):
-		return self.getProperty('Autosave Raw Frames - Next Dataset Name')
-
 	def getPreviousRawFramesName(self):
 		return self.getProperty('Autosave Raw Frames - Previous Dataset Name')
 
@@ -178,8 +173,22 @@ class DE12(ccdcamera.CCDCamera):
 		return int(nframes)
 
 	def getUseFrames(self):
-		nframes = self.getProperty('Number of Frames To Sum')
-		return int(nframes)
+		# Disabled for now, using all frames
+		return range(self.getNumberOfFrames())
+		#nframes = self.getProperty('Number of Frames To Sum')
+		#frames = range(nframes)
+		#return tuple(frames)
 
-	def setUseFrames(self, nframes):
+	def setUseFrames(self, frames):
+		# disabled for now
+		pass
+		total_frames = self.getNumberOfFrames()
+		if frames:
+			nframes = len(frames)
+		else:
+			nframes = total_frames
+		if nframes > total_frames:
+			nframes = total_frames
+		nframes = int(nframes)
+		print 'SETTING SUM', time.time(), nframes
 		self.setProperty('Number of Frames To Sum', nframes)

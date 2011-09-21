@@ -26,7 +26,7 @@ splitdb = True
 data.holdImages(False)
 
 #================
-def getSpecificImagesFromDB(imglist):
+def getSpecificImagesFromDB(imglist, sessiondata=None):
 	print "Querying database for "+str(len(imglist))+" specific images ... "
 	imgtree=[]
 	for imgname in imglist:
@@ -34,7 +34,11 @@ def getSpecificImagesFromDB(imglist):
 			imgname = imgname[:-4]
 		if '/' in imgname:
 			imgname = os.path.basename(imgname)
-		imgquery = leginon.leginondata.AcquisitionImageData(filename=imgname)
+		if sessiondata is not None:
+			### slightly faster query
+			imgquery = leginon.leginondata.AcquisitionImageData(filename=imgname, session=sessiondata)
+		else:
+			imgquery = leginon.leginondata.AcquisitionImageData(filename=imgname)
 		imgres   = imgquery.query(readimages=False, results=1)
 		if len(imgres) >= 1:
 			imgtree.append(imgres[0])
@@ -127,6 +131,14 @@ def getExpIdFromSessionName(sessionname):
 		apDisplay.printError("could not find session, "+sessionname)
 
 #================
+def getSessionDataFromSessionId(sessionid):
+	sessionid = int(sessionid)
+	apDisplay.printMsg("Looking up session, %d" % sessionid)
+	sessionq = leginon.leginondata.SessionData()
+	sessioninfo = sessionq.direct_query(sessionid)
+	return sessioninfo
+
+#================
 def getSessionDataFromSessionName(sessionname):
 	apDisplay.printMsg("Looking up session, "+sessionname)
 	sessionq = leginon.leginondata.SessionData(name=sessionname)
@@ -139,14 +151,21 @@ def getSessionDataFromSessionName(sessionname):
 
 #================
 def getTiltSeriesDataFromTiltNumAndSessionId(tiltseries,sessiondata):
-	apDisplay.printMsg("Looking up session, "+ str(sessiondata.dbid));
-	tiltq = leginon.leginondata.TiltSeriesData()
+	apDisplay.printMsg("Looking up session first, "+ str(sessiondata.dbid));
 	tiltseriesq = leginon.leginondata.TiltSeriesData(session=sessiondata,number=tiltseries)
 	tiltseriesdata = tiltseriesq.query(readimages=False,results=1)
 	if tiltseriesdata:
 		return tiltseriesdata[0]
 	else:
-		apDisplay.printError("could not find tilt series, "+sessionname)
+		apDisplay.printError("could not find tilt series, "+str(tiltseries))
+
+
+#================
+def getPredictionDataForImage(imagedata):
+	q=leginon.leginondata.TomographyPredictionData()
+	q['image']=imagedata
+	predictiondata=q.query()
+	return predictiondata
 
 #================
 def getImagesFromTiltSeries(tiltseriesdata,printMsg=True):

@@ -35,12 +35,12 @@ targettype_colors = {
 	'acquisition': wx.GREEN,
 	'focus': wx.BLUE,
 	'done': wx.RED,
-	'reference': wx.Color(128, 0, 128),
-	'position': wx.Color(218, 165, 32),
-	'preview': wx.Color(255, 128, 255),
-	'meter': wx.Color(255, 255, 0),
-	'original': wx.Color(255, 128, 128),
-	'peak': wx.Color(255, 128, 0),
+	'reference': wx.Colour(128, 0, 128),
+	'position': wx.Colour(218, 165, 32),
+	'preview': wx.Colour(255, 128, 255),
+	'meter': wx.Colour(255, 255, 0),
+	'original': wx.Colour(255, 128, 128),
+	'peak': wx.Colour(255, 128, 0),
 }
 
 ##################################
@@ -262,7 +262,7 @@ class TargetImagePanel(leginon.gui.wx.ImagePanel.ImagePanel):
 	#--------------------
 	def _onLeftClick(self, evt):
 		if self.selectedtype is not None:
-			x, y = self.view2image((evt.m_x, evt.m_y))
+			x, y = self.view2image((evt.X, evt.Y))
 			self.addTarget(self.selectedtype.name, x, y)
 
 	#--------------------
@@ -317,7 +317,7 @@ class TargetImagePanel(leginon.gui.wx.ImagePanel.ImagePanel):
 		leginon.gui.wx.ImagePanel.ImagePanel._onMotion(self, evt, dc)
 #		if self.selectedtype is not None:
 		viewoffset = self.panel.GetViewStart()
-		x, y = self.view2image((evt.m_x, evt.m_y))
+		x, y = self.view2image((evt.X, evt.Y))
 		self.selectedtarget = self.closestTarget(self.selectedtype, x, y)
 #		else:
 #			self.selectedtarget = None

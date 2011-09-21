@@ -204,7 +204,7 @@ function createRctVolumeForm($extra=false, $title='rctVolume.py Launcher', $head
 			//handle multiple runs in stack
 			$stackname = $stackparams['shownstackname'];
 			//print_r($stackparams[0]);
-			echo "<OPTION value='$stackid'";
+			echo "<OPTION value='$stackid|$box'";
 			if ($stackid == $tiltstack) echo " SELECTED";
 			echo">$stackid: $stackname ($box boxsize, $numparts parts) $descript...</OPTION>\n";
 		}
@@ -217,7 +217,7 @@ function createRctVolumeForm($extra=false, $title='rctVolume.py Launcher', $head
 
 	echo "<table border='0' cellspacing='8' cellpading='8'><tr><td>\n";
 
-	//Mask radius
+	//Mask radius & boxsize (for error checking)
 	echo docpop('mask','Mask Radius:<br/>');
 	echo "<INPUT TYPE='text' NAME='maskrad' SIZE='5' VALUE='$maskrad'>";
 	echo "<FONT SIZE='-2'>(in pixels)</FONT>\n";
@@ -294,8 +294,6 @@ function runRctVolume() {
 	$expId=$_GET['expId'];
 	$runname=$_POST['runname'];
 	$outdir=$_POST['outdir'];
-
-	$tiltstack = $_POST['tiltstack'];
 	$maskrad = $_POST['maskrad'];
 	$lowpassvol = $_POST['lowpassvol'];
 	$highpasspart = $_POST['highpasspart'];
@@ -309,6 +307,10 @@ function runRctVolume() {
 	$contour=$_POST['contour'];
 	$mass=$_POST['mass'];
 	$zoom=$_POST['zoom'];
+
+	$stackparams = explode("|",$_POST['tiltstack']);
+	$tiltstack = $stackparams[0];
+	$box = $stackparams[1];
 
 	/* *******************
 	PART 2: Check for conflicts, if there is an error display the form again
@@ -327,6 +329,9 @@ function runRctVolume() {
 
 	if (!$maskrad)
 		createRctVolumeForm("<B>ERROR:</B> Enter a mask radius");
+
+	if ((intval($box)/2-intval($maskrad))<2)
+		createRctVolumeForm("<B>ERROR:</B> Mask radius needs to be at least 2 pixels smaller than 1/2*boxsize; SPIDER error will result otherwise");
 
 	if (!$runname)
 		createRctVolumeForm("<B>ERROR:</B> Enter a unique run name");

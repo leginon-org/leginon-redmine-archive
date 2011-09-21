@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 #
 import os
+import re
 import sys
 import time
+import glob
 import math
+import numpy
+import string
 import subprocess
 #appion
 from appionlib import apDisplay
 from appionlib import apEMAN
+from appionlib import apEulerCalc
 from appionlib import apFile
 from appionlib import apParam
 from appionlib import apImagicFile
@@ -111,7 +116,7 @@ def breakupStackIntoSingleFiles(stackfile, partdir="partfiles", numpart=None, fi
 	"""
 	apDisplay.printColor("Breaking up spider stack into single files, this can take a while", "cyan")
 	apParam.createDirectory(partdir)
-	partdocfile = "partlist.doc"
+	partdocfile = "partlist.sel"
 
 	### setup
 	breaker = breakUpStack()
@@ -236,3 +241,260 @@ def createSubFolders(partdir, numpart, filesperdir):
 		i += filesperdir
 	return dirnum
 
+#======================
+#======================
+def locateXmippProtocol(protocolname):
+	### get Xmipp directory
+	proc = subprocess.Popen('which xmipp_protocols',
+		shell=True,stdout=subprocess.PIPE)
+	stdout_value = proc.communicate()[0]
+	i = stdout_value.find("bin/xmipp_protocols");
+	if (i==-1):
+		apDisplay.printError("Cannot locate Xmipp protocol %s" % (protocolname));
+	XmippDir=stdout_value[0:i]
+
+	### make sure protocolname is given correctly
+	if re.search(".py", protocolname):
+		protocolname = re.sub(".py", "", protocolname)
+	protocolname_new = protocolname+".py"
+	p = os.path.join(XmippDir, "protocols", protocolname_new)
+	if os.path.isfile(p):
+		return p
+	else:
+		apDisplay.printError("Cannot locate Xmipp protocol %s" % p)
+
+#======================
+#======================
+def particularizeProtocol(protocolIn, parameters, protocolOut):
+	'''
+	standard function to modify an Xmipp protocol (e.g. xmipp_protocols_projmatch.py or xmipp_protocols_ml3d.py).
+	Requires 3 inputs: (1) the full path to the protocol name in the Xmipp bin directory, (2) all parameters particular
+	the protocol in a dictionary format, with all keys filled in and matching all variables in the protocolIn file, (3)
+	the full path to the output protocol in the run directory.
+	'''
+	fileIn = open(protocolIn)
+	fileOut = open(protocolOut,'w')
+	endOfHeader=False
+	for line in fileIn:
+		if not line.find("{end-of-header}")==-1:
+			endOfHeader=True
+		if endOfHeader:
+			fileOut.write(line)
+		else:
+			for key in parameters.keys():
+				if not re.match('^'+key,line) is None:
+					line=key+'='+repr(parameters[key])+'\n'
+					break
+			fileOut.write(line)
+	fileIn.close()
+	fileOut.close()
+
+#======================
+#======================	
+def convertXmippEulersToEman(phi, theta, psi):
+	''' 
+	converts Xmipp / Spider Euler angles to EMAN, according to:
+	Baldwin, P.R., and Penczek, P.A. (2007). The Transform Class in SPARX and EMAN2. Journal of Structural Biology 157, 250-261.
+	also see for reference:
+	http://blake.bcm.edu/eman2/doxygen_html/transform_8cpp_source.html
+	http://blake.bcm.edu/emanwiki/Eman2TransformInPython
+	'''
+	az = math.fmod((phi+90),360.0)
+	alt = theta
+	phi = math.fmod((psi-90),360.0)
+
+	return alt, az, phi
+	
+#======================	
+#=====================
+
+class filePathModifier:
+	#=====================
+	def common_prefix(self, c1, c2):
+		if not c1 and c2: return
+		for i, c in enumerate(c1):
+			if c != c2[i]:
+				return c1[:i]
+		return c1
+
+	#=====================
+	def common_suffix(self, c1, c2):
+		return self.common_prefix(c1[::-1], c2[::-1])[::-1]
+
+	#=====================
+	def findUncommonPathPrefix(self, path1, path2):
+		''' usefule when transfering sel and doc files from one file system to another '''
+		prefix1 = re.sub(self.common_suffix(path1, path2), "", path1)
+		prefix2 = re.sub(self.common_suffix(path1, path2), "", path2)
+		return os.path.abspath(prefix1), os.path.abspath(prefix2)
+		
+	#=====================
+	def checkSelOrDocFileRootDirectory(self, sel_doc_file, old_rootdir, new_rootdir):
+		''' necessary when files are transferred from one file system to another, e.g., the root directory on Garibaldi is different from that on Guppy'''
+
+		f = open(sel_doc_file, "r")
+		lines = f.readlines()
+		newlines = []
+		f.close()
+			
+		### replace old root directory with new root directory	
+		count = 0
+		for line in lines:
+			if re.search(old_rootdir, line):
+				newline = re.sub(old_rootdir, new_rootdir, line)
+				count += 1
+			else: 
+				newline = line
+			newlines.append(newline)
+		if count > 0:
+			apDisplay.printMsg("changing root directory from %s to %s in %s" % (old_rootdir, new_rootdir, sel_doc_file))
+			f = open(sel_doc_file, "w")
+			f.writelines(newlines)
+			f.close()
+		return
+		
+#=====================
+#=====================
+def checkSelOrDocFileRootDirectoryInDirectoryTree(directory, remote_basedir, local_basedir):
+	''' 
+	used to change all the root directories in Xmipp .sel, .doc, and .ctfdat files recursively, e.g:
+	from /ddn/people/dlyumkis/appion/11jan11a/recon to /ami/data00/appion/11jan11a/recon
+	'''
+	
+	if remote_basedir != local_basedir:
+		modifier = filePathModifier()
+		remote_root, local_root = modifier.findUncommonPathPrefix(remote_basedir, local_basedir)
+		print "remote cluster root path is: ", remote_root
+		print "local cluster root path is: ", local_root
+			
+		### modify all .sel and .doc files using old_rootdir (remote_root) and new_rootdir (local_root) arguments
+		matches = []
+		for root, dirs, files in os.walk(directory):
+			for file in files:
+				if file.endswith('.sel') or file.endswith('.doc') or file.endswith('.ctfdat'):
+					matches.append(os.path.join(root,file))
+		for match in matches: 
+			modifier.checkSelOrDocFileRootDirectory(match, remote_root, local_root)
+
+#=====================
+#=====================
+def compute_stack_of_class_averages_and_reprojections(dir, selfile, refvolume, docfile, boxsize, resultspath, timestamp, iteration, reference_number=1, extract=False):
+	''' takes Xmipp single files, doc and sel files in routine, creates a stack of class averages in the results directory '''
+	
+	workingdir = os.getcwd()
+	os.chdir(dir)
+	if dir.endswith("/"):
+		dir = dir[:-1]
+	head, tail = os.path.split(dir)
+	
+	### remove "lastdir" component from selfile (created by Xmipp program), then extract header information to docfile
+	f = open(selfile, "r")
+	lines = f.readlines()
+	newlines = [re.sub(str(tail)+"/", "", line) for line in lines]
+	f.close()
+	f = open(selfile[:-4]+"_new.sel", "w")
+	f.writelines(newlines)
+	f.close()
+	if extract is True:
+		extractcmd = "xmipp_header_extract -i %s.sel -o %s.doc" % (selfile[:-4], docfile[:-4])
+		apParam.runCmd(extractcmd, "Xmipp")
+
+	### create a projection params file and project the volume along identical Euler angles
+	f = open("paramfile.descr", "w")
+	f.write("%s\n" % refvolume)
+	f.write("tmpproj 1 xmp\n")
+	f.write("%d %d\n" % (boxsize, boxsize))
+	f.write("%s rot tilt psi\n" % docfile)
+	f.write("NULL\n")
+	f.write("0 0\n")
+	f.write("0 0\n")
+	f.write("0 0\n")
+	f.write("0 0\n")
+	f.write("0 0\n")
+	f.close()
+	projectcmd = "xmipp_project -i paramfile.descr"
+	apParam.runCmd(projectcmd, "Xmipp")
+	
+	### get order of projections in docfile
+	d = open(docfile, "r")
+	lines = d.readlines()[1:]
+	d.close()
+	projfile_sequence = []
+	for i, l in enumerate(lines):
+		if i % 2 == 0:
+			filename = os.path.basename(l.split()[1])
+			projfile_sequence.append(filename)
+		else: pass
+		
+	### create stack of projections and class averages
+	projections = glob.glob("tmpproj**xmp")
+	projections.sort()
+	if len(projections) != len(projfile_sequence):
+		apDisplay.printWarning("number of projections does not match number of classes")
+	stackarray = []
+	stackname = os.path.join(resultspath, "proj-avgs_%s_it%.3d_vol%.3d.hed" % (timestamp, iteration, reference_number))
+	for i in range(len(projections)):
+		stackarray.append(spider.read(projections[i]))
+		stackarray.append(spider.read(projfile_sequence[i]))
+	apImagicFile.writeImagic(stackarray, stackname, msg=False)
+	
+	### remove unnecessary files
+	for file in glob.glob("tmpproj*"):
+		apFile.removeFile(file)
+	os.chdir(workingdir)
+
+	return 
+
+#======================
+#======================
+
+def importProtocolPythonFile(protocolscript, rundir):
+	''' finds protocol python file in directory, protocolscript passed without .py extension, e.g. xmipp_protocol_ml3d '''
+
+	try:
+		if not rundir in sys.path:
+			sys.path.append(os.path.abspath(rundir))
+		p = __import__(protocolscript)		
+	except ImportError, e:
+		print e, "cannot open protocol script, trying to open backup file"
+		try:
+			for root, dirs, files in os.walk(rundir):
+				for name in files:
+					if re.match(str(protocolscript+"_backup.py"), name):
+						if not root in sys.path:
+							sys.path.append(root)				
+			p = __import__(protocolscript+"_backup")
+		except ImportError, e:
+			print e, "cannot open backup protocol file"
+			apDisplay.printError("could not find protocol file: %s ... try uploading as an external refinement" % protocolscript)
+	return p
+
+#======================
+#======================
+
+def convertSymmetryNameForPackage(inputname):
+	'''
+	hedral symmetry key is of possible name, value is that of this package
+	'''
+	xmipp_hedral_symm_names = {'oct':'O','icos':'I'}
+	inputname = inputname.lower().split(' ')[0]
+	if inputname[0] in ('c','d') or inputname in xmipp_hedral_symm_names.values():
+		symm_name = inputname.lower()
+	elif inputname in xmipp_hedral_symm_names.keys():
+		symm_name = xmipp_hedral_symm_names[inputname]
+	else:
+		apDisplay.printWarning("unknown symmetry name conversion. Use it directly")
+		symm_name = inputname.upper()
+	return symm_name
+	
+#=======================
+#=======================
+def calculate_equivalent_Eulers_without_flip(m):
+	''' takes transform matrix, multiplies by mirror_matrix, inverses sign of psi '''
+
+	mmirror = numpy.matrix([[-1,0,0],[0,-1,0],[0,0,-1]])
+	mnew = m * mmirror
+	newphi, newtheta, newpsi = apEulerCalc.rotationMatrixToEulersXmipp(mnew)
+	### this was assessed empirically, works on synthetic data projected with xmipp_project
+	newpsi = -newpsi
+	return newphi, newtheta, newpsi

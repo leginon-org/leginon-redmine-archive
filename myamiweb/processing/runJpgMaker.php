@@ -154,7 +154,7 @@ function createJMForm($extra=false, $title='JPEG Maker', $heading='Automated JPE
 	<tr>
 		<td colspan='2' align='center'>
 	";
-	echo getSubmitForm("Run JPEG Maker", false, true);
+	echo getSubmitForm("Run JPEG Maker");
 	echo "
 		<br />
 		</td>
@@ -241,8 +241,9 @@ function runjpgmaker() {
 		$images.= "</span>";
 		$images.= "</td></tr></table>\n";
 		$images.= "<br />\n";
+		$jpgdir = 'jpgs/';
 		$testjpg=ereg_replace(".mrc","",$testimage);
-		$jpgimg=$outdir.$testjpg.".jpg";
+		$jpgimg=$outdir.$jpgdir.$testjpg.".jpg";
 		$images.= writeTestResults($jpgimg,array(),1);
 	}
 	
@@ -252,7 +253,7 @@ function runjpgmaker() {
 	$headinfo .= appionRef();
 	$headinfo .= "<table width='560' class='tableborder' border='1'>";
 	$headinfo .= "<tr><td colspan='2'><br/>\n";
-	$headinfo .= "<span style='font-size: larger;'> After running this command, jpg images will be available in:<br/> ".$outdir." <br/>";
+	$headinfo .= "<span style='font-size: larger;'> After running this command, jpg images will be available in:<br/> ".$outdir.$jpgdir." <br/>";
 	$headinfo .= "</span><br/></td></tr></table><br/>\n";
 
 	/* *******************

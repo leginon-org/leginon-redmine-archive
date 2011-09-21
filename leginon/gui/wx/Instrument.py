@@ -318,6 +318,7 @@ class StageSizer(wx.StaticBoxSizer):
 		self.parameters = {
 			'Status': wx.StaticText(self.parent, -1, ''),
 			'Correction': wx.CheckBox(self.parent, -1, 'Correct stage movement'),
+			'speed': FloatEntry(self.parent, -1, chars=9, allownone=True),
 			'x': FloatEntry(self.parent, -1, chars=9, allownone=True),
 			'y': FloatEntry(self.parent, -1, chars=9, allownone=True),
 			'z': FloatEntry(self.parent, -1, chars=9, allownone=True),
@@ -353,6 +354,11 @@ class StageSizer(wx.StaticBoxSizer):
 
 		st = wx.StaticText(self.parent, -1, 'Angle:')
 		self.sz.Add(st, (5, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL)
+
+		st = wx.StaticText(self.parent, -1, 'Speed:')
+		self.sz.Add(st, (6, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL)
+		self.sz.Add(self.parameters['speed'], (6, 1), (1, 1),
+				wx.ALIGN_CENTER|wx.FIXED_MINSIZE)
 
 class HolderSizer(wx.StaticBoxSizer):
 	def __init__(self, parent, title='Holder'):
@@ -820,6 +826,7 @@ class TEMPanel(wx.Panel, ParameterMixin):
 				'a': self.szstage.parameters['a'],
 				'b': self.szstage.parameters['b'],
 			},
+			'StageSpeed': self.szstage.parameters['speed'],
 			'ImageShift': {
 				'x': self.szlenses.xy['Image']['Shift']['x'],
 				'y': self.szlenses.xy['Image']['Shift']['y'],
@@ -949,7 +956,6 @@ class Panel(leginon.gui.wx.Node.Panel):
 		self.toolbar.AddTool(leginon.gui.wx.ToolBar.ID_CALCULATE,
 													'calculate',
 													shortHelpString='Get Magnifications')
-		self.toolbar.Realize()
 
 		self.tems = {}
 		self.ccdcameras = {}
@@ -968,7 +974,7 @@ class Panel(leginon.gui.wx.Node.Panel):
 		self.ccdcamerapanel = CCDCameraPanel(self, -1)
 		self.ccdcamerapanel.Show(False)
 
-		self.szmain.AddGrowableRow(1)
+		#self.szmain.AddGrowableRow(1)
 		self.szmain.AddGrowableCol(0)
 
 		self.Enable(False)
@@ -1050,6 +1056,7 @@ class Panel(leginon.gui.wx.Node.Panel):
 				self.toolbar.EnableTool(leginon.gui.wx.ToolBar.ID_CALCULATE, False)
 		except ValueError:
 			pass
+		current_rows = self.szmain.GetCols()
 		if string in self.tems :
 			if self.szmain.FindItem(self.tempanel):
 				self.tempanel.clearParameters()
@@ -1061,6 +1068,8 @@ class Panel(leginon.gui.wx.Node.Panel):
 					self.ccdcamerapanel.clearParameters()
 				self.tempanel.setParameters(self.tems[string])
 				self.szmain.Add(self.tempanel, (1, 0), (1, 1), wx.ALIGN_CENTER)
+				if current_rows == 1:
+					self.szmain.AddGrowableRow(1)
 				self.tempanel.Show(True)
 		elif string in self.ccdcameras:
 			if self.szmain.FindItem(self.ccdcamerapanel):
@@ -1073,6 +1082,7 @@ class Panel(leginon.gui.wx.Node.Panel):
 					self.tempanel.clearParameters()
 				self.ccdcamerapanel.setParameters(self.ccdcameras[string])
 				self.szmain.Add(self.ccdcamerapanel, (1, 0), (1, 1), wx.ALIGN_CENTER)
+				self.szmain.AddGrowableRow(1)
 				self.ccdcamerapanel.Show(True)
 		self.szmain.Layout()
 

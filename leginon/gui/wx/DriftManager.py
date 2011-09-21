@@ -34,14 +34,13 @@ class Panel(leginon.gui.wx.Node.Panel, leginon.gui.wx.Instrument.SelectionMixin)
 		self.toolbar.AddTool(leginon.gui.wx.ToolBar.ID_ABORT_DRIFT,
 													'stop',
 													shortHelpString='Abort Drift Check')
-		self.toolbar.Realize()
 
 		# image
 		self.imagepanel = self.imagepanelclass(self, -1)
 		self.imagepanel.addTypeTool('Image', display=True)
 		self.imagepanel.selectiontool.setDisplayed('Image', True)
 		self.imagepanel.addTypeTool('Correlation', display=True)
-		self.imagepanel.addTargetTool('Peak', wx.Color(255,0,0))
+		self.imagepanel.addTargetTool('Peak', wx.Colour(255,0,0))
 
 		self.szmain.Add(self.imagepanel, (1, 0), (1, 1), wx.EXPAND)
 

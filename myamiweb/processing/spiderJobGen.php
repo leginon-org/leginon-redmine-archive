@@ -8,12 +8,12 @@
  *      Create an Spider Job for submission to a cluster
  */
 
-require "inc/particledata.inc";
-require "inc/processing.inc";
-require "inc/leginon.inc";
-require "inc/viewer.inc";
-require "inc/project.inc";
-require "inc/summarytables.inc";
+require_once "inc/particledata.inc";
+require_once "inc/processing.inc";
+require_once "inc/leginon.inc";
+require_once "inc/viewer.inc";
+require_once "inc/project.inc";
+require_once "inc/summarytables.inc";
 
 $selectedcluster=$CLUSTER_CONFIGS[0];
 if ($_POST['cluster']) {
@@ -449,11 +449,6 @@ function jobForm($extra=false) {
 
 	processing_footer();
 	exit;
-}
-
-function formatEndPath($path) {
-	$path = ereg(DIRECTORY_SEPARATOR."$", $path) ? $path : $path.DIRECTORY_SEPARATOR;
-	return $path;
 }
 
 function getPBSMemoryNeeded($boxsize) {

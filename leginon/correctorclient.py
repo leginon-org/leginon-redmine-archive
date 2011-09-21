@@ -8,7 +8,7 @@
 #       see  http://ami.scripps.edu/software/leginon-license
 #
 
-import leginondata
+from leginon import leginondata
 import numpy
 import scipy.ndimage
 import instrument
@@ -19,6 +19,7 @@ import itertools
 import leginon.session
 import leginon.leginonconfig
 import os
+import sys
 
 ref_cache = {}
 idcounter = itertools.cycle(range(100))
@@ -71,6 +72,81 @@ class CorrectorClient(cameraclient.CameraClient):
 			self.logger.error('%s: bad shape: %s' % (ref['filename'], shape,))
 			return None
 		return ref
+
+	def getBrightImageFromNorm(self,normdata):
+		'''
+		Get bright image used to produce the norm image
+		This is made to be back compatible to early leginondata that
+		has no bright image association but would be the closest in time before
+		the norm was calculated
+		'''
+		if normdata is None:
+			return None
+		# newer leginon data will have bright image associated with norm image
+		if 'bright' in normdata.keys() and normdata['bright'] is not None:
+			return normdata['bright']
+		# bright image may have the same CameraEMData
+		q = leginondata.BrightImageData(camera=normdata['camera'])
+		brightresults = q.query(results=1)
+		if brightresults:
+			return brightresults[0]
+		# otherwise need to look up timestamp
+		timestamp = normdata.timestamp
+		normcam = normdata['camera']
+		qcam = leginondata.CameraEMData(dimension=normcam['dimension'],
+				offset=normcam['offset'], binning=normcam['binning'],
+				ccdcamera=normcam['ccdcamera'])
+		qcam['exposure type'] = 'normal'
+		qcam['energy filtered'] = normcam['energy filtered']
+
+		normscope = normdata['scope']
+		qscope = leginondata.ScopeEMData(tem=normscope['tem'])
+		qscope['high tension'] = normscope['high tension']
+		q = leginondata.BrightImageData(camera=qcam,scope=qscope,channel=normdata['channel'])
+		brightlist = q.query()
+		for brightdata in brightlist:
+			if brightdata.timestamp < timestamp:
+				break
+		return brightdata
+
+	def getAlternativeChannelNorm(self,normdata):
+		'''
+		Get norm image data of the other channel closest in time
+		'''
+		if normdata is None:
+			return None
+		timestamp = normdata.timestamp
+		normcam = normdata['camera']
+		qcam = leginondata.CameraEMData(dimension=normcam['dimension'],
+				offset=normcam['offset'], binning=normcam['binning'],
+				ccdcamera=normcam['ccdcamera'])
+		qcam['exposure time'] = normcam['exposure time']
+		qcam['energy filtered'] = normcam['energy filtered']
+
+		normscope = normdata['scope']
+		qscope = leginondata.ScopeEMData(tem=normscope['tem'])
+		qscope['high tension'] = normscope['high tension']
+		altchannel = int(normdata['channel'] == 0)
+		q = leginondata.NormImageData(camera=qcam,scope=qscope,channel=altchannel)
+		normlist = q.query()
+		if len(normlist) == 0:
+			# Not to query exposure time if none found
+			qcam['exposure time'] = None
+			q = leginondata.NormImageData(camera=qcam,scope=qscope,channel=altchannel)
+			normlist = q.query()
+		for newnormdata in normlist:
+			if newnormdata.timestamp < timestamp:
+				break
+		before_norm = newnormdata
+		normlist.reverse()
+		for newnormdata in normlist:
+			if newnormdata.timestamp > timestamp:
+				break
+		after_norm = newnormdata
+		if after_norm.timestamp - timestamp > timestamp - before_norm.timestamp:
+			return before_norm
+		else:
+			return after_norm
 
 	def formatCorrectorKey(self, key):
 		try:
@@ -159,6 +235,20 @@ class CorrectorClient(cameraclient.CameraClient):
 			darkarray = multiplier * darkarray
 		return darkarray
 
+	def calculateNorm(self,brightarray,darkarray):
+		try:
+			normarray = brightarray - darkarray
+		except:
+			raise
+		normarray = numpy.asarray(normarray, numpy.float32)
+		normavg = arraystats.mean(normarray)
+
+		# division may result infinity or zero division
+		# so make sure there are no zeros in norm
+		normarray = numpy.clip(normarray, 0.001, sys.maxint)
+		normarray = normavg / normarray
+		return normarray
+
 	def normalizeCameraImageData(self, imagedata, channel):
 		cameradata = imagedata['camera']
 		scopedata = imagedata['scope']
@@ -176,6 +266,7 @@ class CorrectorClient(cameraclient.CameraClient):
 		r = numpy.where(numpy.isfinite(r), r, 0)
 		imagedata['image'] = r	
 		imagedata['dark'] = dark
+		imagedata['bright'] = norm['bright']
 		imagedata['norm'] = norm
 		imagedata['correction channel'] = channel
 
@@ -195,6 +286,7 @@ class CorrectorClient(cameraclient.CameraClient):
 		raw = raw + darkarray
 		imagedata['image'] = raw
 		imagedata['dark'] = None
+		imagedata['bright'] = None
 		imagedata['norm'] = None
 		imagedata['correction channel'] = None
 
@@ -300,7 +392,6 @@ class CorrectorClient(cameraclient.CameraClient):
 						neighbors.append(image[r,c])
 				if neighbors:
 					break
-
 			if not neighbors:
 				return
 

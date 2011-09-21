@@ -32,8 +32,8 @@ from appionlib import apParam
 from appionlib import apImagicFile
 from appionlib import apMask
 from appionlib import apXmipp
+from appionlib import apBoxer
 from appionlib.apSpider import filters
-
 
 class Makestack2Loop(appionLoop2.AppionLoop):
 	############################################################
@@ -123,7 +123,7 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 			defocus = (ctfvalue['defocus1'] + ctfvalue['defocus2'])/2.0
 		else:
 			defocus = ctfvalue['defocus1']
-		defocus = -1.0*abs(defocus)
+		defocus = -1.0*abs(defocus)	
 
 		### assume defocus values are ALWAYS negative but mindefocus is greater than maxdefocus
 		if self.params['mindefocus']:
@@ -182,7 +182,10 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 	#=======================
 	def boxParticlesFromImage(self, imgdata):
 		shortname = apDisplay.short(imgdata['filename'])
-		imgpath = os.path.join(imgdata['session']['image path'], imgdata['filename']+".mrc")
+		if self.params['nframe'] == 0:
+			imgpath = os.path.join(imgdata['session']['image path'], imgdata['filename']+".mrc")
+		else:
+			self.params['uncorrected'] = True
 
 		### get the particle before image filtering
 		if self.params['defocpair'] is True and self.params['selectionid'] is not None:
@@ -211,24 +214,24 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 			apDisplay.printColor(shortname+" has no remaining particles and has been rejected\n","cyan")
 			return None, None, None
 
-		### save particle coordinates to box file
-		if self.params['rotate']:
-			boxedpartdatas, emanboxfile = self.writeParticlesToBoxFile(partdatas, shiftdata, imgdata, 1)
-		else:
-			boxedpartdatas, emanboxfile = self.writeParticlesToBoxFile(partdatas, shiftdata, imgdata, 3)
+		### convert database particle data to coordinates and write boxfile
+		boxfile = os.path.join(self.params['rundir'], imgdata['filename']+".box")
+		parttree, boxedpartdatas = apBoxer.processParticleData(imgdata, self.params['boxsize'], 
+			partdatas, shiftdata, boxfile, rotate=self.params['rotate'])
 
 		if self.params['boxfiles']:
+			### quit and return, boxfile created, now process next image
 			return None, None, None
 
 		### check if we have particles again
-		if len(boxedpartdatas) == 0:
+		if len(partdatas) == 0:
 			apDisplay.printColor(shortname+" has no remaining particles and has been rejected\n","cyan")
 			return None, None, None
 
 		if self.params['uncorrected']:
 			### dark/bright correct image
 			tmpname = shortname+"-darknorm.dwn.mrc"
-			imgarray = apImage.correctImage(imgdata, self.params['sessionname'])
+			imgarray = apImage.correctImage(imgdata, self.params['sessionname'],self.params['startframe'],self.params['nframe'])
 			imgpath = os.path.join(self.params['rundir'], tmpname)
 			apImage.arrayToMrc(imgarray,imgpath)
 			print "processing", imgpath
@@ -242,60 +245,24 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 			elif self.params['fliptype'] == "spiderimage":
 				imgpath = self.phaseFlipSpider(imgpath,imgdata)
 				self.ctftimes.append(time.time()-t0)
-			elif self.params['fliptype'] == "ace2image":
+			elif self.params['fliptype'][:9] == "ace2image":
 				### ctf correct whole image using Ace 2
 				imgpath = self.phaseFlipAceTwo(imgpath, imgdata)
 				self.ctftimes.append(time.time()-t0)
 		if imgpath is None:
 			return None, None, None
 
-		if self.params['rotate']:
-			### run batchboxer command to extract box 2*boxsize around each pick
-			tempimgstackfile = os.path.join(self.params['rundir'], shortname+"temp.hed")
-			imgstackfile = os.path.join(self.params['rundir'], shortname+".hed")
-			doublebox = self.params['boxsize']*2
-			emancmd = "batchboxer input=%s dbbox=%s output=%s newsize=%i" %(imgpath, emanboxfile, tempimgstackfile, doublebox)
-			apDisplay.printMsg("boxing "+str(len(boxedpartdatas))+" particles into temp file: "+tempimgstackfile)
-			t0 = time.time()
-			apEMAN.executeEmanCmd(emancmd, showcmd=True, verbose=True)
-			self.batchboxertimes.append(time.time()-t0)
-
-			### Break up stack and rotate each filament by rotation angle calculated in manual picker and rebox to original size
-			apXmipp.breakupStackIntoSingleFiles(tempimgstackfile, filetype="mrc")
-			partlist = os.path.join(self.params['rundir'], 'partlist.doc')
-			partfile = open(partlist, 'r')	
-			partlist = partfile.readlines()
-			partfile.close()
-			selfile = os.path.join(self.params['rundir'], 'partlist2.doc')
-			selfilew = open(selfile, 'w')	
-			i = 0
-			for partdata in boxedpartdatas:
-				if partdata['angle'] is not None:
-					angle = partdata['angle']
-					imgpath = partlist[i].split()[0]
-					rotimgpath = imgpath.replace('.mrc', 'r.mrc')
-					outimgpath = imgpath.replace('.mrc', 'o.mrc')
-					emancmd="proc2d %s %s rot=%d"%(imgpath,rotimgpath,angle)
-					apEMAN.executeEmanCmd(emancmd, showcmd=True)
-					blankpartdatas, emanboxfile = self.writeParticlesToBoxFile(partdatas, shiftdata, imgdata, 2)
-					emancmd = "batchboxer input=%s dbbox=%s output=%s newsize=%i" %(rotimgpath, emanboxfile, outimgpath, self.params['boxsize'])
-					t0 = time.time()
-					apEMAN.executeEmanCmd(emancmd, showcmd=False, verbose=False)
-					self.batchboxertimes.append(time.time()-t0)
-					print>>selfilew, outimgpath, 1
-					i += 1
-				else:
-					apDisplay.printError("Rotation angle not found. Use helical insert in Manual Picker to find filament angles then try again.")
-			selfilew.close()
-			apXmipp.gatherSingleFilesIntoStack(selfile, imgstackfile, filetype="mrc")
+		### run batchboxer command
+		imgstackfile = os.path.join(self.params['rundir'], shortname+".hed")
+		#emancmd = ("batchboxer input=%s dbbox=%s output=%s newsize=%i" 
+		#	%(imgpath, emanboxfile, imgstackfile, self.params['boxsize']))
+		apDisplay.printMsg("boxing "+str(len(parttree))+" particles into temp file: "+imgstackfile)
+		t0 = time.time()
+		if self.params['rotate'] is True:
+			apBoxer.boxerRotate(imgpath, parttree, imgstackfile, self.params['boxsize'])
 		else:
-			### run batchboxer command
-			imgstackfile = os.path.join(self.params['rundir'], shortname+".hed")
-			emancmd = "batchboxer input=%s dbbox=%s output=%s newsize=%i" %(imgpath, emanboxfile, imgstackfile, self.params['boxsize'])
-			apDisplay.printMsg("boxing "+str(len(boxedpartdatas))+" particles into temp file: "+imgstackfile)
-			t0 = time.time()
-			apEMAN.executeEmanCmd(emancmd, showcmd=True, verbose=True)
-			self.batchboxertimes.append(time.time()-t0)
+			apBoxer.boxer(imgpath, parttree, imgstackfile, self.params['boxsize'])
+		self.batchboxertimes.append(time.time()-t0)
 
 		### read mean and stdev
 		partmeantree = []
@@ -369,61 +336,10 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 		numpart = apFile.numImagesInStack(imgstackfile)
 		apDisplay.printMsg(str(numpart)+" particles were boxed out from "+shortname)
 
-		if len(boxedpartdatas) != numpart:
+		if len(parttree) != numpart:
 			apDisplay.printError("There is a mismatch in the number of particles expected and that were boxed")
 
 		return boxedpartdatas, imgstackfile, partmeantree
-
-	#=======================
-	def writeParticlesToBoxFile(self, partdatas, shiftdata, imgdata, roundno):
-		imgdims = imgdata['camera']['dimension']
-		fullbox = self.params['boxsize']
-		halfbox = self.params['boxsize']/2
-		doublebox = self.params['boxsize']*2
-			
-		boxedpartdatas = []
-		eliminated = 0
-
-		if roundno == 1:
-			emanboxfile = os.path.join(self.params['rundir'], imgdata['filename']+"1.box")
-			boxfile=open(emanboxfile, 'w')
-			for i in range(len(partdatas)):
-				partdata = partdatas[i]
-				xcoord= int(round( shiftdata['scale']*(partdata['xcoord'] - shiftdata['shiftx']) - fullbox ))
-				ycoord= int(round( shiftdata['scale']*(partdata['ycoord'] - shiftdata['shifty']) - fullbox ))
-
-				if ( (xcoord > 0 and xcoord+fullbox <= imgdims['x'])
-				and  (ycoord > 0 and ycoord+fullbox <= imgdims['y']) ):
-					boxfile.write("%d\t%d\t%d\t%d\t-3\n"%(xcoord,ycoord,doublebox,doublebox))
-					boxedpartdatas.append(partdata)
-				else:
-					eliminated += 1
-		elif roundno == 2:
-			emanboxfile = os.path.join(self.params['rundir'], imgdata['filename']+"2.box")
-			boxfile=open(emanboxfile, 'w')
-			xcoord= int(round(halfbox))
-			ycoord= int(round(halfbox))	
-
-			boxfile.write("%d\t%d\t%d\t%d\t-3\n"%(xcoord,ycoord,fullbox,fullbox))
-		else:
-			emanboxfile = os.path.join(self.params['rundir'], imgdata['filename']+".box")
-			boxfile=open(emanboxfile, 'w')
-			for i in range(len(partdatas)):
-				partdata = partdatas[i]
-				xcoord= int(round( shiftdata['scale']*(partdata['xcoord'] - shiftdata['shiftx']) - halfbox ))
-				ycoord= int(round( shiftdata['scale']*(partdata['ycoord'] - shiftdata['shifty']) - halfbox ))	
-
-				if ( (xcoord > 0 and xcoord+fullbox <= imgdims['x'])
-				and  (ycoord > 0 and ycoord+fullbox <= imgdims['y']) ):
-					boxfile.write("%d\t%d\t%d\t%d\t-3\n"%(xcoord,ycoord,fullbox,fullbox))
-					boxedpartdatas.append(partdata)
-				else:
-					eliminated += 1
-
-		if eliminated > 0:
-			apDisplay.printMsg(str(eliminated)+" particle(s) eliminated because they were out of bounds")
-		boxfile.close()
-		return boxedpartdatas, emanboxfile
 
 	############################################################
 	############################################################
@@ -659,7 +575,9 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 		ace2exe = self.getACE2Path()
 		outfile = os.path.join(os.getcwd(),imgdata['filename']+".mrc.corrected.mrc")
 
-		ace2cmd = (ace2exe+" -ctf %s -apix %.3f -img %s -wiener 0.1 -out %s" % (ctfvaluesfile, apix, inimgpath,outfile))
+		ace2cmd = (ace2exe+" -ctf %s -apix %.3f -img %s -out %s" % (ctfvaluesfile, apix, inimgpath,outfile))
+		if self.params['fliptype'] == "ace2image":
+			ace2cmd += " -wiener 0.1"
 		apDisplay.printMsg("ace2 command: "+ace2cmd)
 		apDisplay.printMsg("phaseflipping entire micrograph with defocus "+str(round(defocus,3))+" microns")
 
@@ -868,6 +786,8 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 		if self.params['phaseflipped'] is True:
 			stparamq['phaseFlipped'] = True
 			stparamq['fliptype'] = self.params['fliptype']
+		if self.params['rotate'] is True:
+			stparamq['rotate'] = True
 		paramslist = stparamq.query()
 
 		if not 'boxSize' in stparamq or stparamq['boxSize'] is None:
@@ -971,7 +891,7 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 
 	#=======================
 	def setupParserOptions(self):
-		self.flipoptions = ('emanimage', 'emanpart', 'emantilt', 'spiderimage', 'ace2image')
+		self.flipoptions = ('emanimage', 'emanpart', 'emantilt', 'spiderimage', 'ace2image','ace2imagephase')
 		self.ctfestopts = ('ace2', 'ctffind')
 
 		### values
@@ -1011,6 +931,10 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 			help="select particles by label within the same run name")
 		self.parser.add_option("--xmipp-normalize", dest="xmipp-norm", type="float",
 			help="normalize the entire stack using xmipp")
+		self.parser.add_option("--ddstartframe", dest="startframe", type="int", default=1,
+			help="starting frame for direct detector raw frame processing")
+		self.parser.add_option("--ddnframe", dest="nframe", type="int", default=0,
+			help="total frames to sum up for direct detector raw frame processing")
 
 		### true/false
 		self.parser.add_option("--phaseflip", dest="phaseflipped", default=False,
@@ -1087,20 +1011,11 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 			self.params['ctfmethod'] = 'ace2'
 		if self.params['xmipp-norm'] is not None:
 			self.xmippexe = apParam.getExecPath("xmipp_normalize", die=True)
+		if self.params['particlelabel'] == 'user' and self.params['rotate'] is True:
+			apDisplay.printError("User selected targets do not have rotation angles")
+		if self.params['particlelabel'] == 'helical' and self.params['rotate'] is False:
+			apDisplay.printWarning("Rotate parameter is not set, helical filaments will not be aligned")
 			
-
-	#=====================
-	def setRunDir(self):
-		if self.params['sessionname'] is None:
-			apDisplay.printError("Please provide a sessionname or run directory")
-		#auto set the output directory
-		sessiondata = apDatabase.getSessionDataFromSessionName(self.params['sessionname'])
-		path = os.path.abspath(sessiondata['image path'])
-		pieces = path.split('leginon')
-		path = 'leginon'.join(pieces[:-1]) + 'appion' + pieces[-1]
-		path = re.sub("/rawdata","",path)
-		path = os.path.join(path, self.processdirname, self.params['runname'])
-		self.params['rundir'] = path
 
 	#=======================
 	def preLoopFunctions(self):
@@ -1115,9 +1030,11 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 			self.noimages = True
 			return
 		self.checkPixelSize()
+		self.existingParticleNumber=0
 		if self.params['commit'] is True:
 			self.insertStackRun()
 			self.particleNumber = self.getExistingStackInfo()
+			self.existingParticleNumber=self.particleNumber
 		else:
 			self.particleNumber = 0
 			stackfile=os.path.join(self.params['rundir'], self.params['single'])
@@ -1185,7 +1102,7 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 
 		### create a stack average every so often
 		if self.stats['lastpeaks'] > 0:
-			logpeaks = math.log(self.stats['peaksum']+self.stats['lastpeaks'])
+			logpeaks = math.log(self.existingParticleNumber+self.stats['peaksum']+self.stats['lastpeaks'])
 			if logpeaks > self.logpeaks:
 				self.logpeaks = math.ceil(logpeaks)
 				numpeaks = math.ceil(math.exp(self.logpeaks))
@@ -1241,28 +1158,11 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 			apDisplay.printMsg("Xmipp normalization time: "+apDisplay.timeString(normtime))
 
 			### recombine particles to a single imagic stack
-			pfile = open(selfile)
-			lstfile = "norm"+self.timestamp+".lst"
-			lstf = open(lstfile,'w')
-			lstf.write("#LST\n")
-			pnum=0
-			for line in pfile:
-				pinfo = line.split()
-				if len(pinfo)==2:
-					lstf.write("%i\t%s\n"%(pnum,pinfo[0]))
-					pnum+=1
-			pfile.close()
-			lstf.close()
-
-			### overwrite unnormalized stack
-			apDisplay.printMsg("Converting normalized Xmipp particles")
 			tmpstack = "tmp.xmippStack.hed"
-			emancmd="proc2d %s %s"%(lstfile,tmpstack)
-			apEMAN.executeEmanCmd(emancmd, showcmd=True, verbose=True)
+			apXmipp.gatherSingleFilesIntoStack(selfile,tmpstack)
 			apFile.moveStack(tmpstack,stackpath)
 
 			### clean up directory
-			apFile.removeFile(lstfile)
 			apFile.removeFile(selfile)
 			apFile.removeDir("partfiles")
 			
@@ -1316,15 +1216,17 @@ class Makestack2Loop(appionLoop2.AppionLoop):
 				stpartq.insert()
 		self.insertdbtimes.append(time.time()-t0)
 
+	#=======================
+	def loopCleanUp(self,imgdata):
 		### last remove any existing boxed files, reset global params
 		shortname = apDisplay.short(imgdata['filename'])
 		shortfileroot = os.path.join(self.params['rundir'], shortname)
 		rmfiles = glob.glob(shortfileroot+"*")
-		for rmfile in rmfiles:
-			apFile.removeFile(rmfile)
+		if not self.params['keepall']:
+			for rmfile in rmfiles:
+				apFile.removeFile(rmfile)
 		self.imgstackfile = None
 		self.boxedpartdatas = []
-
 
 if __name__ == '__main__':
 	makeStack = Makestack2Loop()

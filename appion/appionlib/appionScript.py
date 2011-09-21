@@ -84,16 +84,16 @@ class AppionScript(basicScript.BasicScript):
 		if useglobalparams is True:
 			self.checkGlobalConflicts()
 
+		### setup run directory
+		self.setProcessingDirName()
+		self.setupRunDirectory()
+
 		### Start pool of threads to run subprocesses.
 		### Later you will use self.process_launcher.launch(...) to
 		### put commands into the queue.
 		### There is currently a timeout built into it that will cause
 		### the threads to die if they have no tasks after 10 seconds.
-		self.process_launcher = apThread.ProcessLauncher(2)
-
-		### setup run directory
-		self.setProcessingDirName()
-		self.setupRunDirectory()
+		self.process_launcher = apThread.ProcessLauncher(2, self.params['rundir'])
 
 		### write function log
 		self.logfile = apParam.writeFunctionLog(sys.argv, msg=(not self.quiet))
@@ -180,6 +180,7 @@ class AppionScript(basicScript.BasicScript):
 		pathq = appiondata.ApPathData(path=os.path.abspath(self.params['rundir']))
 		clustq = appiondata.ApAppionJobData()
 		clustq['path'] = pathq
+		clustq['jobtype'] = self.functionname.lower()
 		clustdatas = clustq.query()
 		if not clustdatas:
 			### insert a cluster job
@@ -190,7 +191,11 @@ class AppionScript(basicScript.BasicScript):
 			clustq['status'] = "R"
 			clustq['session'] = self.getSessionData()
 			### need a proper way to create a jobtype
-			clustq['jobtype'] = self.functionname.lower()
+			clustq['jobtype']=self.params['jobtype']
+			if not clustq['jobtype']:
+				clustq['jobtype'] = self.functionname.lower()
+			clustq.insert()
+			self.clusterjobdata = clustq
 			return clustq
 		elif len(clustdatas) == 1:
 			### we have an entry
@@ -210,6 +215,7 @@ class AppionScript(basicScript.BasicScript):
 		Using tables to track program run parameters in a generic fashion
 		inspired by Roberto Marabini and Carlos Oscar Sanchez Sorzano from the Xmipp team/Carazo lab
 		"""
+		apDisplay.printMsg("Uploading ScriptData....")
 		prognameq = appiondata.ScriptProgramName()
 		prognameq['name'] = self.functionname
 
@@ -414,12 +420,18 @@ class AppionScript(basicScript.BasicScript):
 		"""
 		this function only runs if no rundir is defined at the command line
 		"""
+		if self.params['rundir'] is None:
+			if ('sessionname' in self.params and self.params['sessionname'] is not None ):
+				# command line users may use sessionname rather than expId
+				sessiondata = apDatabase.getSessionDataFromSessionName(self.params['sessionname'])
+				self.params['rundir'] = self.getDefaultBaseAppionDir(sessiondata,[self.processdirname,self.params['runname']])
+			else:
+				if ('expId' in self.params and self.params['expId']):
+					# expId should  always be included from appionwrapper derived appionscript
+					sessiondata = apDatabase.getSessionDataFromSessionId(self.params['expId'])
+					self.params['rundir'] = self.getDefaultBaseAppionDir(sessiondata,[self.processdirname,self.params['runname']])
+		# The rest should not be needed with appionwrapper format
 		from appionlib import apStack
-		if ( self.params['rundir'] is None
-		and 'sessionname' in self.params
-		and self.params['sessionname'] is not None ):
-			sessiondata = apDatabase.getSessionDataFromSessionName(self.params['sessionname'])
-			self.params['rundir'] = self.getDefaultBaseAppionDir(sessiondata,[self.processdirname,self.params['runname']])
 		if ( self.params['rundir'] is None
 		and 'reconid' in self.params
 		and self.params['reconid'] is not None ):

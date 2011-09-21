@@ -11,11 +11,18 @@ from numpy import linalg
 ## appion
 from appionlib import apDisplay
 from appionlib.apSpider import filters
+try:
+	from appionlib import apDDprocess
+	dd_imported = True
+except:
+	dd_imported = False
 ## pyami
 from pyami import imagefun, fftengine
 
 ffteng = fftengine.fftEngine()
-
+if dd_imported:
+	dd = apDDprocess.DirectDetectorProcessing()
+	
 ####
 # This is a low-level file with NO database connections
 # Please keep it this way
@@ -357,20 +364,41 @@ def scaleImage(imgdata, scale):
 	return ndimage.zoom(imgdata, scale, order=1)
 
 #=========================
-def correctImage(imgdata, sessionname):
+def correctImage(imgdata, sessionname,start_frame=0,nframe=0):
 	"""
 	Correct an image using the old method:
 	- no bias correction
-	- dark correction is not time dependent
+	- dark correction is not time dependent in the normal mode
 	"""
-	rawimgarray = imgdata['image']
-	from appionlib import apDatabase
-	darkarray, normarray = apDatabase.getDarkNorm(sessionname, imgdata['camera'])
-	correctedimgarray = normarray * (rawimgarray - darkarray)
-	return correctedimgarray
+	digital_camera_name = imgdata['camera']['ccdcamera']['name']
+	if not digital_camera_name.upper().startswith('DE') and nframe > 0:
+		apDisplay.printWarning("Image not taken with direct detection camera, raw frame correction ignored")
+		normal_mode = True
+	elif nframe == 0:
+		normal_mode = True
+	else:
+		normal_mode = False
+	if normal_mode == True or dd_imported==False:
+		rawimgarray = imgdata['image']
+		from appionlib import apDatabase
+		darkarray, normarray = apDatabase.getDarkNorm(sessionname, imgdata['camera'])
+		correctedimgarray = normarray * (rawimgarray - darkarray)
+		return correctedimgarray
+	else:
+		dd.setImageData(imgdata)
+		return dd.correctFrameImage(start_frame,nframe)
 
 #=========================
 def frame_cut(a, newshape):
+	"""
+	clips image, similar to EMAN1's proc2d clip=X,Y
+	
+	>>> a = num.arange(16, shape=(4,4))
+	>>> frame_cut(a, (2,2))
+	array(
+			[[5,  6],
+		   [9, 10]])
+	"""
 	mindimx = int( (a.shape[0] / 2.0) - (newshape[0] / 2.0) )
 	maxdimx = int( (a.shape[0] / 2.0) + (newshape[0] / 2.0) )
 	mindimy = int( (a.shape[1] / 2.0) - (newshape[1] / 2.0) )

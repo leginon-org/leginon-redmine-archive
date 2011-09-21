@@ -36,6 +36,8 @@ function showReport () {
 	// check if reconstruction is specified
 	if (!$reconId = $_GET['reconId'])
 		$reconId=false;
+	if (!$multiModelReconRunId = $_GET['multimodelreconid'])
+		$multiModelReconRunId=false;
 	$expId = $_GET['expId'];
 
 
@@ -111,7 +113,12 @@ function showReport () {
 
 	$stackfile=$stackparams['path']."/".$stackparams['name'];
 	$res = $particle->getHighestResForRecon($refinerun['DEF_id']);
-	$avgmedjump = $particle->getAverageMedianJump($refinerun['DEF_id']);
+	if ($multiModelReconRunId) {
+		$avgmedjump = $particle->getAverageMedianJumpMM($multiModelReconRunId);
+	} else {		
+		$avgmedjump = $particle->getAverageMedianJump($refinerun['DEF_id']);
+	}	
+
 	if ($avgmedjump['count'] > 0) {
 		$avgmedjumpstr .= "<A HREF='eulergraph.php?expId=$expId&hg=1&recon=$refinerun[DEF_id]' starget='snapshot'>";
 		$avgmedjumpstr .= sprintf("%2.2f &plusmn; %2.1f </A>", $avgmedjump['average'], $avgmedjump['stdev']);
@@ -293,9 +300,9 @@ function showReport () {
 		$numbad = $partcounts['bad_refine'];
 		$numgood = $partcounts['good_refine'];
 
-		if ($numbad + $numgood != $stackparticles) 
-				$html .= "<tr><td bgcolor='$bg'><font size='-1' color='#dd3333'><b>Particles are missing!!!</b></font></td></tr>";
-
+		$allrefineparticles = $particle->getNumParticlesFromRefineIter($refineIterId);
+		if (($numbad + $numgood != $stackparticles) && ($numbad + $numgood != $allrefineparticles[0]['num_parts'])) 
+			$html .= "<tr><td bgcolor='$bg'><font size='-1' color='#dd3333'><b>Particles are missing!!!</b></font></td></tr>";
 
 		$html .= "<tr><td bgcolor='$bg'>Normal Refine</td></tr>\n";
 		$html .= "<tr><td bgcolor='$bg'>\n";
@@ -445,8 +452,8 @@ function showReport () {
 		Show Common Particles Between Iterations:";
 	echo "
 		<select name='comm_param'>\n";
-	$comm_params = array('bad'=>'Bad by EMAN refine',
-		'good'=>'Good by EMAN refine');
+	$comm_params = array('bad'=>'Bad by refinement procedure',
+		'good'=>'Good by refinement procedure');
 	if ($refinerun['package']=='EMAN/MsgP') { 
 			$comm_params_msgp = array('msgpbad'=>'Bad by Msg Passing');
 			$comm_params = array_merge($comm_params,$comm_params_msgp);

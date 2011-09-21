@@ -4,6 +4,7 @@ import os, re, sys, time
 import tempfile
 import cPickle
 import math
+import numpy
 import string
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ from appionlib import apEulerDraw
 from appionlib import apChimera
 from appionlib import apStack
 from appionlib import apFile
+from appionlib import apFourier 
 from appionlib import apSymmetry
 
 #==================
@@ -60,6 +62,33 @@ def getResolutionFromFSCFile(fscfile, boxsize, apix, msg=False):
 	apDisplay.printWarning("Failed to determine resolution")
 	res = boxsize * apix / (lastx + 1)
 	return res
+
+def getResolutionFromGenericFSCFile(fscfile, boxsize, apix, filtradius=3, msg=False):
+	"""
+	parses standard 2-column FSC file with 1) spatial frequency and 2) FRC, returns resolution
+	"""
+	if not os.path.isfile(fscfile):
+		apDisplay.printError("fsc file does not exist")
+	if msg is True:
+		apDisplay.printMsg("box: %d, apix: %.3f, file: %s"%(boxsize, apix, fscfile))
+
+	f = open(fscfile, 'r')
+	fscfileinfo = f.readlines()
+	f.close()
+	fscdata = numpy.zeros((int(boxsize)/2), dtype=numpy.float32)
+	for i, info in enumerate(fscfileinfo):		# skip commented out lines
+		if info[0] == "#":
+			pass
+		else: 
+			fscfileinfo = fscfileinfo[i:]
+			break
+	for j, info in enumerate(fscfileinfo):      
+		frc = float(info.split()[1])
+		fscdata[j] = frc
+	res = apFourier.getResolution(fscdata, apix, boxsize, filtradius=filtradius)
+
+	return res
+
 
 #==================
 #==================
@@ -170,6 +199,8 @@ def getRefinementsFromRun(refinerundata):
 	refineitq['refineRun'] = refinerundata
 	return refineitq.query()
 
+def getRefineIterDataFromIterationId(iterid):
+	return appiondata.ApRefineIterData.direct_query(iterid)
 #==================
 #==================
 def getSessionDataFromReconId(reconid):
@@ -284,6 +315,43 @@ def getParticleCount(refineid, cursor, name="refine_keep", isone=True):
 	count = results[0][0]
 	#print count
 	return int(count)
+
+#==================
+def getComponentFromVector(vector, iteration):
+	''' NOTE: THIS IS MODIFIED FROM XMIPP ARG.PY LIBRARY IN THE XMIPP_PROTOCOLS DIRECTORY '''
+
+	listValues = getListFromVector(vector)
+	if listValues is None:
+		return None
+	if iteration<0: iteration=0
+	if iteration<len(listValues): 
+		return listValues[iteration]
+	else:
+		return listValues[len(listValues)-1]
+
+#---------------------------------------------------------------------------
+# getListFromVector
+#---------------------------------------------------------------------------
+def getListFromVector(vector):
+	''' NOTE: THIS IS MODIFIED FROM XMIPP ARG.PY LIBRARY IN THE XMIPP_PROTOCOLS DIRECTORY '''	
+
+	if vector is None:
+		return None
+	intervals = string.split(str(vector))
+	if len(intervals) == 0:
+#		raise RuntimeError,"Empty vector"
+		return None
+	listValues = []
+	for i in range(len(intervals)):
+		intervalo = intervals[i]
+		listaIntervalo = string.split(intervalo,'x')
+		if len(listaIntervalo) == 1:
+			listValues += listaIntervalo
+		elif len(listaIntervalo) == 2:
+			listValues += [listaIntervalo[1]] * string.atoi(listaIntervalo[0])
+		else:
+			raise RuntimeError,"Unknown syntax: "+intervals
+	return listValues
 
 #==================
 #==================

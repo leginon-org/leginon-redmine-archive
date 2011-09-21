@@ -8,7 +8,7 @@
 #       see  http://ami.scripps.edu/software/leginon-license
 #
 
-import leginondata
+from leginon import leginondata
 import event
 import imagewatcher
 import numpy
@@ -137,6 +137,7 @@ class Corrector(imagewatcher.ImageWatcher):
                         raise
 			self.logger.exception('Raw acquisition failed: %s' % (e,))
 		else:
+			self.maskimg = numpy.zeros(image.shape)
 			self.displayImage(image)
 			self.currentimage = image
 		self.panel.acquisitionDone()
@@ -169,8 +170,13 @@ class Corrector(imagewatcher.ImageWatcher):
 		self.setStatus('processing')
 		self.logger.info('load channel %s %s image' % (channel, reftype))
 
-		imdata = self.retrieveCorrectorImageFromSettings(reftype, channel)
-		imarray = imdata['image']
+		if reftype != 'dark-subtracted':
+			imdata = self.retrieveCorrectorImageFromSettings(reftype, channel)
+			imarray = imdata['image']
+		else:
+			brightdata = self.retrieveCorrectorImageFromSettings('bright', channel)
+			darkdata = self.retrieveCorrectorImageFromSettings('dark', channel)
+			imarray = brightdata['image'] - darkdata['image']
 		self.displayImage(imarray)
 		self.currentimage = imarray
 		self.beep()
@@ -187,7 +193,11 @@ class Corrector(imagewatcher.ImageWatcher):
 	def acquireSeriesAverage(self, n, type, channel):
 		for i in range(n):
 			self.logger.info('Acquiring reference image (%s of %s)' % (i+1, n))
-			imagedata = self.acquireCameraImageData()
+			try:
+				imagedata = self.acquireCameraImageData()
+			except Exception, e:
+				self.logger.error('Error acquiring image: %s' % e)
+				raise
 			if self.settings['store series']:
 				self.storeCorrectorImageData(imagedata, type, channel)
 			imagearray = imagedata['image']
@@ -206,7 +216,11 @@ class Corrector(imagewatcher.ImageWatcher):
 		series = []
 		for i in range(n):
 			self.logger.info('Acquiring reference image (%s of %s)' % (i+1, n))
-			imagedata = self.acquireCameraImageData()
+			try:
+				imagedata = self.acquireCameraImageData()
+			except Exception, e:
+				self.logger.error('Error acquiring image: %s' % e)
+				raise
 			if self.settings['store series']:
 				self.storeCorrectorImageData(imagedata, type, channel)
 			imagearray = imagedata['image']
@@ -340,6 +354,8 @@ class Corrector(imagewatcher.ImageWatcher):
 		normarray = normavg / normarray
 		normdata = leginondata.CameraImageData(initializer=refdata)
 		normdata['image'] = normarray
+		normdata['dark'] = dark
+		normdata['bright'] = bright
 		self.storeCorrectorImageData(normdata, 'norm', channel)
 
 	def uiAutoAcquireReferences(self):
@@ -394,28 +410,40 @@ class Corrector(imagewatcher.ImageWatcher):
 
 	def onAddPoints(self):
 		imageshown = self.currentimage
-		imagemean = imageshown.mean()
 		plan = self.retrieveCorrectorPlanFromSettings()
+		if plan is not None:
+			self.fixBadPixels(imageshown, plan)
+		imagemean = imageshown.mean()
 		badpixelcount = len(plan['pixels'])
 		newbadpixels = plan['pixels']
-		while  len(newbadpixels) <= badpixelcount+2 :
-			extrema = scipy.ndimage.extrema(imageshown)
-			# add points only on max or min depending on how far they are from mean
-			usemax = extrema[1] - imagemean > imagemean - extrema[0]
-			if usemax:
-				i = 3
-			else:
-				i = 2
-			currentvalue = extrema[i-2]
-			newextrema = extrema
-			while newextrema[i-2] == currentvalue:
-				if newextrema[i] not in newbadpixels:
-					newbadpixels.append(newextrema[i])
-					self.logger.info("added bad pixel point at (%d,%d)" % (newextrema[i]))
-				imageshown[newextrema[i]]=imagemean
-				newextrema=scipy.ndimage.extrema(imageshown)
+		# Note: Must use numpy min, max function here because arraystats remembers the
+		# old value.  If the latter is used, this function only work once per
+		# image displayed
+		extrema = imageshown.min(),imageshown.max()
+		# add points only on max or min depending on how far they are from mean
+		usemax = extrema[1] - imagemean > imagemean - extrema[0]
+		if usemax:
+			indices = [1]
+		else:
+			indices = [0]
+		# also remove values less than or equal to zero
+		if extrema[0] <= 0.0 and usemax:
+			indices.append(0)
+		for i in indices:
+			currentvalue = extrema[i]
+			coordinates = numpy.argwhere(imageshown == currentvalue)
+			coordinates = coordinates.tolist()
+			for bad in coordinates:
+				# convert to tuple to be consistent with plan
+				yx = bad[1], bad[0]
+				if yx not in newbadpixels:
+					newbadpixels.append(yx)
+					self.logger.info("added bad pixel point at (%d,%d) at %d" % (bad[0], bad[1],int(currentvalue)))
+					imageshown[yx]=imagemean
+
 		plan['pixels'] = newbadpixels
 		self.displayImage(imageshown)
+		self.currentimage = imageshown
 		self.storeCorrectorPlan(plan)
 		self.panel.setPlan(plan)
 

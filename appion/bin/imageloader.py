@@ -37,10 +37,6 @@ class ImageLoader(appionLoop2.AppionLoop):
 		### id info
 		self.parser.add_option("--userid", dest="userid", type="int",
 			help="Leginon User database ID", metavar="INT")
-		self.parser.add_option("--scopeid", dest="scopeid", type="int",
-			help="Scope database ID", metavar="INT")
-		self.parser.add_option("--cameraid", dest="cameraid", type="int",
-			help="Camera database ID", metavar="INT")
 
 		self.parser.add_option("--dir", dest="imgdir", type="string", metavar="DIR",
 			help="directory containing MRC files for upload")
@@ -68,6 +64,8 @@ class ImageLoader(appionLoop2.AppionLoop):
 			help="nominal magnification")
 		self.parser.add_option("--kv", dest="kv", type="int", metavar="INT",
 			help="high tension (in kilovolts)")
+		self.parser.add_option("--cs", dest="cs", type="float", metavar="#.#",
+			default=2.0, help="spherical aberration constant (in mm), e.g., --cs=2.0")
 		self.parser.add_option("--binx", dest="binx", type="int", metavar="INT",
 			default=1, help="binning in x (default=1)")
 		self.parser.add_option("--biny", dest="biny", type="int", metavar="INT",
@@ -100,6 +98,8 @@ class ImageLoader(appionLoop2.AppionLoop):
 				apDisplay.printError("If not specifying a parameter file, supply a high tension")
 			if self.params['kv'] > 1000:
 				apDisplay.printError("High tension must be in kilovolts (e.g., 120)")
+			if self.params['cs'] < 0.1:
+				apDisplay.printError("Cs value must be in mm (e.g., 2.0)")
 			if self.params['imgdir'] is None:
 				apDisplay.printError("If not specifying a parameter file, specify directory containing images")
 			if not os.path.exists(self.params['imgdir']):
@@ -108,10 +108,6 @@ class ImageLoader(appionLoop2.AppionLoop):
 			#mode 2: batch script
 			apDisplay.printError("Could not find Batch parameter file: %s"%(self.params["batchscript"]))
 
-		if self.params['scopeid'] is None:
-			apDisplay.printError("Please provide a Scope database ID, e.g., --scopeid=12")
-		if self.params['cameraid'] is None:
-			apDisplay.printError("Please provide a Camera database ID, e.g., --cameraid=12")
 		if self.params['sessionname'] is None:
 			apDisplay.printError("Please provide a Session name, e.g., --session=09feb12b")
 		if self.params['projectid'] is None:
@@ -207,7 +203,7 @@ class ImageLoader(appionLoop2.AppionLoop):
 		"""
 		standard appionLoop
 		"""	
-		self.getInstruments()
+		self.getAppionInstruments()
 
 	#=====================
 	def run(self):
@@ -358,7 +354,12 @@ class ImageLoader(appionLoop2.AppionLoop):
 			'image path': imagedirectory,
 		}
 		sessionq = leginon.leginondata.SessionData(initializer=initializer)
-		return self.publish(sessionq)
+		sessiondata = self.publish(sessionq)
+		# session become unreserved if is committed
+		reservationq = leginon.leginondata.SessionReservationData(name=sessiondata['name'],reserved=False)
+		self.publish(reservationq,True)
+		return sessiondata
+		
 
 	#=====================
 	def linkSessionProject(self, sessiondata, projectid):
@@ -509,9 +510,18 @@ class ImageLoader(appionLoop2.AppionLoop):
 				return self.publish(tiltq)
 
 	#=====================
-	def getInstruments(self):
-		self.temdata = leginon.leginondata.InstrumentData.direct_query(self.params['scopeid'])
-		self.camdata = leginon.leginondata.InstrumentData.direct_query(self.params['cameraid'])
+	def getAppionInstruments(self):
+		instrumentq = leginon.leginondata.InstrumentData()
+		instrumentq['hostname'] = "appion"
+		instrumentq['name'] = "AppionTEM"
+		instrumentq['cs'] = self.params['cs'] * 1e-3
+		self.temdata = instrumentq
+		
+		instrumentq = leginon.leginondata.InstrumentData()
+		instrumentq['hostname'] = "appion"
+		instrumentq['name'] = "AppionCamera"
+		self.camdata = instrumentq
+		return
 
 	#=====================
 	def makeImageData(self,info):

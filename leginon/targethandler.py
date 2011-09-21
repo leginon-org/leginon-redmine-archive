@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import leginondata
+from leginon import leginondata
 import event
 import threading
 from pyami import ordereddict
@@ -329,7 +329,11 @@ class TargetHandler(object):
 
 	def newSimulatedTarget(self, preset=None,grid=None):
 		## current state of TEM, but use preset
-		scopedata = self.instrument.getData(leginondata.ScopeEMData)
+		try:
+			scopedata = self.instrument.getData(leginondata.ScopeEMData)
+		except Exception, e:
+			self.logger.error('getting scopedata failed: %s' % (e))
+			raise
 		scopedata.friendly_update(preset)
 		lastnumber = self.lastTargetNumber(session=self.session, type='simulated')
 		nextnumber = lastnumber + 1

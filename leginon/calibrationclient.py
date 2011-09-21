@@ -241,11 +241,14 @@ class CalibrationClient(object):
 			if not self.rpixelsize:
 				self.rpixelsize = self.getImageReciprocalPixelSize(imagedata)
 			ctfdata = fftfun.fitFirstCTFNode(pow,self.rpixelsize['x'], None, self.ht)
+			self.node.logger.info('tabeau defocus: %.3f um, zast: %.3f um' % (ctfdata[0]*1e6,ctfdata[1]*1e6))
 			self.ctfdata.append(ctfdata)
 
+			# show defocus estimate on tableau
 			if ctfdata:
 				s = '%d' % int(ctfdata[0]*1e9)
 				eparams = ctfdata[4]
+				self.node.logger.info('eparams a:%.3f, b:%.3f, alpha:%.3f' % (eparams['a'],eparams['b'],eparams['alpha']))
 				center = numpy.divide(eparams['center'], binning)
 				a = eparams['a'] / binning
 				b = eparams['b'] / binning
@@ -461,7 +464,7 @@ class PixelSizeCalibrationClient(CalibrationClient):
 				mag = caldata['magnification']
 			except:
 				print 'CALDATA', caldata
-				raise
+				raise RuntimeError('Failed retrieving last pixelsize')
 			if mag not in last:
 				last[mag] = caldata
 		return last.values()
@@ -488,6 +491,7 @@ class MatrixCalibrationClient(CalibrationClient):
 		caldatalist = self.node.research(datainstance=queryinstance, results=1)
 		if caldatalist:
 			caldata = caldatalist[0]
+			self.node.logger.debug('matrix calibration dbid: %d' % caldata.dbid)
 			return caldata
 		else:
 			excstr = 'no matrix for %s, %s, %s, %seV, %sx' % (tem['name'], ccdcamera['name'], caltype, ht, mag)
@@ -584,9 +588,9 @@ class BeamTiltCalibrationClient(MatrixCalibrationClient):
 		mag = self.instrument.tem.Magnification
 		try:
 			fmatrix = self.retrieveMatrix(tem, cam, 'defocus', ht, mag)
-		except NoMatrixCalibrationError:
-				raise RuntimeError('missing calibration matrix')
-
+		except (NoMatrixCalibrationError,RuntimeError), e:
+			self.node.logger.error('Measurement failed: %s' % e)
+			return {'x':0.0, 'y': 0.0}
 		state1 = leginondata.ScopeEMData()
 		state2 = leginondata.ScopeEMData()
 		state1['defocus'] = defocus1
@@ -606,10 +610,9 @@ class BeamTiltCalibrationClient(MatrixCalibrationClient):
 		cam = self.instrument.getCCDCameraData()
 		ht = self.instrument.tem.HighTension
 		mag = self.instrument.tem.Magnification
-		try:
-			fmatrix = self.retrieveMatrix(tem, cam, 'defocus', ht, mag)
-		except NoMatrixCalibrationError:
-				raise RuntimeError('missing calibration matrix')
+		# Can not handle the exception for retrieveMatrix here. 
+		# Focuser node that calls this need to know the type of error
+		fmatrix = self.retrieveMatrix(tem, cam, 'defocus', ht, mag)
 
 		## only do stig if stig matrices exist
 		amatrix = bmatrix = None
@@ -639,7 +642,7 @@ class BeamTiltCalibrationClient(MatrixCalibrationClient):
 			state2 = leginondata.ScopeEMData()
 			state2['beam tilt'] = bt2
 			try:
-				shiftinfo = self.measureScopeChange(image0, state2, settle=settle, correlation_type=correlation_type)
+				shiftinfo = self.measureScopeChange(image0, state2, settle=settle, correct_tilt=correct_tilt, correlation_type=correlation_type)
 			except Abort:
 				break
 
@@ -928,8 +931,10 @@ class BeamTiltCalibrationClient(MatrixCalibrationClient):
 					tvect = [0, 0]
 					tvect[axisn] = t
 					diff = self.measureDefocusDifference(tvect, settle)
-					if diff is None or not self.confirmDefocusInRange():
-						raise
+					if diff is None:
+						raise RuntimeError('Defocus Difference is None')
+					if not self.confirmDefocusInRange():
+						raise RuntimeError('Deofucs Range confirmation failed')
 					diffs[axisname][msign] = diff
 		finally:
 			## return to original beam tilt
@@ -977,11 +982,10 @@ class BeamTiltCalibrationClient(MatrixCalibrationClient):
 		self.rpixelsize = None
 		self.ht = ht
 		self.initTableau()
-		try:
-			par = 'beam-tilt coma'
-			cmatrix = self.retrieveMatrix(tem, cam, 'beam-tilt coma', ht, mag)
-		except NoMatrixCalibrationError:
-			raise RuntimeError('missing %s calibration matrix' % par)
+
+		par = 'beam-tilt coma'
+		cmatrix = self.retrieveMatrix(tem, cam, 'beam-tilt coma', ht, mag)
+
 		dc = [0,0]
 		for axisn, axisname in ((0,'x'),(1,'y')):
 			tvect = [0, 0]
@@ -1090,7 +1094,12 @@ class SimpleMatrixCalibrationClient(MatrixCalibrationClient):
 		par = self.parameter()
 		tem = scope['tem']
 		ccdcamera = camera['ccdcamera']
-		matrix = self.retrieveMatrix(tem, ccdcamera, par, ht, mag)
+		try:
+			matrix = self.retrieveMatrix(tem, ccdcamera, par, ht, mag)
+		except NoMatrixCalibrationError, e:
+			self.node.logger.error(e)
+			return scope
+			
 
 		pixrow = pixelshift['row'] * biny
 		pixcol = pixelshift['col'] * binx
@@ -1122,12 +1131,16 @@ class SimpleMatrixCalibrationClient(MatrixCalibrationClient):
 			scope['high tension'],
 			scope['magnification'],
 		)
-		matrix = self.retrieveMatrix(*args)
-		inverse_matrix = numpy.linalg.inv(matrix)
-
 		shift = dict(position)
 		shift['x'] -= scope[parameter]['x']
 		shift['y'] -= scope[parameter]['y']
+
+		try:
+			matrix = self.retrieveMatrix(*args)
+		except NoMatrixCalibrationError, e:
+			self.node.logger.error(e)
+			return {'row':0.0,'col':0.0}
+		inverse_matrix = numpy.linalg.inv(matrix)
 
 		# take into account effect of stage alpha tilt on y stage position
 		if parameter == 'stage position':
@@ -1311,6 +1324,7 @@ class StageTiltCalibrationClient(StageCalibrationClient):
 
 		## convert pixel shift into stage movement
 		newscope = self.transform(pixelshift, imagedata0['scope'], imagedata0['camera'])
+
 		## only want the y offset (distance from tilt axis)
 		deltay = newscope['stage position']['y'] - imagedata0['scope']['stage position']['y']
 		## scale correlation shift to the axis offset
@@ -1500,8 +1514,8 @@ class StageTiltCalibrationClient(StageCalibrationClient):
 			self.displayImage(im0)
 		try:
 			defresult = self.node.btcalclient.measureDefocusStig(beam_tilt_value, False, False, correlation_type, 0.5, imagedata0)
-		except RuntimeError, e:
-			self.node.logger.error('Measurement failed: %s' % e)
+		except (NoMatrixCalibrationError,RuntimeError), e:
+			self.node.logger.error(e)
 			return imagedata0, None 
 		def0 = defresult['defocus']
 		print defresult

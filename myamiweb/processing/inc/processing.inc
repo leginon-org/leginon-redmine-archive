@@ -359,6 +359,7 @@ function getSessionList($projectId,$sessionId){
 	return $sessiondata;
 }
 
+// TODO: what if the cluster does not use qstat? Moab uses mstat or some thing like that.
 function checkClusterJobs($processhost, $user, $pass) {
 	$cmd = "qstat -au ".$user." | egrep '^[0-9]'";
 	$subjobs = exec_over_ssh($processhost, $user, $pass, $cmd, true);
@@ -397,267 +398,6 @@ function streamToArray($stream) {
 	return $rows;
 }
 
-function stackViewer($file_hed,$file_img,$n_images,$stackoptions=array()) {
-	$optionkeys = array ('updateheader', 'plist', 'stackinfoindex', 'pixelsize');
-	$plist=false;
-	$updateheader=false;
-	$pixelsize=0;
-	$stackinfoindex=0;
-	foreach ((array)$stackoptions as $k=>$v) {
-		if (in_array($k, $optionkeys)) {
-			$$k = $v;
-		}
-	}
-	$javascript = "
-	<style type='text/css'>
-	input, select {
-		border: 1px solid #AABDCC;
-	}
-	img.imgtile {
-		border: 1px solid #000000;
-	}
-
-	div.scrollpane {
-		height: 600px;
-		overflow: auto;
-		border: 1px solid #666;
-		background-color: #ccc;
-		padding: 8px;
-	}
-	</style>
-	<script src=\"../js/prototype.js\"></script>
-	<script>
-
-	var file_hed=\"$file_hed\"
-	var file_img=\"$file_img\"
-	var n_images=\"$n_images\"
-	var updateheader=\"$updateheader\"
-	var pixelsize=\"$pixelsize\"
-	var stackinfoindex=\"$stackinfoindex\"
-	var excludeimages=Array()
-	var selectimages=Array()
-	var n_tiles=0
-	var lastselectedimage\n";
-	if (is_array($plist)) {
-		$javascript.="imgArray = new Array()\n";
-		foreach ($plist as $p) {
-			$javascript.="imgArray.push(\"$p[p]\");";
-		}
-		$javascript.="
-		function displaystack(imgArray, startImg, endImg, force) {
-			var wholemap = $('wholemap')
-			var i=0
-			for(i = startImg; i <= endImg; i++) {
-				var tileId = addTile(wholemap, imgArray[i], force)
-			}
-			n_tiles=i
-		}\n";
-	}
-
-	else {
-		$javascript.="
-		function displaystack(startImg, endImg, force) {
-			var wholemap = $('wholemap')
-			var i=0
-			for(i = startImg; i <= endImg; i++) {
-				var tileId = addTile(wholemap, i, force)
-			}
-			n_tiles=i
-		}\n";
-	}
-
-	$javascript.= "
-	function addTile(wholemap, i, force) {
-		binning = $('binning').value
-		scalebar = ($('scalebar').checked) ? 1 : 0
-		info = ($('info').checked) ? 1 : 0
-		t = $('quality').value
-		var tileId = \"img\"+i
-		var filename = 'getstackimg.php?'
-				+'hed='+file_hed
-				+'&img='+file_img
-				+'&n='+i
-				+'&t='+t
-				+'&b='+binning
-				+'&uh='+updateheader
-				+'&ps='+pixelsize
-				+'&di='+info
-				+'&sb='+scalebar
-
-		if (typeof stackinfo == 'object' && stackinfo[i]) {
-			filename +='&i='+stackinfo[i]
-		}
-
-		if (stackinfoindex) {
-			filename +='&k='+stackinfoindex
-		}
-
-		var img = $(tileId)
-		if(!img || force){
-			img = document.createElement(\"img\")
-			img.src = filename
-			img.setAttribute(\"id\", tileId)
-			img.setAttribute(\"class\", \"imgtile\")
-			img.setAttribute(\"onclick\", \"setSelection(\"+i+\",'\"+tileId+\"')\")
-		wholemap.appendChild(img)
-	}
-
-		return tileId
-	}
-
-	function setSelection(id, img) {
-		var imgelement = document.getElementById(img)
-		if (mode=='exclude') {
-			c=excludeImage(id)
-			if(c!=-1) { 
-				imgelement.style.border='1px solid #f00'
-				imgelement.style.opacity=0.5
-			} else {
-				imgelement.style.border=''
-				imgelement.style.opacity=''
-			}
-			if (typeof addexcludefn== 'function') {
-				addexcludefn()
-			}
-		}
-		if (mode=='select') {
-			c=selectImage(id)
-			imgelement.style.border=(c!=-1) ? '1px solid #0f0' : ''
-			if (typeof addselectfn== 'function') {
-				addselectfn()
-			}
-		}
-		if (o=$('excludedIndex')) {
-			o.value=getExcludeImages()
-		}
-		if (o=$('selectedIndex')) {
-			o.value=getSelectImages()
-		}
-	}
-
-	function selectImage(id) {
-		var cindex=selectimages.length
-		for(var i=0; i<selectimages.length; i++) {
-			if (selectimages[i]==id) {
-				cindex=i
-				id=-1
-				break
-			}
-		}
-		selectimages[cindex]=id
-		return id
-	}
-
-	function select2exclude() {
-		var selected=false
-		for(var j=0; j<n_tiles; j++) {
-			selected=false
-			for(var i=0; i<selectimages.length; i++) {
-				if (selectimages[i]==j) {
-					selected=true
-				}
-			}
-			excludeimages[j]=(selected) ? -1 : j
-		}
-	}
-
-	function getSelectImages() {
-		var a=Array();
-		for(var i=0; i<selectimages.length; i++) {
-			if (selectimages[i]!=-1) {
-				a[a.length]=selectimages[i]
-			}
-		}
-		if (a.length) {
-			lastselectedimage=a[a.length-1]
-		}
-		return a.toString()
-	}
-
-	function getLastSelectedImage() {
-		return lastselectedimage
-	}
-
-	function getExcludeImages() {
-		var a=Array();
-		for(var i=0; i<excludeimages.length; i++) {
-			if (excludeimages[i]!=-1) {
-				a[a.length]=excludeimages[i]
-			}
-		}
-		return a.toString()
-	}
-
-	function excludeImage(id) {
-		var cindex=excludeimages.length
-		for(var i=0; i<excludeimages.length; i++) {
-			if (excludeimages[i]==id) {
-				cindex=i
-				id=-1
-				break
-			}
-		}
-		excludeimages[cindex]=id
-		return id
-	}
-
-	function load() {
-		clean()
-		startImg=parseInt($('startimg').value)
-		endImg=parseInt($('endimg').value)
-		if (endImg > n_images-1) {
-			endImg=n_images-1
-		}
-		force=1
-		displaystack(\n";
-	if (is_array($plist)) $javascript.="imgArray, ";
-	$javascript.="startImg, endImg, force)
-	}
-
-	function clean() {
-		var wholemap = $('wholemap')
-		var allTiles = wholemap.getElementsByTagName('img')
-		for(i = 0; i < allTiles.length; i++) {
-			var id = allTiles[i].getAttribute('id')
-			wholemap.removeChild(allTiles[i])
-			i-- 
-		}
-	}
-
-	function setImage() {
-		window.document.myf.submit(); 
-	}
-
-	function resetSelection() {
-		selectimages=Array()
-		excludeimages=Array()
-		for(var id=0; id<n_tiles; id++) {
-			var img = $('img'+id)
-			if(s=img.style) {
-				s.border=''
-				s.opacity=''
-			}
-		}
-	}
-
-	var mode='exclude'
-	function setMode(){
-		resetSelection()
-		if (o=$('mode')) {
-			if (mode=='select') {
-				o.style.border='1px solid #F00'
-				mode='exclude'
-			} else {
-				o.style.border='1px solid #0F0'
-				mode='select'
-			}
-			o.value=mode
-		}
-	}
-
-	</script>\n";
-	return $javascript;
-}
 
 function getNumberOfProcsPerNode($processingHost) {
 	global $PROCESSING_HOSTS;
@@ -671,11 +411,20 @@ function getNumberOfProcsPerNode($processingHost) {
 	return $numOfNode;
 }
 
-function getNumberOfRequiredNodes($nproc, $ppn) {
-	if ($nproc < $ppn)
-	return array(1, $nproc);
-	$nodes = (int) ceil($nproc/$ppn);
-	$ppn = (int) ceil($nproc/$nodes);
+function getNumberOfRequiredNodes($nproc, $ppn) 
+{
+	if ($nproc < $ppn) {
+		return array(1, $nproc);
+	}
+	
+	if ( $ppn ) {
+		$nodes = (int) ceil($nproc/$ppn);
+	}
+	
+	if ( $nodes ) {
+		$ppn = (int) ceil($nproc/$nodes);
+	}
+	
 	return array($nodes, $ppn);
 }
 
@@ -717,10 +466,19 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc) {
 		$outdir=$_POST['outdir'];
 		if (empty($outdir))
 			return "<B>ERROR:</B> undefined outdir";
+			
 		// set rundir from runname and outdir
 		if (substr($outdir,-1,1)!='/')
 			$outdir.='/';
 		$rundir = $outdir.$runname;
+		
+		// set remoterundir from runname and remoteoutdir
+		$remoteoutdir = $_POST['remoteoutdir'];
+		if ( !empty($remoteoutdir) ) {
+			if (substr($remoteoutdir,-1,1)!='/')
+				$remoteoutdir.='/';
+			$remoterundir = $remoteoutdir.$runname;
+		}
 	} else {
 		if (!is_numeric($expId) || $expId == 0) {
 			// special case for uploading images to a new session coming from a known project
@@ -731,7 +489,7 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc) {
 		}
 	}
 	if (!$allow_processing)
-		redirect(BASE_URL.'accessdeny.php?text=You are not allow to process this data set');
+		redirect(BASE_URL.'accessdeny.php?text=You do not have permission to process this data set');
 	$projectid = getProjectId();
 
 	// add space to end, if necessary
@@ -740,6 +498,8 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc) {
 	// in the future maybe remove if statements
 	if (!preg_match("/--rundir=/", $command) && !empty($rundir))
 	$command .= "--rundir=$rundir ";
+	if (!preg_match("/--remoterundir=/", $command) && !empty($remoterundir))
+	$command .= "--remoterundir=$remoterundir ";
 	if (!preg_match("/--runname=/", $command) && !empty($runname))
 	$command .= "--runname=$runname ";
 	if (!preg_match("/--projectid=/", $command))
@@ -806,38 +566,43 @@ function justShowCommandTable($command,$skip_command=false) {
 	// split the components into an array, and pop the first element
 	// which should be the function.
 	$command = trim($command);
-	// beginning and end of description value is indicated by "
-	$description_position = strpos($command,'--description=');
-	if (is_numeric($description_position)) {
-		$quote_start = strpos($command,'"',$description_position);
-		$quote_end = strpos($command,'"',$quote_start+1);
-		$description_bit = substr($command,$description_position,($quote_end-$description_position+1));
-		$short_command = substr_replace($command,'',$description_position, ($quote_end-$description_position+2));
-	} else {
-		$short_command = $command;
-	}
-	$bits = split(" ", $short_command);
-	$function = array_shift($bits);
-	if (is_numeric($description_position)) $bits[] = $description_bit;
-
+	
+	// tokenize the command on spaces, without splitting quoted tokens
+	$token = strtok($command,' ');
+	while ($token) {
+		// find double quoted tokens
+		if ( preg_match('/([^"]*)"([^"]*)/', $token) ) { 
+			$token .= ' '.strtok('"').'"'; 
+		}
+		// find single quoted tokens
+		if ( preg_match("/([^']*)'([^']*)/", $token) ) { 
+			$token .= ' '.strtok("'")."'"; 
+		}
+		
+		$tokens[] = $token;
+		$token = strtok(' ');
+	} 
+	
+	// remove the first token, which should be the file name
+	$function = array_shift($tokens);	
+	
 	// Add the Appion wrapper to support muliple installations of Appion
 	$command =  addAppionWrapper($command);
-
 
 	$commandtable = "<table class='tablebubble' border='0' width='800'>\n";
 	if (!$skip_command) {
 		$commandtable .= "<tr><td colspan='2'>\n";
-		$commandtable .= "	Copy and paste this $function command into a terminal:<hr/>\n";
+		$commandtable .= "	Copy and paste this ".$function." command into a terminal:<hr/>\n";
 		$commandtable .= "</td></tr><tr><td colspan='2' style='padding-left:0.3in;text-indent:-0.3in'>\n";
 		$commandtable .= "	<p>\n";
 		$commandtable .= "		<font size='+1'>$command</font>\n";
 		$commandtable .= "	</p>\n";
 	}
 	$commandtable .= "</td></tr><tr><td colspan='2'><hr/>\n";
-	sort($bits);
-	foreach ($bits as $bit) {
-		if (substr($bit, 0, 2) == "--") {
-			if (preg_match("/^--([^=]*)=(.*)$/", $bit, $matches)) {
+	sort($tokens);
+	foreach ($tokens as $token) {
+		if (substr($token, 0, 2) == "--") {
+			if (preg_match("/^--([^=]*)=(.*)$/", $token, $matches)) {
 				// type 1: --param=value
 				if (empty($matches[1]))
 				continue;
@@ -845,7 +610,7 @@ function justShowCommandTable($command,$skip_command=false) {
 				$commandtable .= "<b>".$matches[1]."</b>\n";
 				$commandtable .= "</td><td>\n";
 				$commandtable .= $matches[2]."\n";
-			} elseif (preg_match("/^--([^=]*)$/", $bit, $matches)) {
+			} elseif (preg_match("/^--([^=]*)$/", $token, $matches)) {
 				// type 2: --param, e.g., --no-commit
 				if (empty($matches[1]))
 				continue;
@@ -854,11 +619,11 @@ function justShowCommandTable($command,$skip_command=false) {
 				$commandtable .= "</td><td>\n";
 				$commandtable .= "<font color='#339933'><i>flag enabled</i></font>\n";
 			}
-		} elseif(!empty($bit)) {
+		} elseif(!empty($token)) {
 			$commandtable .= "</td></tr><tr><td>\n";
 			$commandtable .= "<font color='#cc3333'>Unknown flag:</font>\n";
 			$commandtable .= "</td><td>\n";
-			$commandtable .= "$bit\n";
+			$commandtable .= "$token\n";
 		}
 	}
 	$commandtable .= "</td></tr>\n";
@@ -866,18 +631,81 @@ function justShowCommandTable($command,$skip_command=false) {
 	return $commandtable;
 };
 
+function addProcessingHostParams( $command, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime )
+{
+	if ($ppn < 1 && !preg_match("/--ppn=/", $command) ) {
+		$ppn = getNumberOfProcsPerNode($processhost);
+	}
+	if ($nodes < 1 && !preg_match("/--nodes=/", $command) ) {
+		list($nodes, $ppn) = getNumberOfRequiredNodes($nproc, $ppn);
+	}
+	if ($ppn < 1) {
+		$ppn = 1;
+	}
+	// Torque PBS: the cput needs to be nproc*walltime
+	// PBS Pro: cput = walltime
+	// This was not being using in current job files, should it be?
+	$cput = $walltime * $nproc;
+	
+	if (!preg_match("/--ppn=/", $command))
+		$command .= "--ppn=$ppn ";
+	if (!preg_match("/--nodes=/", $command))
+		$command .= "--nodes=$nodes ";
+	if (!preg_match("/--walltime=/", $command))
+		$command .= "--walltime=$walltime ";
+	if (!preg_match("/--cput=/", $command) && $cputime)
+		$command .= "--cput=$cputime ";
+		
+	return $command;		
+}
+
+// Put the command into format:
+// <wrapper> runjob.py <wrapper> somejob.py --param1=x -- param2=y
+// for generic jobs or
+// <wrapper> runjob.py --appionwrapper=<wrapper> --param1=x -- param2=y
+// for jobs that need to create a type specific job file.
+function addJobSubmitParams( $command, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime )
+{
+	// Add the Appion wrapper to support muliple installations of Appion
+	$command = addAppionWrapper($command);
+	
+	// if there is no python file in the command, turn the wrapper into a flag
+	if (!preg_match("/.py /", $command)) {
+		$command = "--appionwrapper=".$command;
+	}
+	
+	// Funnel all jobs through the cluster agent, runjob.py.
+	// Jobs to be run on remote clusters are built by job specific classes.
+	// All others are built by apGenericJob.py.
+	if (!preg_match("/runJob.py/", $command)) {
+		$command = "runJob.py ".$command;
+
+		// Add the Appion wrapper to support muliple installations of Appion
+		// Makes sure we use the right version of runjob.py and subsequent scripts.
+		$command = addAppionWrapper($command);
+	}
+	
+	// Add processing host parameters to the command
+	// TODO: when is the command ever an array??? should it always be an array that sometimes has len=1??
+	// Commenting this out for now, if no problems it can be removed
+//	if (is_array($command)) {
+//		foreach ($command as $cmd) {
+//			$cmd = addProcessingHostParams($cmd, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime);
+//		}
+//	} else {
+		$command = addProcessingHostParams($command, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime);
+//	}
+	
+	return $command;
+}
+
 /**************************************/
 function submitAppionJob($command, $outdir, $runname, $expId, $jobtype, $testimg=False,
-$xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime="240") {
+$xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=False) {
 	global $DATA_DIRS;
 
 	$allow_processing = checkExptAdminPrivilege($expId,'data');
 	if (!$allow_processing) return "processing not allowed by this user";
-
-	// Add the Appion wrapper to support muliple installations of Appion
-	$command =  addAppionWrapper($command);
-	
-	$particle=new particleData();
 
 	if ($_POST['processinghost']) {
 		$_SESSION['processinghost'] = $_POST['processinghost'];
@@ -887,23 +715,26 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 	$user = $_SESSION['username'];
 	$pass = $_SESSION['password'];
 
-	// check if database is configured on processing host
-	$cmd = "python -c 'import sinedon; print sinedon.getConfig(\"leginondata\")'";	
-	$dbcheck = exec_over_ssh($processhost,$user,$pass,$cmd,True);
-	if ($dbcheck === false){
-		//Return a more accurate error message		
-		$errMsg = "Could not connect to $processhost: ";
-		$errMsg .= pconnError();
-		return $errMsg;
-	}	
-
-	if (trim($dbcheck)=='') return "sinedon is not configured for leginondata, check your sinedon.cfg file";
+	// Add parameters that are only needed if submitting the job from the web server
+	$command = addJobSubmitParams( $command, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime );
 	
-	if($expId != 000){
-		$cmd = "python -c 'import sinedon; print sinedon.getConfig(\"appiondata\")'";
-		$dbcheck = exec_over_ssh($processhost,$user,$pass,$cmd,True);
-		if (trim($dbcheck) == '') return "sinedon is not configured for appiondata, check your sinedon.cfg file";
-	}
+	// check if database is configured on processing host
+//	$cmd = "python -c 'import sinedon; print sinedon.getConfig(\"leginondata\")'";	
+//	$dbcheck = exec_over_ssh($processhost, $user, $pass, $cmd, True);
+//	if ($dbcheck === false){
+//		//Return a more accurate error message		
+//		$errMsg = "Could not connect to $processhost: ";
+//		$errMsg .= pconnError();
+//		return $errMsg;
+//	}	
+//
+//	if (trim($dbcheck)=='') return "sinedon is not configured for leginondata, check your sinedon.cfg file";
+//	
+//	if($expId != 000){
+//		$cmd = "python -c 'import sinedon; print sinedon.getConfig(\"appiondata\")'";
+//		$dbcheck = exec_over_ssh($processhost,$user,$pass,$cmd,True);
+//		if (trim($dbcheck) == '') return "sinedon is not configured for appiondata, check your sinedon.cfg file";
+//	}
 	
 	//Check if filesystem is full
 	$cmd = "df $outdir";
@@ -941,23 +772,6 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 	// is this used anymore? - neil
 	if ($xtra) $runname = "$runname.$xtra";
 
-	// set names of cluster job file and output log
-	$jobfile = "$runname.appionsub.job";
-	$logfile = "$runname.appionsub.log";
-
-	if (is_array($command)) {
-		$apcmd = array();
-		foreach ($command as $cmd) {
-			$filtcommand = ereg_replace("\'","", $cmd);;
-			$apcmd[] = "webcaller.py '".$filtcommand."' $rundir/$logfile"."\n";
-		}
-	} else {
-		// create appion command
-		$filtcommand = ereg_replace("\'","", $command);
-		//$filtcommand = preg_replace("/[\n\r]/", " -- ", $filtcommand);
-		$apcmd = "webcaller.py '".$filtcommand."' $rundir/$logfile";
-	}
-
 	// create run directory on processing host only.  Do not do anything on
 	// the webserver, doing so requires making poor assumptions. 
 	$cmd = "mkdir -p $rundir;";
@@ -967,101 +781,56 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 		$errMsg .= pconnError();
 		return $errMsg;
 	}
+
+	// set names of cluster job file and output log
+	// Changing this, not sure why appionsub is being added to the name...AH
+	// May need to change back in case of Armageddon
+	$jobfile = "$runname.appionsub.job";
+	$logfile = "$runname.appionsub.log";
+	// These should match the names being assigned on the python side where the files are created
+	//$jobfile = "$runname.job";
+	//$logfile = "$runname.log";
 	
-	if ($testimg) {
-		//submit directly to head node on cluster if testing 1 image
-		$cmd .= "cd $rundir; $apcmd; exit;";
-		$jobnum = exec_over_ssh($processhost, $user, $pass, $cmd, True);
-		return;
-	}
-
-	// get proper node numbers
-	if ($ppn < 1)
-	$ppn = getNumberOfProcsPerNode($processhost);
-	if ($nodes < 1)
-	list($nodes, $ppn) = getNumberOfRequiredNodes($nproc, $ppn);
-	if ($ppn < 1)
-	$ppn = 1;
-	// Torque PBS: the cput needs to be nproc*walltime
-	// PBS Pro: cput = walltime
-	$cput = $walltime*$nproc;
-
 	// insert cluster job data and set job as queued
-	$jobid=$particle->insertClusterJobData($processhost,$rundir,'',$rundir,$jobfile,$expId,$jobtype,$user);
-
-	$jobtext = "#PBS -l nodes=$nodes:ppn=$ppn\n";
-	// AMI guppy specific to get small jobs to run on 4 proc nodes
-	/*if ($nproc < 5) {
-	$jobtext = "#PBS -l nodes=1:ppn=4:fourProc\n";
-	} else {
-	$jobtext = "#PBS -l nodes=$nodes:ppn=$ppn\n";
-	}*/
-
-	// create job file
-	$jobtext .= "#PBS -l walltime=$walltime:00:00\n";
-	$jobtext .= "#PBS -l cput=$cputime:00:00\n";
-	$jobtext .= "#PBS -j oe\n";
-	$jobtext .= "#PBS -r n\n\n";
-	$projectid = getProjectId();
-
-	// we should get rid of this and let python do it
-	$jobtext .= "updateAppionDB.py $jobid R $projectid\n\n";
-
-	if (is_array($command)) {
-		foreach ($apcmd as $iteration) {
-			$jobtext .= "$iteration\n";
-		}
-	} else
-		$jobtext .= "$apcmd\n";
-
-	// we should get rid of this and let python do it
-	$jobtext .= "\nupdateAppionDB.py $jobid D $projectid\n\n";
-
-	$jobtext .= "exit\n";
-
-	// Create job file and copy it directly to the processing host via scp
-	$randstr = randomString(16);
-	$tmpfile = "/tmp/$randstr.txt";
-	$f = fopen($tmpfile,'w');
-	fwrite($f,$jobtext);
-	fclose($f);
-
-	$rvalue = scp($processhost, $user, $pass, $tmpfile, "$rundir/$jobfile");	
-	if (!$rvalue){
-		$errMsg = "Copying jobfile to $rundir on $host failed: ";
-		$errMsg .= pconnError();
-		unlink($tmpfile);//make sure to clean up after ourselves
-		return $errMsg;
-	}
+	$particle = new particleData();
+	$jobid = $particle->insertClusterJobData($processhost, $rundir, '', $rundir, $jobfile, $expId, $jobtype, $user);
+	
+	// Add the job id to the command string
+	$command .= "--jobid=$jobid ";
+		
+	$apcmd = $command;
+	//$cmd = "cd $rundir; $apcmd;\n";
+	$cmd = $apcmd;
 	
 	// write output page
 	processing_header("Appion Job Submission","Appion Job Submission");
-	echo "<table width='600'>\n";
+	echo "<table width='800'>\n";
 	echo "<tr><td>Appion Directory</td><td>$rundir</td></tr>\n";
 	echo "<tr><td>Job File Name</td><td>$jobfile</td></tr>\n";
 	echo "<tr><td>Hostname</td><td>$processhost</td></tr>\n";
 	echo "<tr><td>Username</td><td>$user</td></tr>\n";
 	echo "<tr><td>Local server ip</td><td>$webserver</td></tr>\n";
 	echo "<tr><td>Project Id</td><td>$projectid</td></tr>\n";
-	$cmd = "cd $rundir; qsub $jobfile;\n";
-
+	echo "<tr><td>Command</td><td><font size='-2'>$cmd</font></td></tr>\n";
 	
 	// submit job to cluster
 	$jobdata = exec_over_ssh($processhost, $user, $pass, $cmd, True);
-	if ($jobdata === false){		
-		$errMsg = "Error: submitting job to $host failed:  ";
+	if ( empty($jobdata) ) {		
+		$errMsg = "Error: Job submission to $processhost failed:  ";
 		$errMsg .= pconnError();
 		echo "</table><p>\n";
 		echo "<hr>\n<font color='#CC3333' size='+1'>$errMsg</font>\n";
-		unlink($tmpfile); //make sure to clean up after ourselves
 		exit;
 	}
 	// retrieve job id
-	ereg("([0-9]{1,})", $jobdata, $regs);
-	$jobnum = $regs[1];
+	// TODO: may want to clean this up so the number is not returned twice.
+	// we want to match the last numeric value at the end of the $jobdata string
+	// this currently returns it twice, hence the 2D array result requiring $matches[0][0] to access.
+	preg_match_all("/([0-9]+)$/", $jobdata, $matches );
+	$jobnum = $matches[0][0];
 	if (!is_numeric($jobnum)) {
 		echo "</table><p>\n";
-		echo "ERROR in job submission. Check the cluster\n".$jobdata."\n".$regs."\n";
+		echo "ERROR in job submission. Check the cluster.\n".$jobdata."\n".$matches[0][0]."\n";
 		processing_footer();
 		exit;
 	}
@@ -1080,7 +849,6 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 	$particle->updateClusterQueue($jobid, $jobnum, $status);
 
 	echo "<tr><td>Job number</td><td>$jobnum</td></tr>\n";
-	echo "<tr><td>Command</td><td><font size='-3'>$filtcommand</font></td></tr>\n";
 	echo "</table>\n";
 
 	// check jobs that are running on the cluster
@@ -1094,7 +862,6 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 	echo "<p><a href='checkAppionJob.php?expId=$expId&jobId=$jobid'>[Check status of this job]</a><p>\n";
 	echo "<p><font color='#990000'>Do not hit 'reload' - it will re-submit job</font><p>\n";
 	processing_footer();
-	unlink($tmpfile); //make sure to clean up after ourselves
 	exit;
 }
 
@@ -1141,6 +908,7 @@ function getTimestring() {
 	return $timestring;
 }
 
+// TODO: is this used anywhere???
 /**************************************/
 function bashcolor2html($str) {
 	$chr27=chr(27);
@@ -1279,7 +1047,10 @@ function getHtmlStyle($code) {
 }
 
 /**************************************/
-function writeJavaPopupFunctions ($help) {
+function writeJavaPopupFunctions($help='') 
+{
+	$helpsection = ($help === '' ) ? "help." : "help.".$help.".";
+
 	$javafunc = "
   <style type='text/css'>
     input { border-style: solid; border-color: #9dae9b; }
@@ -1290,19 +1061,20 @@ function writeJavaPopupFunctions ($help) {
 		}
   </style>\n";
 
-	$javafunc .= "
-  <script type='text/javascript' src='js/help.js'></script>
-  <script type='text/javascript' src='../js/prototype.js'></script>
-  <script type='text/javascript' src='../js/draglayer.js'></script>
+	$javafunc .= "<script type='text/javascript' src='js/help.js'></script>\n";
+	// TODO: prototype.js is a huge amount of javascript to include in every page. Can we reduce it?
+	// Not sure which portion is actually used, but not including it breaks help popups.
+	$javafunc .= "<script type='text/javascript' src='../js/prototype.js'></script>\n";
+	$javafunc .= "<script type='text/javascript' src='../js/draglayer.js'></script>
   <script type='text/javascript'>
 
 	overdiv='0'
-	var ie = (document.all)? true:false
-
-// create the popups 
+	var ie = (document.all)? true:false\n";
+// create the popups
+	$javafunc .="
 	function popLayer(a, id) {
 		dhelp=$('dhelp')
-		helpstr=eval('help.$help.'+a)
+		helpstr=eval('$helpsection'+a)
 		if(!helpstr){helpstr='<font color=red>Missing help info</font>'}
 
 		desc = '<div style=\'position: relative; width: 300px; padding: 1em\'>'+helpstr+'</div>'
@@ -1425,6 +1197,35 @@ function protomoRef() {
 
 function imodRef() {
 	return referenceBox("Computer visualization of three-dimensional image data using IMOD", 1996, "Kremer J.R., D.N. Mastronarde and J.R. McIntosh", "J. Struct. Biol.", 116, 1, 8742726, false, "doi:10.1006/jsbi.1996.0013", false);
+}
+
+function xmippRef() 
+{
+	return referenceBox("XMIPP: a new generation of an open-source image processing package for electron microscopy", 2004, "Sorzano CO, Marabini R, Velázquez-Muriel J, Bilbao-Castro JR, Scheres SH, Carazo JM, Pascual-Montano A.", "J Struct Biol.", 148, 2, 15477099, false, "10.1016/j.jsb.2004.06.006", "img/xmipp_logo.png");
+}
+
+// TODO: This should be revisited. 
+function showReference( $method )
+{
+	switch ( $method ){
+		case "eman":
+			return emanRef();
+			break;
+		case "xmipp":
+			return xmippRef();
+			break;
+		case "frealign":
+			return frealignRef();
+			break;
+		case "imagic":
+			return imagicRef();
+			break;
+		case "spider":
+			return spiderRef();
+			break;
+		default:
+			return appionRef();
+	}
 }
 
 /**************************************/

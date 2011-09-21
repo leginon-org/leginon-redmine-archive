@@ -254,7 +254,7 @@ def writeImagic(array, filename, msg=True):
 	Currently reads header information for only first image in stack
 
 	Inputs:
-		3d numpy array (numimg x row x col)
+		3d numpy array (numimg x row x col) OR python list of 2d numpy arrays (row x col)
 		filename
 	Modifies:
 		overwrites files on disk
@@ -262,6 +262,7 @@ def writeImagic(array, filename, msg=True):
 		none
 	"""
 	if isinstance(array, list):
+		### python list of 2d numpy arrays (row x col)
 		if len(array) == 0:
 			apDisplay.printWarning("writeImagic: no particles to write")
 			return
@@ -298,9 +299,8 @@ def writeImagic(array, filename, msg=True):
 		partnum = i+1
 		headerstr = makeHeaderStr(partnum, array.shape, avg1, stdev1, min1, max1)
 		headfile.write(headerstr)
-		### scale image to maximize range
-		scalepartimg = (partimg-min1)/(max1-min1)
-		datafile.write(scalepartimg.tostring())
+		# write to imagic file
+		datafile.write(partimg.tostring())
 		i += 1
 	headfile.close()
 	datafile.close()

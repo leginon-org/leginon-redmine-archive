@@ -550,6 +550,7 @@ class ApStackParamsData(Data):
 			('lowpass', float),
 			('highpass', float),
 			('tiltangle', str),
+			('rotate', bool),
 		)
 	typemap = classmethod(typemap)
 
@@ -643,6 +644,26 @@ class ApMaxLikeRunData(Data):
 			('job', ApMaxLikeJobData),
 		)
 	typemap = classmethod(typemap)
+
+class ApCL2DRunData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('runname', str),
+			('fast', str),
+			('run_seconds', int),
+			('timestamp', str),
+			('REF|projectdata|projects|project', int),
+			('path', ApPathData),
+			('finished', bool),
+			('max-iter', int),
+			('num-ref', int),
+			('correlation', bool),
+			('correntropy', bool),
+			('classical_multiref', bool),
+			('intracluster_multiref', bool),
+		)
+	typemap = classmethod(typemap)
+
 
 class ApTopolRepJobData(Data):
 	def typemap(cls):
@@ -758,6 +779,7 @@ class ApAlignRunData(Data):
 			('imagicMRA', ApMultiRefAlignRunData),
 			('editerrun', ApEdIterRunData),
 			('topreprun', ApTopolRepRunData),
+			('cl2drun', ApCL2DRunData),
 			('hidden', bool),
 			('path', ApPathData),
 		)
@@ -927,6 +949,7 @@ class ApClusteringRunData(Data):
 			('kerdenparams', ApKerDenSOMParamsData),
 			('rotkerdenparams', ApRotKerDenSOMParamsData),
 			('affpropparams', ApAffinityPropagationClusterParamsData),
+			('cl2dparams', ApCL2DRunData),
 		)
 	typemap = classmethod(typemap)
 
@@ -1088,6 +1111,17 @@ class ApOtrRunData(Data):
 ### END 3d Volume tables ###
 ### START Reconstruction tables ###
 
+### generic multi-model refine table for all multi-model jobs
+class ApMultiModelRefineRunData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('runname', str),
+			('num_refinements', int),
+			('REF|projectdata|projects|project', int),
+			('session', leginon.leginondata.SessionData),
+		)
+	typemap = classmethod(typemap)	
+
 ### this one is for all iterations
 ### generic refine table
 class ApRefineRunData(Data):
@@ -1098,12 +1132,12 @@ class ApRefineRunData(Data):
 			('description', str),
 			('num_iter', int),
 			('hidden', bool),
+			('reference_number', int),
 			('stack', ApStackData),
 			('initialModel', ApInitialModelData),
 			('path', ApPathData),
 			('job', ApAppionJobData),
-			### additional packages plugin here
-			('xmippParams', ApXmippRefineParamsData),
+			('multiModelRefineRun', ApMultiModelRefineRunData),
 		)
 	typemap = classmethod(typemap)
 
@@ -1113,11 +1147,14 @@ class ApRefineIterData(Data):
 	def typemap(cls):
 		return Data.typemap() + (
 			('iteration', int),
-			('exemplar',bool),
+			('exemplar', bool),
+			('angularSamplingRate', int),
 			('mask', int),
 			('imask', int),
-			('volumeDensity',str),
-			('refineClassAverages',str),
+			('alignmentInnerRadius', int),
+			('alignmentOuterRadius', int),
+			('volumeDensity', str),
+			('refineClassAverages', str),
 			('postRefineClassAverages', str),
 			('classVariance', str),
 			('symmetry', ApSymmetryData),
@@ -1128,6 +1165,19 @@ class ApRefineIterData(Data):
 			('emanParams', ApEmanRefineIterData),
 			('xmippParams', ApXmippRefineIterData),
 			('frealignParams', ApFrealignIterData),
+			('xmippML3DParams', ApXmippML3DRefineIterData),
+		)
+	typemap = classmethod(typemap)
+	
+### this one is for each iteration, generic reference table
+class ApRefineReferenceData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('volumeDensityStart', str),
+			('volumeDensityEnd', str),
+			('reference_number', int),
+			('path', ApPathData),
+			('iteration', ApRefineIterData),
 		)
 	typemap = classmethod(typemap)
 
@@ -1136,6 +1186,8 @@ class ApRefineParticleData(Data):
 	def typemap(cls):
 		return Data.typemap() + (
 			('refineIter', ApRefineIterData),
+			('multiModelRefineRun', ApMultiModelRefineRunData),
+			('reference_number', ApRefineReferenceData),
 			('particle', ApStackParticleData),
 			('shiftx', float),
 			('shifty', float),
@@ -1145,6 +1197,8 @@ class ApRefineParticleData(Data):
 			('quality_factor', float),
 			('phase_residual', float),
 			('mirror', bool),
+			('3Dref_num', int),
+			('2Dclass_num', int),
 			('refine_keep',bool),
 			('postRefine_keep',bool),
 			('euler_convention', str),
@@ -1156,9 +1210,12 @@ class ApRefineParticleData(Data):
 class ApEmanRefineIterData(Data):
 	def typemap(cls):
 		return Data.typemap() + (
+			('package', str),
 			('ang', float),
 			('lpfilter', int),
 			('hpfilter', int),
+			('mask', int),
+			('imask', int),
 			('pad', int),
 			('EMAN_maxshift', int),
 			('EMAN_hard', int),
@@ -1168,6 +1225,9 @@ class ApEmanRefineIterData(Data):
 			('EMAN_shrink', int),
 			('EMAN_euler2', int),
 			('EMAN_xfiles', float),
+			('EMAN_amask1', float),
+			('EMAN_amask2', float),
+			('EMAN_amask3', float),
 			('EMAN_median', bool),
 			('EMAN_phasecls', bool),
 			('EMAN_fscls', bool),
@@ -1180,6 +1240,61 @@ class ApEmanRefineIterData(Data):
 	typemap = classmethod(typemap)
 
 ### this one is for all iterations
+class ApRefineStackData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('preprefine', ApPrepRefineData),
+			('stackref', ApStackData),
+			('filename', str), 
+			('bin', int),
+			('lowpass', float),
+			('highpass', float),
+			('last_part', int),
+			('format', str),
+			('apix', float),
+			('boxsize', int),
+			('cs', float), 
+			('recon', bool),
+		)
+	typemap = classmethod(typemap)
+
+class ApRefineInitModelData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('preprefine', ApPrepRefineData),
+			('refmodel', ApInitialModelData),
+			('filename', str), 
+			('format', str),
+			('apix', float),
+		)
+	typemap = classmethod(typemap)
+
+class ApRefineMaskVolData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('preprefine', ApPrepRefineData),
+			('refmodel', ApInitialModelData),
+			('filename', str), 
+			('format', str),
+			('apix', float),
+		)
+	typemap = classmethod(typemap)
+
+class ApPrepRefineData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+		('name', str),
+		('hidden', bool),
+		('path', ApPathData),
+		('stack', ApStackData),
+		('job', ApAppionJobData),
+		('session', leginon.leginondata.SessionData),
+		('method', str),
+		('description', str),
+		('paramiter', ApRefineIterData),
+		)
+	typemap = classmethod(typemap)
+
 class ApFrealignPrepareData(Data):
 	def typemap(cls):
 		return Data.typemap() + (
@@ -1200,7 +1315,7 @@ class ApFrealignPrepareData(Data):
 		)
 	typemap = classmethod(typemap)
 
-### this one is for all iterations
+### this one is for each iteration in Frealign refinement
 class ApFrealignIterData(Data):
 	def typemap(cls):
 		return Data.typemap() + (
@@ -1221,55 +1336,95 @@ class ApFrealignIterData(Data):
 		)
 	typemap = classmethod(typemap)
 
-### this one is for all iterations
-### is this even used???
-class ApXmippRefineParamsData(Data):
-	def typemap(cls):
-		return Data.typemap() + (
-			('Niter', int),
-			('maskFilename', str),
-			('maskRadius', int),
-			('innerRadius', float),
-			('outerRadius', float),
-			('symmetryGroup', ApSymmetryData),
-			('fourierMaxFrequencyOfInterest', float),
-			('computeResol', bool),
-			('dolowpassfilter', bool),
-			('usefscforfilter', bool),
-		)
-	typemap = classmethod(typemap)
-
-### this one is for each iteration
+### this one is for each iteration in Xmipp projection-matching refinement
 class ApXmippRefineIterData(Data):
 	def typemap(cls):
 		return Data.typemap() + (
-			('angularStep', float),
-			('maxChangeInAngles', float),
-			('maxChangeOffset', float),
-			('search5dShift', float),
-			('search5dStep', float),
-			('discardPercentage', float),
-			('reconstructionMethod', str),
+			('NumberofIterations', int),
+			('MaskFileName', str),
+			('MaskRadius', int),
+			('InnerRadius', int),
+			('OuterRadius', int),
+			('SymmetryGroup', str),
+			('FourierMaxFrequencyOfInterest', float),
+			('SelFileName', str),
+			('DocFileName', str),
+			('ReferenceFileName', str),
+			('WorkingDir', str),
+			('CleanUpFiles', bool),
+			('DoCtfCorrection', bool),
+			('CTFDatName', str),
+			('DoAutoCtfGroup', bool),
+			('CtfGroupMaxDiff', float),
+			('CtfGroupMaxResol', float),
+			('PaddingFactor', float),
+			('WienerConstant', float),
+			('DataArePhaseFlipped', bool),
+			('ReferenceIsCtfCorrected', bool),
+			('DoMask', bool),
+			('DoSphericalMask', bool),
+			('AngSamplingRateDeg', float),
+			('MaxChangeInAngles', float),
+			('PerturbProjectionDirections', bool),
+			('MaxChangeOffset', float),
+			('Search5DShift', int),
+			('Search5DStep', int),
+			('DoRetricSearchbyTiltAngle', bool),
+			('Tilt0', float),
+			('TiltF', float),
+			('SymmetryGroupNeighbourhood', str),
+			('OnlyWinner', bool),
+			('MinimumCrossCorrelation', float),
+			('DiscardPercentage', float),
+			('ProjMatchingExtra', str),
+			('DoAlign2D', bool),
+			('Align2DIterNr', int),
+			('Align2dMaxChangeOffset', float),
+			('Align2dMaxChangeRot', float),
+			('ReconstructionMethod', str),
 			('ARTLambda', float),
-			('constantToAddToFiltration', float),
+			('ARTReconstructionExtraCommand', str),
+			('WBPReconstructionExtraCommand', str),
+			('FourierReconstructionExtraCommand', str),
+			('ResolSam', float),
+			('ConstantToAddToFiltration', float),
 		)
 	typemap = classmethod(typemap)
 	
-### this one is for each iteration
-class ApXmippRefineFixedParamsData(Data):
+### this one is for each iteration in ML3D refinement
+class ApXmippML3DRefineIterData(Data):
 	def typemap(cls):
 		return Data.typemap() + (
-			('Niter', float),
-			('maskFilename', str),
-			('maskRadius', float),
-			('innerRadius', float),
-			('outerRadius', float),
-			('computeResol', bool),
-			('symmetryGroup', str),
-			('dolowpassfilter', bool),
-			('usefscforfilter', bool),
+			('InSelFile', str),
+			('InitialReference', str),
+			('WorkingDir', str),
+			('DoDeleteWorkingDir', bool),
+			('DoMlf', bool),
+			('DoCorrectAmplitudes', bool),
+			('InCtfDatFile', str),
+			('HighResLimit', float),
+			('ImagesArePhaseFlipped', bool),
+			('InitialMapIsAmplitudeCorrected', bool),
+			('SeedsAreAmplitudeCorrected', bool),
+			('DoCorrectGreyScale', bool),
+			('ProjMatchSampling', int),
+			('DoLowPassFilterReference', bool),
+			('LowPassFilter', int),
+			('PixelSize', float),
+			('DoGenerateSeeds', bool),
+			('NumberOfReferences', int),
+			('DoJustRefine', bool),
+			('SeedsSelfile', str),
+			('DoML3DClassification', bool),
+			('AngularSampling', int),
+			('NumberOfIterations', int),
+			('Symmetry', str),
+			('DoNorm', bool),
+			('DoFourier', bool),
+			('RestartIter', bool),
+			('ExtraParamsMLrefine3D', str),
 		)
-	typemap = classmethod(typemap)	
+	typemap = classmethod(typemap)
 
 ### this one is for each iteration
 class ApResolutionData(Data):
@@ -1308,6 +1463,7 @@ class ApEulerJumpData(Data):
 		return Data.typemap() + (
 			('particle', ApStackParticleData),
 			('refineRun', ApRefineRunData),
+			('multiModelRefineRun', ApMultiModelRefineRunData),
 			('median', float),
 			('mean', float),
 			('stdev', float),
@@ -1614,6 +1770,7 @@ class ApTomoAlignmentRunData(Data):
 			('path', ApPathData),
 			('description', str),
 			('hidden', bool),
+			('badAlign', bool),
 		)
 	typemap = classmethod(typemap)
 
@@ -1776,6 +1933,7 @@ class ApHipIterData(Data):
 			('chop2', str),	
 			('avglist_file', str),
 			('final_numpart', int),
+			('asymsu', int),
 			('avg_file', str),
 			('map_file', str),
 			('mrc_file', str),

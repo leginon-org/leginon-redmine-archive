@@ -18,14 +18,13 @@ require "inc/summarytables.inc";
 // IF valueS SUBMITTED, EVALUATE DATA
 if ($_POST['process']) {
 	runUploadRecon();
-}
-
-// Create the form page
-else {
+} else {
+	// Create the form page
 	createUploadReconForm();
 }
 
-function createUploadReconForm($extra=false, $title='UploadRecon.py Launcher', $heading='Upload Reconstruction Results') {
+function createUploadReconForm( $extra=false, $title='UploadRecon.py Launcher', $heading='Upload Reconstruction Results' ) 
+{
 	// check if session provided
 	$expId = $_GET['expId'];
 	$jobId = $_GET['jobId'];
@@ -38,31 +37,68 @@ function createUploadReconForm($extra=false, $title='UploadRecon.py Launcher', $
 		$sessionId=$_POST['sessionId'];
 		$formAction=$_SERVER['PHP_SELF'];
 	}
+	
+	if (!$jobId) $extra = "ERROR: No prepared refine job id was selected";
 
 	$javafunctions .= writeJavaPopupFunctions('appion');  
 
 	$particle = new particledata();
-
-	// if uploading a specific recon, get recon info from database & job file
-	if ($jobId) {
-		$jobinfo = $particle->getJobInfoFromId($jobId);
-		$runname = ereg_replace('\.job$','',$jobinfo['name']);
-		$sessionpath = ereg_replace($runname,'',$jobinfo['appath']);
-		$jobfile = $jobinfo['appath'].'/'.$jobinfo['name'];
-		$f = file($jobfile);
-		$package='EMAN';
-		foreach ($f as $line) {
-			if (preg_match('/^\#\sstackId:\s/',$line)) $stackid=ereg_replace('# stackId: ','',trim($line));
-			elseif (preg_match('/^\#\smodelId:\s/',$line)) $modelid=ereg_replace('# modelId: ','',trim($line));
-			elseif (preg_match('/^coran_for_cls.py\s/',$line)) $package='EMAN/SpiCoran';
-			elseif (preg_match('/^msgPassing_subClassification.py\s/',$line)) $package='EMAN/MsgP';
-			if ($stackid && $modelid && $package) break;
+	
+	// ------------Get Job info, model and stack info-------------
+	// Get the selected refinement job info from the database 
+	if ( $jobId ) {
+		// get name of job from apAppionJobData and lookup ApPrepRefineData based on that
+		$jobdata = $particle->getJobInfoFromId( $jobId );
+		$jobfile = $jobdata['name'];
+		
+		// remove any extentions to the name like .job
+		$pos = strpos($jobfile, ".");
+		if ($pos !== false) {
+			$runname = substr($jobfile, 0, $pos);
+		} else {
+			$runname = $jobfile;
 		}
-		if (file_exists($jobinfo['appath'].'/classes_coran.1.hed'))
-			$package='EMAN/SpiCoran';
-	}
+		
+		$refinejobdatas = $particle->getPreparedRefineJobs(false, false, true, $runname );
+		$refjobdata 	= $refinejobdatas[0];
+		$refineID 		= $refjobdata['DEF_id'];
+		$method 		= $refjobdata['method'];
+		$rundir 		= $refjobdata['path'];
+		$outdir 		= ereg_replace($runname."$", "", $rundir); // TODO: ereg_replace deprecated
+		$description 	= $refjobdata['description'];
+		$refinestackid 	= $refjobdata['REF|ApStackData|stack'];
+		$reconstackid 	= $refjobdata['REF|ApStackData|reconstack'];
+	
+		// Get refine stack preparation parameters
+		// TODO: this may need to be modified if we have multiple stacks???
+		$stacks		= $particle->getPreparedRefineStackData($refineID);
+		$lastPart 	= $stacks[0][last_part];
+		$lp 		= $stacks[0][lowpass];
+		$hp 		= $stacks[0][highpass];
+		$bin 		= $stacks[0][bin];	
+		$apix 		= $stacks[0][apix];	
+		$cs 		= $stacks[0][cs];	
+		$boxsize 	= $stacks[0][boxsize];	
+		$stackfilename = $stacks[0][filename]; 
+		
+		// Get initial models
+		$models = $particle->getModelsFromRefineID( $refineID );
+		
+		// Create lists of model names and ids for the summary tables and command
+		foreach( $models as $model ) {
+			$modelNames .= $model['filename'].",";
+			$modelIds   .= $model['DEF_id'].",";			
+		}
+		$modelNames = trim($modelNames, ",");
+		$modelIds   = trim($modelIds, ",");
+		$modelid	= $models[0]['DEF_id']; // only display info for the first model
+		
+		if (file_exists($rundir.'/classes_coran.1.hed')) {
+			$method='EMAN/SpiCoran';
+		}		
+	}	
 
-	$projectId=getProjectId();
+	$projectId = getProjectId();
 
 	processing_header($title,$heading,$javafunctions);
 	// write out errors, if any came up:
@@ -76,25 +112,30 @@ function createUploadReconForm($extra=false, $title='UploadRecon.py Launcher', $
 	$sessioninfo=$sessiondata['info'];
 	
 	if (!empty($sessioninfo) && !$jobId) {
-		$sessionpath=getBaseAppionPath($sessioninfo).'/recon/';
+		$rundir=getBaseAppionPath($sessioninfo).'/recon/';
 	}
 
-	echo "<input type='hidden' name='outdir' value='$sessionpath'>\n";
+	echo "<input type='hidden' name='outdir' value='$outdir'>\n";
 	
 	// Set any existing parameters in form
-	$package = ($_POST['package']) ? $_POST['package'] : $package;
+	$method = ($_POST['package']) ? $_POST['package'] : $method;
 	$contour = ($_POST['contour']) ? $_POST['contour'] : '2.0';
 	$mass = ($_POST['mass']) ? $_POST['mass'] : '';
 	$zoom = ($_POST['zoom']) ? $_POST['zoom'] : '1.0';
 	$filter = ($_POST['filter']) ? $_POST['filter'] : '';
 	$runname = ($_POST['runname']) ? $_POST['runname'] : $runname;
-	$reconpath = ($_POST['reconpath']) ? $_POST['reconpath'] : $sessionpath;
-	$description = $_POST['description'];
+	$reconpath = ($_POST['reconpath']) ? $_POST['reconpath'] : $rundir;
+	$description = $_POST['description'] ? $_POST['description'] : $description;
 	$itertype = ($_POST['itertype']) ? $_POST['itertype'] : "all";
 	$iteration = $_POST['iteration'];
 	$startiteration = $_POST['startiteration'];
 	$enditeration = $_POST['enditeration'];
+	$apix = $_POST['apix'] ? $_POST['apix'] : $apix;
+	$boxsize = $_POST['boxsize'] ? $_POST['boxsize'] : $boxsize;
 
+	echo "<input type='hidden' name='boxsize' value='$boxsize'>\n";
+	echo "<input type='hidden' name='apix' value='$apix'>\n";
+	
 	// main table
 	echo "<table border='3' class='tableborder'>\n";
 	echo "<tr><td>\n";
@@ -117,8 +158,8 @@ function createUploadReconForm($extra=false, $title='UploadRecon.py Launcher', $
 	// Stack Info
 	echo "<tr><td colspan='2'>\n";
 	if ($jobId) {
-		echo "<input type='hidden' name='stackid' value='$stackid'>\n";
-		echo stacksummarytable($stackid, $mini=true);
+		echo "<input type='hidden' name='stackid' value='$refinestackid'>\n";
+		echo stacksummarytable($refinestackid, $mini=true);
 	} else {
 		echo "Stack:\n";
 		$stackIds = $particle->getStackIds($sessionId);
@@ -189,8 +230,8 @@ function createUploadReconForm($extra=false, $title='UploadRecon.py Launcher', $
 		'setting'=>'EMAN/SpiCoran');
 	$packages=array('EMAN'=>$eman,'EMAN/SpiCoran'=>$eman_coran,'EMAN/MsgP'=>$eman_msgp);
 	if ($jobId) {
-		echo "$package<input type='hidden' name='package' value='$package'><br/>\n";
-		echo "Type: '".$packages[$package]['description']."'<br/>\n";
+		echo "$method<input type='hidden' name='package' value='$method'><br/>\n";
+		echo "Type: '".$packages[$method]['description']."'<br/>\n";
 		echo "<br/>\n";
 	} else {
 		echo "Process Used:
@@ -198,7 +239,7 @@ function createUploadReconForm($extra=false, $title='UploadRecon.py Launcher', $
 		foreach ($packages as $p) {
 			echo "<option value='$p[setting]'";
 			// select previously set package on resubmit
-			if ($p['setting']==$package) echo " SELECTED";
+			if ($p['setting']==$method) echo " SELECTED";
 			echo ">  $p[description]";
 			echo "</option>\n";
 		}
@@ -235,7 +276,7 @@ function createUploadReconForm($extra=false, $title='UploadRecon.py Launcher', $
 	echo "</form>\n";
 	echo "</center>\n";
 
-	echo emanRef();
+	echo showReference( $method );
 
 	processing_footer();
 	exit;
@@ -258,9 +299,11 @@ function runUploadRecon() {
 	$enditeration=$_POST['enditeration'];
 	$runname=$_POST['runname'];
 	$description=$_POST['description'];
-	$package=$_POST['package'];
+	$method=$_POST['package'];
 	$modelid = $_POST['modelid'];
-
+	$boxsize = $_POST['boxsize'];
+	$apix = $_POST['apix'];
+	
 	/* *******************
 	PART 2: Check for conflicts, if there is an error display the form again
 	******************** */
@@ -271,9 +314,9 @@ function runUploadRecon() {
 	
 	//make sure a stack was chosen
 	if ($_POST['stackid'])
-		$stackid = $_POST['stackid'];
+		$refinestackid = $_POST['stackid'];
 	elseif ($_POST['stackval'])
-		list($stackid, $apix, $boxsize) = split('\|--\|',$_POST['stackval']);
+		list($refinestackid, $apix, $boxsize) = split('\|--\|',$_POST['stackval']);
 	else
 		createUploadReconForm("<B>ERROR:</B> Select the image stack used");
 
@@ -282,7 +325,7 @@ function runUploadRecon() {
 		createUploadReconForm("<B>ERROR:</B> Select the initial model used");
 	
 	//make sure a package was chosen
-	if (!$package)
+	if (!$method)
 		createUploadReconForm("<B>ERROR:</B> Enter the reconstruction process used");
 
 	//make sure a description was entered
@@ -293,7 +336,8 @@ function runUploadRecon() {
 	if ($_POST['reconpath'] && $_POST['reconpath']!="./") {
 		$reconpath = $_POST['reconpath'];
 		if (substr($reconpath,-1,1)!='/') $reconpath.='/';
-		$runpath = $reconpath.$runname;
+		//$runpath = $reconpath.$runname."";
+		$runpath = $reconpath."recon/";
 		if (!file_exists($runpath)) createUploadReconForm("<B>ERROR:</B> Could not find recon run directory: ".$runpath);
 	}
 	else {
@@ -301,15 +345,16 @@ function runUploadRecon() {
 	}
 	
 
-	$particle = new particledata();
-	//make sure specific result file is present
-	if ($jobId) {
-		$jobinfo = $particle->getJobInfoFromId($jobId);
-		$fileerror = checkRequiredFileError($jobinfo['appath'],'resolution.txt'); 
-	} else {
-		$fileerror = checkRequiredFileError($runpath,'resolution.txt'); 
-	}
-	if ($fileerror) createUploadReconForm($fileerror);
+//	$particle = new particledata();
+//	//make sure specific result file is present
+//	if ($jobId) {
+//		$jobinfo = $particle->getJobInfoFromId($jobId);
+//		$fileerror = checkRequiredFileError($jobinfo['appath'],'resolution.txt'); 
+//	} else {
+//		$fileerror = checkRequiredFileError($runpath,'resolution.txt'); 
+//	}
+//	$fileerror = checkRequiredFileError($runpath,'resolution.txt');
+//	if ($fileerror) createUploadReconForm($fileerror);
 
 	//make sure the user only want one iteration to be uploaded
 	if (is_numeric($iteration)) {
@@ -335,34 +380,71 @@ function runUploadRecon() {
 	if ($itertype=='range' && !is_numeric($startiteration) && !is_numeric($enditeration)) {
 		createUploadReconForm("<B>ERROR: </B> Enter either or both start/end iteration number if you really want to upload a limited range of iteration ");
 	}
-
+	
 	/* *******************
 	PART 3: Create program command
 	******************** */
 
-	$command ="uploadRecon.py ";
+	switch ( $method ) {
+		case "emanrecon":
+			$command = "uploadEMANRefine.py ";
+			// TODO: get Dmitry to fix this, should not be hardcoded.
+			$command .= "--numberOfReferences=1 ";
+			break;
+		case "xmipprecon":
+			$command = "uploadXmippRefine.py ";
+			// TODO: get Dmitry to fix this, should not be hardcoded.
+			$command .= "--numberOfReferences=1 ";
+			break;
+		case "xmippml3drecon":
+			$command = "uploadXmippML3DRefine.py ";
+			break;
+		case "frealignrecon":
+			$command = "uploadFrealignRefine.py ";
+			break;
+		default:
+			$command = "uploadExternalRefine.py ";
+			break;
+	}
 	$command.="--runname=$runname ";
-	$command.="--stackid=$stackid ";
+	$command.="--stackid=$refinestackid ";
 	$command.="--modelid=$modelid ";
-	$command.="--package=$package ";
-	if (!$jobId) $command.="--rundir=$runpath ";
+	// TODO: use the correct method
+	//$command.="--package=$method ";
+	//$command.="--package=EMAN ";
+	//if (!$jobId) $command.="--rundir=$runpath ";
+	//if ($jobId) $command.="--rundir=$runpath ";
 	if ($jobId) $command.="--jobid=$jobId ";
 	if ($contour) $command.="--contour=$contour ";
 	if ($mass) $command.="--mass=$mass ";
 	if ($zoom) $command.="--zoom=$zoom ";
-	if ($filter) $command.="--filter=$filter ";
-	if ($itertype=='one' && $iteration) $command.="--oneiter=$iteration ";
-	if ($itertype=='range' && $startiteration > 0) $command.="--startiter=$startiteration ";
-	if ($itertype=='range' && $enditeration > 0) $command.="--enditer=$enditeration ";
-	$command.="--description=\"$description\"";
-
+	if ($filter) $command.="--snapfilter=$filter ";
+	if ($itertype == 'range') {
+		$numiter = ($enditeration-$startiteration)+1;
+		$command.="--numiter=$numiter ";
+		$iterlist = $startiteration;
+		$iter = $startiteration;
+		while ($iter < $enditeration) {
+			$iter = $iter+1;
+			$iterlist.=",$iter";
+		}
+		$command.="--uploadIterations=$iterlist ";
+	}
+	if ($itertype == 'one') {
+		$command.="--numiter=1 ";
+		$command.="--uploadIterations=$iteration ";
+	}
+	$command.="--description=\"$description\" ";
+	$command.="--box=$boxsize ";
+	$command.="--apix=$apix ";
+	
 	/* *******************
 	PART 4: Create header info, i.e., references
 	******************** */
 
 	// Add reference to top of the page
-	$headinfo .= emanRef(); // main eman ref
-
+	$headinfo .= showReference( $method );
+	
 	/* *******************
 	PART 5: Show or Run Command
 	******************** */
@@ -375,4 +457,5 @@ function runUploadRecon() {
 		createUploadReconForm($errors);
 	exit;
 }
+
 ?>
