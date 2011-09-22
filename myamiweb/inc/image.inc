@@ -14,7 +14,7 @@ require_once "inc/graphutil.inc";
 require_once "inc/scalebar.inc";
 require_once "inc/scalering.inc";
 require_once "inc/cachedb.inc";
-require_once "inc/redux.inc";
+require_once "inc/imagerequest.inc";
 
 
 function getImage($sessionId, $imageId, $preset, $params = array()) {
@@ -70,8 +70,8 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 
 	$pic = $path.$filename;
 	
-	// create redux and imageUtil instances to begin.
-	$redux = new redux($pic);
+	// create imageRequester and imageUtil instances to begin.
+	$imagerequest = new imageRequester();
 	$imageUtil = new imageUtil();
 
 	$imginfo = $leginondata->getImageInfo($imageId);
@@ -80,7 +80,6 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 	
 	// find out the proper x, y for display
 	$xyDim = $imageUtil->imageBinning($dimx, $dimy, $binning);
-	$redux->setShape($xyDim);
 
 	if ($p['autoscale']) 
 		list($type,$arg1, $arg2)=explode(";", $p['autoscale']);
@@ -89,37 +88,68 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 	switch($type){
 		// when scale type is 'minmax'
 		case ('0'):
-			//$redux->setScaleType("minmax");
-			$redux->setScaleType("pctminmax");
+			$scaletype = "minmax";
 			$pctminmax = $imageUtil->scaleMinMaxConvert($p['minpix'], $p['maxpix']);
 			$arg1 = $pctminmax['minpix'];
 			$arg2 = $pctminmax['maxpix'];
 			break;
 		// when scale type is 'cdf'
 		case ('c'):
-			$redux->setScaleType("cdf");
+			$scaletype = "cdf";
 			break;
 		// when scale type is 'stdev'
 		default:
-			$redux->setScaleType("stdev");
+			$scaletype = "stdev";
 			$arg2=($arg1>=1) ? $arg1 : 3;
 			$arg1= -1 * $arg1;
 			break;
 	}
 	
-	$redux->setScaleMin($arg1);
-	$redux->setScaleMax($arg2);
-	
-	
-	$redux->setPower((bool)$p['fft']);
+	$imgstr = $imagerequest->requestImage($pic,'JPEG',$xyDim,$scaletype,$arg1,$arg2,(bool)$p['fft']);
+	$img = imagecreatefromstring($imgstr);
 
-	$img = $redux->requestImage();
-	header('Content-Type: image/jpeg');
-	echo($img);
+	// display scale bar //
+	if ($p['scalebar']) {
+		if (!$p['fft']) {
+			addScaleBar($img,$imginfo,$xyDim);
+		} else {
+			addScaleRing($img,$imginfo,$xyDim,$p['fftbin']);
+		}
+	}
 
-	exit;	
-	
-/* There are still php-gd part need to convert */
+	if (!$img) 
+		$img = blankimage(512);
+	// This is a good place to add debug message as a string on the image
+	//$debug_message = $pic.$p['minpix'].' '.$p['maxpix'];
+	imagestring($img, 2, 10, 20, $debug_message, imagecolorallocate($img,0,255,255));
+	return $img;
+}	
+
+function addScaleBar($img,$imginfo,$xyDim) {
+	if ($imginfo) {
+		$size = ($xyDim[0]) ? $xyDim[0]: 1;
+		$ratio = $imginfo['dimx']/$size ;
+		$value = $imginfo['pixelsize']*$imginfo['binning']*$ratio;
+		$scalebar = new ScaleBar($img, $size, $value);
+		$scalebar->display();
+	}
+}
+
+function addScaleRing($img,$imginfo,$xyDim,$fftbin) {
+	if ($imginfo) {
+		$size = ($xyDim[0]) ? $xyDim[0]: 1;
+		$ratio = $imginfo['dimx']/$size ;
+		//value is the resolution limit in Fourier space
+		$value = $imginfo['pixelsize']*$imginfo['binning']*$ratio*2;
+		if ($fftbin == 'a') 
+			$value = $imginfo['pixelsize']*$imginfo['binning']*2;
+		$scalebar = new ScaleRing($img, $size, $value);
+		$scalebar->display();
+	}
+}
+/*
+function the_rest() {
+// There are still php-gd part need to convert //
 		
 	// if we found the file //
 	if (@is_file($pic)) {
@@ -127,16 +157,6 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 		$imginfo = $leginondata->getImageInfo($imageId);
 
 		$dimx = $imginfo['dimx'];
-		// binning is determined in the x direction to preserve perspectives
-		if ($binning=='auto') {
-			$binning = ($dimx > 1024) ? (($dimx > 2048) ? 4 : 2 ) : 1;
-			if ($p['fft'] && $p['fftbin']=='b')
-				$binning = ($dimx > 2048) ? 2 : 1;
-		}
-		
-		/*
-		$binning => 1024 x 1024; (shape x,shape y)
-		*/
 		
 		// fft => power
 		if ($p['loadjpg'] && !$p['fft']) {
@@ -325,6 +345,7 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 				}
 			}
 		}
+
 		if ($p['displayicethicktarget']) {
 			$r = $leginondata->getIceThicknessFromImage($imageId);
 			$imageinfo = $leginondata->getImageInfo($imageId);
@@ -344,6 +365,7 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 				imagestringshadow($img, 4, $ctx, $cty, $tn, $col);
 			}
 		}
+
 		if ($driftdirection=0) {
 			if ($targets = $leginondata->getImageFocusTargets($imageId, true)) {
 
@@ -376,30 +398,10 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 			}
 		}
 
-		/* diplay loading time */
+		// diplay loading time //
 		if ($p['loadtime'])
 			imagestringshadow($img, 4, 10, 10, "load time: ".($end-$begin), $blue);
 
-		/* display scale bar */
-		if ($p['scalebar']) {
-			if ($imginfo) {
-				$size = ($size) ? $size : (($binning) ? $imginfo['dimx']/$binning : $imginfo['dimx']);
-				if (!$size)
-					$size=1;
-				$ratio = $imginfo['dimx']/$size ;
-				$value = $imginfo['pixelsize']*$imginfo['binning']*$ratio;
-				if (!$p['fft']) {
-					$scalebar = new ScaleBar($img, $size, $value);
-				} else {
-					//value is the resolution limit in Fourier space
-					$value = $imginfo['pixelsize']*$imginfo['binning']*$binning*2;
-					if ($p['fftbin'] == 'a')
-						$value = $imginfo['pixelsize']*$imginfo['binning']*2;
-					$scalebar = new ScaleRing($img, $size, $value);
-				}
-				$scalebar->display();
-			}
-		}
 
 		if ($p['newptcl'] && defined('PROCESSING')) {
 			// --- extract particle info --- //
@@ -470,12 +472,6 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 				$particlelabeldiam[$text]=$labeldata[$index]['diam'];
 				$particlelabelthres1[$text]=$labeldata[$index]['thres1'];
 				$particlelabelthres2[$text]=$labeldata[$index]['thres2'];
-				/* don't display label on the image it self 
-				$cy += $lsize+4;
-				if ($displaylabel && $colorby=='label') {
-					imagestringshadow($img, $lsize, $cx, $cy, $text, $col, 1);
-				}
-				*/
 			}
 			$particleinfo=$particledata->getParticlesFromImageId($particlerun, $imageId);
 			list($selectionparams)=$particledata->getSelectionParams($particlerun);
@@ -530,8 +526,6 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 					}
 				}	
 			}
-		// This is a good place to add debug message as a string on the image
-		imagestring($img, 2, 10, 20, $debug_message, imagecolorallocate($img,255,255,255));
 		}
 
 	} else {
@@ -544,7 +538,7 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 	return $img;
 
 }
-
+*/
 function getImageXML($xmlfile, $imageId, $preset, $params = array()) {
 
 	$p = array (

@@ -1,8 +1,8 @@
 <?php
-require_once 'inc/redux.inc';
+require_once 'inc/imagerequest.inc';
 require_once 'inc/login.inc';
 
-login_header();
+#login_header();
 
 function redux_request_string($request_string) {
 	$address = "http://bnc16.scripps.edu";
@@ -26,27 +26,14 @@ function redux_request_string($request_string) {
 }
 if($_POST){
 
-	$redux = new redux($_POST['filename'], $_POST['oFormat']);
-	$redux->setPadShape(array($_POST['padShapeX'], $_POST['padShapeY']));
-	$redux->setScaleType($_POST['scaleType']);
-	$redux->setPadPos(array($_POST['padPosX'], $_POST['padPoxY']));
-	$redux->setPadValue($_POST['padValue']);
 	$powerValue = ($_POST['power'] == "false") ? false : true;
-	$redux->setPower($powerValue);
-	$redux->setMaskRadius($_POST['maskRadius']);
-	$redux->setShape(array($_POST['shapeX'], $_POST['shapeY']));
-	$redux->setLpf($_POST['lpf']);
-	$redux->setScaleMin($_POST['scaleMin']);
-	$redux->setScaleMax($_POST['scaleMax']);
-	$redux->setScaleType($_POST['scaleType']);
+
+	$imagerequest = new imageRequester();
+	$reply = $imagerequest->requestImage($_POST['filename'],$_POST['oFormat'],
+		array($_POST['shapeX'],$_POST['shapeY']),
+		$_POST['scaleType'],$_POST['scaleMin'],$_POST['scaleMax'],
+		$powerValue);
 	
-	$errMsg = $redux->getErrMsg();
-	//if(!empty($errMsg)){
-	//	print_r($errMsg);
-	//	exit;
-	//}
-	
-	$reply = $redux->requestImage();
 	header('Content-Type: image/jpeg');
 	echo($reply);
 	exit;
