@@ -20,6 +20,7 @@ import leginon.session
 import leginon.leginonconfig
 import os
 import sys
+import numextension
 
 ref_cache = {}
 idcounter = itertools.cycle(range(100))
@@ -222,7 +223,10 @@ class CorrectorClient(cameraclient.CameraClient):
 		Assuming exposure time of each frame (or frame rate) is constant.
 		'''
 		try:
-			darkframes = len(dark['use frames'])
+			## NEED TO FIX
+			## DE12 always gives averaged frames to one frame
+			#darkframes = len(dark['use frames'])
+			darkframes = 1
 		except:
 			darkframes = 1
 		try:
@@ -235,17 +239,44 @@ class CorrectorClient(cameraclient.CameraClient):
 			darkarray = multiplier * darkarray
 		return darkarray
 
-	def calculateNorm(self,brightarray,darkarray):
-		try:
-			normarray = brightarray - darkarray
-		except:
-			raise
+	def calculateDarkScale(self,rawarray,darkarray):
+		'''
+		Calculate the scale used for darkarray using
+		Gram-Schmidt process for very low signal-to-noise
+		ratio such as DD raw frames as suggested by Niko Grigoreiff.
+		Need to apply the same factor used in data dark subtraction as
+		in dark subtraction for the normarray
+		'''
+		onedshape = rawarray.shape[0] * rawarray.shape[1]
+		a = rawarray.reshape(onedshape)
+		b = darkarray.reshape(onedshape)
+		a_std = numextension.allstats(a,std=True)['std']
+		b_std = numextension.allstats(b,std=True)['std']
+		ab_corr_coef = numpy.corrcoef(a,b)[(0,1)]
+		dark_scale = ab_corr_coef * a_std / b_std
+		return dark_scale
+
+	def calculateNorm(self,brightarray,darkarray,scale=None):
+		'''
+		caculating norm array from bright and dark array.  A scale
+		for the dark array can be specified or calculated.  For most
+		case, scale of 1 is good enough if the exposure time of the
+		bright and dark are equal.  If Gram-Schmidt process is used
+		to calculate dark_scale on the data, normarray need to be
+		scaled the same by specifying it.
+		'''
+		if scale:
+				dark_scale = scale
+		else:
+			dark_scale = 1.0
+		normarray = brightarray - dark_scale * darkarray
 		normarray = numpy.asarray(normarray, numpy.float32)
-		normavg = arraystats.mean(normarray)
 
 		# division may result infinity or zero division
 		# so make sure there are no zeros in norm
 		normarray = numpy.clip(normarray, 0.001, sys.maxint)
+		stats = numextension.allstats(normarray, mean=True)
+		normavg = stats['mean']
 		normarray = normavg / normarray
 		return normarray
 
@@ -462,7 +493,8 @@ class CorrectorClient(cameraclient.CameraClient):
 	def getReferenceSession(self):
 		refsession = leginondata.ReferenceSessionData()
 		try:
-			refsession = refsession.query(results=1)[0]
+			# using timelimit of 30 days
+			refsession = refsession.query(results=1, timelimit='-30 0:0:0')[0]
 		except:
 			refsession = None
 

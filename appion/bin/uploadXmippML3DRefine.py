@@ -366,16 +366,17 @@ class uploadXmippML3DScript(reconUploader.generalReconUploader):
 			sym = "icos"
 		else:
 			sym = xmipp_protocol_ml3d.Symmetry
+			sym = sym.split()[0]
 		
 		### set global parameters
 		runparams = {}
 		runparams['symmetry'] = apSymmetry.findSymmetry(sym)
 		runparams['apix'] = packageparams['PixelSize']
 		runparams['angularSamplingRate'] = packageparams['AngularSampling']
-		runparams['numberOfReferences'] = packageparams['NumberOfReferences']
+		runparams['NumberOfReferences'] = packageparams['NumberOfReferences']
+		runparams['numiter'] = packageparams['NumberOfIterations']		
 		runparams['package_params'] = packageparams
-		runparams['cluster_root_path'] = os.path.abspath(xmipp_protocol_ml3d.ProjectDir)
-		runparams['upload_root_path'] = self.params['rundir']
+		runparams['remoterundir'] = os.path.abspath(xmipp_protocol_ml3d.ProjectDir)
 		
 		return runparams
 		
@@ -427,7 +428,7 @@ class uploadXmippML3DScript(reconUploader.generalReconUploader):
 		return ML3DProtocolParamsq
 
 	#=====================
-	def cleanupFiles(complete_refinements):
+	def cleanupFiles(self, complete_refinements):
 		''' deletes all intermediate files for which database entries exitst '''
 		
 		### cleanup directories (grey-scale correction and initial reference generation)
@@ -472,10 +473,12 @@ class uploadXmippML3DScript(reconUploader.generalReconUploader):
 		package_table = 'ApXmippML3DRefineIterData|xmippML3DParams'
 				
 		### set ml3d path
-		self.ml3dpath = os.path.abspath(os.path.join(self.params['rundir'], self.runparams['package_params']['WorkingDir'], "RunML3D"))
+		self.ml3dpath = os.path.abspath(os.path.join(self.params['rundir'], "recon", self.runparams['package_params']['WorkingDir'], "RunML3D"))
 			
 		### check for variable root directories between file systems
-		apXmipp.checkSelOrDocFileRootDirectoryInDirectoryTree(self.params['rundir'], self.runparams['cluster_root_path'], self.runparams['upload_root_path'])
+		if os.path.split(self.runparams['remoterundir'])[1] == "recon":
+			self.runparams['remoterundir'] = os.path.split(self.runparams['remoterundir'])[0]
+		apXmipp.checkSelOrDocFileRootDirectoryInDirectoryTree(self.params['rundir'], self.runparams['remoterundir'], self.params['rundir'])
 						
 		### determine which iterations to upload
 		lastiter = self.findLastCompletedIteration()
@@ -490,7 +493,7 @@ class uploadXmippML3DScript(reconUploader.generalReconUploader):
 			### set package parameters, as they will appear in database entries
 			package_database_object = self.instantiateML3DParamsData(iteration)
 			
-			for j in range(self.runparams['numberOfReferences']):
+			for j in range(self.runparams['NumberOfReferences']):
 				
 				### calculate FSC for each iteration using split selfile (selfile requires root directory change)
 				self.calculateFSCforIteration(iteration, j+1)

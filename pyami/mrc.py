@@ -473,15 +473,22 @@ with MRC.
 	narray = numpy.asarray(a, dtype=dtype)
 	return narray
 
-def readDataFromFile(fobj, headerdict):
+def readDataFromFile(fobj, headerdict, zslice=None):
 	'''
 	Read data portion of MRC file from the file object fobj.
 	Both mrcmode and shape have been determined from the MRC header.
-	fobj already points to beginning of data, not header.
 	Returns a new numpy ndarray object.
 	'''
-	shape = headerdict['shape']
+	bytes_per_pixel = headerdict['dtype'].itemsize
+	framesize = bytes_per_pixel * headerdict['nx'] * headerdict['ny']
+	if zslice is None:
+		start = 1024  # right after header
+		shape = headerdict['shape']
+	else:
+		start = 1024 + zslice * framesize
+		shape = headerdict['shape'][-2:]  # only a 2-D slice
 	datalen = reduce(numpy.multiply, shape)
+	fobj.seek(start)
 	a = numpy.fromfile(fobj, dtype=headerdict['dtype'], count=datalen)
 	a.shape = shape
 	return a
@@ -583,6 +590,26 @@ def appendArray(a, f):
 		end = start + items_per_write
 		b[start:end].tofile(f)
 
+def update_file_header(filename, headerdict):
+	'''
+	open the MRC header, update the fields given by headerdict
+	'''
+	f = open(filename, 'rb+')
+	f.seek(0)
+	headerbytes = f.read(1024)
+	oldheader = parseHeader(headerbytes)
+	oldheader.update(headerdict)
+	headerbytes = makeHeaderData(oldheader)
+	f.seek(0)
+	f.write(headerbytes)
+
+def read_file_header(filename):
+	'''get MRC header from a file in the form of a dict'''
+	f = open(filename, 'r')
+	headerbytes = f.read(1024)
+	header = parseHeader(headerbytes)
+	return header
+
 def append(a, filename, calc_stats=True):
 	# read existing header
 	f = open(filename, 'rb+')
@@ -591,21 +618,25 @@ def append(a, filename, calc_stats=True):
 	oldheader = parseHeader(headerbytes)
 
 	# make a header for new array
-	newheader = {}
-	updateHeaderUsingArray(newheader, a, calc_stats=calc_stats)
+	sliceheader = {}
+	updateHeaderUsingArray(sliceheader, a, calc_stats=calc_stats)
 
 	## check that new array is compatible with old array
 	notmatch = []
 	for key in ('nx', 'ny', 'mode'):
-		if newheader[key] != oldheader[key]:
+		if sliceheader[key] != oldheader[key]:
 			notmatch.append(key)
 	if notmatch:
 		raise RuntimeError('Array to append is not compatible with existing array: %s' % (notmatch,))
 
 	## update old header for final MRC
-	oldheader['nz'] += newheader['nz']
-	## (could also update some other fields of header...)
-
+	oldheader['nz'] += sliceheader['nz']
+	## Use stats of new array.
+	## In the future, maybe recalculate global stats of entire stack.
+	if calc_stats:
+		for key in ('amin', 'amax', 'amean', 'rms'):
+			oldheader[key] = sliceheader[key]
+	
 	headerbytes = makeHeaderData(oldheader)
 	f.seek(0)
 	f.write(headerbytes)
@@ -626,7 +657,7 @@ Read the X,Y,Z coordinates for the origin
 	}
 	return origin
 
-def read(filename):
+def read(filename, zslice=None):
 	'''
 Read the MRC file given by filename, return numpy ndarray object
 	'''
@@ -635,7 +666,7 @@ Read the MRC file given by filename, return numpy ndarray object
 		f = open(filename, 'rb')
 		headerbytes = f.read(1024)
 		headerdict = parseHeader(headerbytes)
-		a = readDataFromFile(f, headerdict)
+		a = readDataFromFile(f, headerdict, zslice)
 
 		## store keep header with image
 		setHeader(a, headerdict)
@@ -707,7 +738,35 @@ def testStack():
 	outputname = 'stack.mrc'
 	stack(files, tilts, outputname)
 
+def test_update_header():
+	## read image, recalculate mean value
+	a = read('test.mrc')
+	newmean = a.mean()
+	newheader = {'amean': newmean}
+	update_file_header('test.mrc', newheader)
+
+	## for a stack, you may not want to read the whole thing into memory
+	# read header only
+	h = read_file_header('test.mrc')
+
+	# read first frame only
+	a = mmap('test.mrc')
+	frame = a[0]
+	amin = frame.min()
+	a.close()
+	# read frames one at a time without using much memory
+	nz = h['nz']
+	for i in range(nz):
+		a = mmap('test.mrc')
+		frame_min = a[i].min()
+		a.close()
+		if frame_min < amin:
+			amin = frame_min
+	# update header with global min
+	update_file_header('test.mrc', {'amin':amin})
+
 if __name__ == '__main__':
 	#testHeader()
 	#testWrite()
-	testStack()
+	#testStack()
+	test_update_header()

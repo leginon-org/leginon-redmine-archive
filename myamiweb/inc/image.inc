@@ -52,6 +52,7 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 	$leginondata = new leginondata();
 	// --- get image path
 	$path = $leginondata->getImagePathFromImageId($imageId);
+
 	// --- find image
 	$newimage = $leginondata->findImage($imageId, $preset);
 	$imageId = $newimage['id'];
@@ -161,26 +162,17 @@ function the_rest() {
 		// fft => power
 		if ($p['loadjpg'] && !$p['fft']) {
 
-		if ($p['loadjpg']) {
-			if ($p['fft']) {
-				$jpgpic = ereg_replace('mrc$', 'fft.jpg', $pic);
-				$jpgpic = ereg_replace('leginon', 'appion', $jpgpic);
-				$jpgpic = ereg_replace('rawdata', 'jpgs', $jpgpic);
-				$jpgpic = ereg_replace('appion2', 'appion', $jpgpic);
-			}
-			else {
-				$sessioninfo=$leginondata->getSessionInfo($sessionId);
-				$session=$sessioninfo['Name'];
-				$jpgfilename = ereg_replace('mrc$', 'jpg', $filename);
-				$jpgpath = CACHE_PATH.$session."/";
-				$jpgpic = $jpgpath.$jpgfilename;
-			}
+		if ($p['loadjpg'] && !$p['fft']) {
+			$sessioninfo=$leginondata->getSessionInfo($sessionId);
+			$session=$sessioninfo['Name'];
+			$jpgfilename = ereg_replace('mrc$', 'jpg', $filename);
+			$jpgpath = CACHE_PATH.$session."/";
+			$jpgpic = $jpgpath.$jpgfilename;
 		}
 		if (@is_file($jpgpic)) {
 			$img = imagecreatefromjpeg($jpgpic);
 			// found at the binning = original mrc image size / size of the JPEG image
 			$binning=$dimx/imagesx($img);
-			if ($p['fft']) $imginfo['binning']=$imginfo['binning']/4;
 		} else {
 			//This is for autoscale = c or s, when using customize size do not run this if statement.
 			if ($p['autoscale']) {

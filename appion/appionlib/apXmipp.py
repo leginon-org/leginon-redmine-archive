@@ -304,6 +304,13 @@ def convertXmippEulersToEman(phi, theta, psi):
 	phi = math.fmod((psi-90),360.0)
 
 	return alt, az, phi
+
+def convertEmanEulersToXmipp(alt, az, psi):
+	''' reverse of convertXmippEulersToEman '''
+	phi = math.fmod((az-90), 360.0)
+	theta = alt
+	psi = math.fmod((psi+90), 360.0)
+	return phi, theta, psi
 	
 #======================	
 #=====================
@@ -498,3 +505,31 @@ def calculate_equivalent_Eulers_without_flip(m):
 	### this was assessed empirically, works on synthetic data projected with xmipp_project
 	newpsi = -newpsi
 	return newphi, newtheta, newpsi
+
+#=======================
+#=======================
+def readSelfile(selfile):
+	''' returns a list of filenames '''
+	f = open(selfile, "r")
+	lines = f.readlines()
+	f.close()
+	split = [l.strip().split() for l in lines]
+	filenames = [s[0] for s in split]
+	return filenames
+
+#=======================
+#=======================
+def readDocfile(docfile):
+	''' returns a nested dictionary: key=particle number (starts with 0), value=dictionary: {'values':[allvals], 'filename':'name'} '''
+	f = open(docfile, "r")
+	lines = f.readlines()[1:]
+	f.close()
+	splitl = [l.strip().split() for l in lines]
+	d = {}
+	for i in range(len(splitl)/2):
+		filename = splitl[i*2][1]
+		m = re.search('part[0-9]{6}', filename)
+		partnum = int(float(m.group(0)[-6:]))
+		vals = splitl[i*2+1]
+		d[partnum] = {'filename':filename, 'values':vals}
+	return d

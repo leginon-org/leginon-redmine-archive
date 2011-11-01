@@ -1,4 +1,7 @@
 <?php
+// compress this file if the browser accepts it.
+if (substr_count($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip')) ob_start("ob_gzhandler"); else ob_start();
+
 require "inc/particledata.inc";
 require "inc/util.inc";
 require "inc/leginon.inc";
@@ -32,6 +35,7 @@ function checkJobs($showjobs=False, $showall=False, $extra=False) {
 		echo "<input type='submit' name='checkjobs' value='Check Jobs in Queue'>\n";
 		echo "</form><br/>\n";
 	}
+	
 
 	$type = $_GET['type'];
 	if ( $type == "multi" ) 
@@ -42,13 +46,15 @@ function checkJobs($showjobs=False, $showall=False, $extra=False) {
 	}
 	$jobs = $refineJobs->getUnfinishedRefineJobs($showall);
 
+	
 	// if clicked button, list jobs in queue
 	if ($showjobs && $_SESSION['loggedin'] == true) {
 		showClusterJobTables($jobs);
 	}
 	
+	
 	// loop over jobs and show info
-	foreach ($jobs as $job) {
+	foreach ($jobs as $job) {		
 		$jobid = $job['DEF_id'];
 		$jobinfo = $particle->getJobInfoFromId($jobid);
 		
@@ -86,7 +92,8 @@ function checkJobs($showjobs=False, $showall=False, $extra=False) {
 			echo formatHtmlRow($k,$v);
 		}
 		echo "</table>\n";
-
+		
+		
 		if ($_SESSION['loggedin'] == true && $showjobs) {
 			if ($jobinfo['status']=='R' || $jobinfo['status']=='D') {
 				if ($jobinfo['jobtype'] == 'emanrecon') {
@@ -104,8 +111,8 @@ function checkJobs($showjobs=False, $showall=False, $extra=False) {
 			}
 		}
 		echo "<br/><br/>\n\n";
-	
 	}
+	
 	processing_footer();
 	exit;
 }
@@ -195,23 +202,19 @@ function showStatus($jobinfo) {
 		$status='Error';
 	} elseif ($jobinfo['status']=='D') {
 		$has_coran = checkCoranTarGz($jobinfo);
-		$dlbuttons = "<input type='BUTTON' onclick=\"displayDMF('"
-			."$jobinfo[dmfpath]','$jobinfo[appath]',$has_coran)\" value='Get files from DMF'>&nbsp;\n";
 		if ($jobinfo['jobtype'] == 'emanrecon') {
-			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
+			$dlbuttons = "<input type='button' onclick=\"parent.location=('"
 				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload EMAN results'>&nbsp;\n";
-		} elseif ($jobinfo['jobtype'] == 'runfrealign') {
-			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
-				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload FREALIGN results'>&nbsp;\n";
+		} elseif ($jobinfo['jobtype'] == 'frealignrecon') {
 //			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
-//				."uploadFrealign.php?expId=$expId&jobId=$jobid')\" value='Upload FREALIGN results'>&nbsp;\n";
+//				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload FREALIGN results'>&nbsp;\n";
+			$dlbuttons = "<input type='button' onclick=\"parent.location=('"
+				."uploadFrealign.php?expId=$expId&jobId=$jobid')\" value='Upload FREALIGN results'>&nbsp;\n";
 		} elseif ($jobinfo['jobtype'] == 'xmipprecon') {
-//			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
-//				."uploadXmippRecon.php?expId=$expId&jobId=$jobid')\" value='Upload Xmipp results'>&nbsp;\n";
-			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
+			$dlbuttons = "<input type='button' onclick=\"parent.location=('"
 				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload Xmipp results'>&nbsp;\n";
 		} elseif ($jobinfo['jobtype'] == 'xmippml3d') {
-			$dlbuttons .= "<input type='button' onclick=\"parent.location=('"
+			$dlbuttons = "<input type='button' onclick=\"parent.location=('"
 				."uploadrecon.php?expId=$expId&jobId=$jobid')\" value='Upload Xmippml3d results'>&nbsp;\n";
 		}
 		if ($user == $job['user'] || is_null($job['user'])) {
@@ -565,14 +568,18 @@ function checkEMANJobStatus($host,$jobpath,$jobfile,$user,$pass) {
 
 function checkCoranTarGz($jobinfo) {
 	// transfer coran results only if tar.gz exists
-	$user = $_SESSION['username'];
-	$pass = $_SESSION['password'];
-	$cluster = $jobinfo['cluster'];
-	$coranfile = $jobinfo['dmfpath'].'/coran.tar.gz';
-	$cmd = "dmf ls $coranfile";
-	$lscoran = exec_over_ssh($cluster, $user, $pass, $cmd, True);
-	$has_coran = ($lscoran) ? 1:0;
-	return $has_coran;
+	
+	// This function is obsolete. Replace it with a check to the log file after logging results during the run.
+	// Comment this out for now.
+//	$user = $_SESSION['username'];
+//	$pass = $_SESSION['password'];
+//	$cluster = $jobinfo['cluster'];
+//	$coranfile = $jobinfo['dmfpath'].'/coran.tar.gz';
+//	$cmd = "dmf ls $coranfile";
+//	$lscoran = exec_over_ssh($cluster, $user, $pass, $cmd, True);
+//	$has_coran = ($lscoran) ? 1:0;
+//	return $has_coran;
+	return false;
 }
 
 /******************************

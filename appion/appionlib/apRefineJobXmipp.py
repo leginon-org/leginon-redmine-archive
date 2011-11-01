@@ -123,12 +123,12 @@ class XmippSingleModelRefineJob(apRefineJob.RefineJob):
 		protocolPrm["ReferenceIsCtfCorrected"]      =   True
 		protocolPrm["DoMask"]                       =   self.params['maskvol']>0
 		protocolPrm["DoSphericalMask"]              =   self.params['outerMaskRadius']>0
-		protocolPrm["MaskRadius"]                   =   self.params['outerMaskRadius'].split()[0]
+		protocolPrm["MaskRadius"]                   =   self.params['outerMaskRadius'].split()[0] / self.params['apix']
 		protocolPrm["MaskFileName"]                 =   self.params['maskvol']
 		protocolPrm["DoProjectionMatching"]         =   True
 		protocolPrm["DisplayProjectionMatching"]    =   False
-		protocolPrm["InnerRadius"]                  =   self.params['innerAlignRadius']
-		protocolPrm["OuterRadius"]                  =   self.params['outerAlignRadius']
+		protocolPrm["InnerRadius"]                  =   self.params['innerAlignRadius'] / self.params['apix']
+		protocolPrm["OuterRadius"]                  =   self.params['outerAlignRadius'] / self.params['apix']
 		protocolPrm["AvailableMemory"]              =   '%d' % self.calcRefineMem()
 #		protocolPrm["AngSamplingRateDeg"]           =   self.params['AngularSteps']
 		protocolPrm["AngSamplingRateDeg"]           =   self.params['angSampRate']
@@ -193,7 +193,7 @@ class XmippSingleModelRefineJob(apRefineJob.RefineJob):
 		self.runparams['remoterundir'] = self.params['remoterundir']
 		self.runparams['reconstruction_working_dir'] = protocolPrm["WorkingDir"] 
 		self.runparams['package_params'] = protocolPrm
-		paramfile = os.path.join(self.params['rundir'], "xmipp_projection_matching_"+self.timestamp+"-params.pickle")
+		paramfile = os.path.join(self.params['remoterundir'], "xmipp_projection_matching_"+self.timestamp+"-params.pickle")
 		apParam.dumpParameters(self.runparams, paramfile)
 		
 		### finished setup of input files, now run xmipp_protocols_ml3d.py from jobfile
@@ -220,6 +220,10 @@ class XmippSingleModelRefineJob(apRefineJob.RefineJob):
 		tasks = {}
 		self.addToLog('....Setting up Xmipp Protocol....')
 		protocolfile, protocolPrm = self.setupXmippProtocol()
+
+		### check for variable root directories between file systems
+		apXmipp.checkSelOrDocFileRootDirectoryInDirectoryTree(self.params['remoterundir'], self.params['rundir'], self.params['remoterundir'])
+		
 		self.addToLog('....Start running Xmipp Protocol....')
 		tasks = self.addToTasks(tasks,'python %s' % protocolfile,self.calcRefineMem(),self.params['nproc'])
 		protocol_pyname = os.path.basename(protocolfile)

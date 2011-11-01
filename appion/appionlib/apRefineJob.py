@@ -33,7 +33,7 @@ class RefineJob(basicScript.BasicScript):
 		self.parser.add_option("--jobtype", dest="jobtype",
 			help="Job Type of processing run, e.g., emanrecon", metavar="X")
 		# Parameters that the agent need
-		self.parser.add_option("--jobid", dest="jobid", type="int", default=1,
+		self.parser.add_option("--jobid", dest="jobid", type="int", default=0,
 			help="ApAppionJobId for updating job status", metavar="#")
 		# Job parameters that the remotehost need
 		self.parser.add_option("--rpn", dest="rpn", type="int", default=4,
@@ -53,7 +53,7 @@ class RefineJob(basicScript.BasicScript):
 		self.parser.add_option("--rundir", dest="rundir", default='./',
 			help="Path for the local run directory that is accessable by localhost and general data files e.g. --rundir=/data/appion/sessionname/recon/runname", metavar="PATH")
 		self.parser.add_option("--remoterundir", dest="remoterundir", default='./',
-			help="Path for the remote run directory accessable by remotehost and will not be erased at the beginning of the run, e.g. --recondir=/home/you/sessionname/rundir/", metavar="PATH")
+			help="Path for the remote run directory accessable by remotehost and will not be erased at the beginning of the run, e.g. --remoterundir=/home/you/sessionname/rundir/", metavar="PATH")
 		# Standard Web Form Appion parameters
 		self.parser.add_option('--runname', dest='runname')
 		self.parser.add_option("--expId", dest="expid", type="int",
@@ -107,7 +107,7 @@ class RefineJob(basicScript.BasicScript):
 		if self.params['stackname'] is None:
 			apDisplay.printError("enter the pixel size, e.g. --apix=1.5")
 		self.params['numiter'] = self.params['enditer'] - self.params['startiter'] + 1
-		self.params['remoterundir'] = os.path.abspath(self.params['remoterundir'])
+		self.params['remoterundir'] = os.path.abspath( os.path.expanduser(self.params['remoterundir']) )
 		if self.params['recondir'][0] != '/':
 			# assumes relative recondir is under the safe remoterundir
 			self.params['recondir'] = os.path.join(self.params['remoterundir'],self.params['recondir'])
@@ -186,6 +186,7 @@ class RefineJob(basicScript.BasicScript):
 		if len(procscripts) > 1:
 			masterfile = os.path.join(masterfile_dir,masterfile_name)
 			self.__makeMPIMasterScript(procscripts,masterfile)
+			mpi_script += '-app '
 			mpi_script += masterfile
 		elif len(procscripts) == 1:
 			mpi_script += procscripts[0]
@@ -223,10 +224,16 @@ class RefineJob(basicScript.BasicScript):
 		for line in lines:
 			filename = os.path.basename(line.replace('\n',''))
 			sourcepath = os.path.join(self.params['remoterundir'],filename)
-			pretasks = self.addToTasks(pretasks,'ln -s  %s %s' % (sourcepath,filename))
+			pretasks = self.addToTasks(pretasks,'ln -s  ../%s %s' % (filename,filename))
 			pretasks = self.addToTasks(pretasks,'test -s  %s || ( echo %s not found && exit )' % (sourcepath,filename))
 		self.addJobCommands(pretasks)
 		self.addSimpleCommand('')
+
+	def __createReconDir(self):
+		apParam.createDirectory(self.params['recondir'], warning=(not self.quiet))
+
+	def __removeReconDir(self):
+		apParam.removeDirectory(self.params['recondir'], warning=(not self.quiet))
 
 	def makeNewTrialScript(self):
 		'''
@@ -242,7 +249,7 @@ class RefineJob(basicScript.BasicScript):
 		'''
 		pretasks = {}
 		pretasks = self.addToTasks(pretasks,'# setup directory')
-		pretasks = self.addToTasks(pretasks,'/bin/rm -rf %s' % self.params['recondir'])
+		#pretasks = self.addToTasks(pretasks,'/bin/rm -rf %s' % self.params['recondir'])
 		pretasks = self.addToTasks(pretasks,'mkdir -p %s' % self.params['recondir'])
 		pretasks = self.addToTasks(pretasks,'cd %s' % self.params['recondir'])
 		pretasks = self.addToTasks(pretasks,'')
@@ -285,7 +292,7 @@ class RefineJob(basicScript.BasicScript):
 		# clean up files that are already in localhost rundir
 		for line in lines:
 			filename = os.path.basename(line.replace('\n',''))
-			tasks = self.addToTasks(tasks,'/bin/rm -fv  %s' % filename)
+			#tasks = self.addToTasks(tasks,'/bin/rm -fv  %s' % filename)
 		return tasks
 
 	def __saveFileListFromRemoteHost(self):
@@ -302,12 +309,20 @@ class RefineJob(basicScript.BasicScript):
 		'''
 		self.addToLog('....Compressing refinement results for uploading....')
 		tasks = {}
-		tasks = self.__addCleanUpReconDirTasks(tasks)
+		###  Removing this for now as it removes a needed file and may not be necessary 
+		#tasks = self.__addCleanUpReconDirTasks(tasks)
+		
+		# cd to the directory that holds the recon dir. For unpacking in to recon dir, we need to tar
+		# the entire recon directory.
 		tasks = self.addToTasks(tasks,'cd %s' % self.params['remoterundir'])
-		tasks = self.addToTasks(tasks,'cd %s' % self.params['recondir'])
-		result_tar = os.path.join(self.params['remoterundir'],'recon_results.tar.gz')
+		#tasks = self.addToTasks(tasks,'cd %s' % self.params['recondir'])
+		
+		# Garibaldi does not work with the absolute path in the tar command
+		#result_tar = os.path.join(self.params['remoterundir'],'recon_results.tar.gz')
+		result_tar = 'recon_results.tar.gz'
+
 		self.files_from_remote_host.append(result_tar)
-		tasks = self.addToTasks(tasks,'tar cvzf %s *' % (result_tar))
+		tasks = self.addToTasks(tasks,'tar cvzf %s recon/' % (result_tar))
 		self.files_from_remote_host.append(self.commandfile)
 		self.__saveFileListFromRemoteHost()
 		if self.params['remoterundir'] != self.params['rundir']:
@@ -432,7 +447,9 @@ class RefineJob(basicScript.BasicScript):
 		if self.params['startiter'] == 1:
 			self.addSimpleCommand('')
 			self.addToLog('....Setting up new refinement job trial....')
+			self.__removeReconDir()
 			self.__makeNewTrialScript()
+			self.__createReconDir()
 			self.makeNewTrialScript()
 		self.addSimpleCommand('')
 		self.__makePreIterationScript()
@@ -446,7 +463,6 @@ class RefineJob(basicScript.BasicScript):
 				self.addJobCommands(refinetasks)
 				self.addToLog('Done with iteration %d' % (iter))
 				self.addSimpleCommand('')
-				
 		self.__writeCommandListToFile()
 		self.addToLog('....Performing tasks after iterations....')
 		self.makePostIterationScript()
@@ -481,7 +497,9 @@ class RefineJob(basicScript.BasicScript):
 	def getCommandList(self):
 		return self.command_list
 	def getJobId(self):
-		return self.jobid
+		return self.jobid    
+	def setJobId(self, id):
+		self.jobid = int(id)
 	def getProjectId(self):
 		return self.params['projectid']
 	

@@ -49,7 +49,7 @@ class generalReconUploader(appionScript.AppionScript):
 		self.parser.add_option("--modelid", dest="modelid", type="str", 	
 			help="input model(s) for multi-model refinement. You can start with one model or as many as you like. Just provide the \
 				database IDs, like so: '--modelid=1' or '--modelid=1,3,17', etc.", metavar="ID#(s)")
-		self.parser.add_option("--numberOfReferences", dest="numberOfReferences", type="int",
+		self.parser.add_option("--numberOfReferences", dest="NumberOfReferences", type="int",
 			help="number of references produced during refinement", metavar="INT")
 		self.parser.add_option("--numiter", dest="numiter", type="int",
 			help="number of iterations performed during refinement", metavar="INT")
@@ -80,6 +80,7 @@ class generalReconUploader(appionScript.AppionScript):
 
 		### unpickle results or parse logfile, set default parameters if missing
 		os.chdir(os.path.abspath(self.params['rundir']))
+		self.unpackResults()
 		self.runparams = self.readRunParameters()
 	
 		### parameters recovered from runparameter file(s)
@@ -93,9 +94,9 @@ class generalReconUploader(appionScript.AppionScript):
 				self.runparams['modelid'] = self.params['modelid']
 			else:
 				apDisplay.printError("model id must be specified for proper database insertion")
-		if not self.runparams.has_key('numberOfReferences'):
-			if self.params['numberOfReferences'] is not None:
-				self.runparams['numberOfReferences'] = self.params['numberOfReferences']
+		if not self.runparams.has_key('NumberOfReferences'):
+			if self.params['NumberOfReferences'] is not None:
+				self.runparams['NumberOfReferences'] = self.params['NumberOfReferences']
 			else:
 				apDisplay.printError("number of references produced during the refinement needs to be specified")
 		if not self.runparams.has_key('numiter'):
@@ -118,16 +119,17 @@ class generalReconUploader(appionScript.AppionScript):
 				self.runparams['symmetry'] = apSymmetry.getSymmetryDataFromID(self.params['symid'])
 			else:
 				apDisplay.printError("symmetry ID must be specified, you can input --symid=25 for an asymmetric reconstruction")
-		if 'multiModelRefinement' in vars(self):
-			if not self.runparams.has_key('numberOfReferences') and self.multiModelRefinementRun is True:
-				if self.params['numberOfReferences'] is not None:
-					self.runparams['numberOfReferences'] = self.params['numberOfReferences']
+		# access multiModelRefinementRun this way in case it is not present
+		if 'multiModelRefinementRun' in vars(self):
+			if not self.runparams.has_key('NumberOfReferences') and self.multiModelRefinementRun is True:
+				if self.params['NumberOfReferences'] is not None:
+					self.runparams['NumberOfReferences'] = self.params['NumberOfReferences']
 				else:
 					apDisplay.printError("number of output models in refinement needs to be specified for multi-model run")		
 		else:
-			if self.params['numberOfReferences'] is not None:
-				self.runparams['numberOfReferences'] = self.params['numberOfReferences']
-				if self.runparams['numberOfReferences'] > 1:
+			if self.params['NumberOfReferences'] is not None:
+				self.runparams['NumberOfReferences'] = self.params['NumberOfReferences']
+				if self.runparams['NumberOfReferences'] > 1:
 					self.multiModelRefinementRun = True
 				else:
 					self.multiModelRefinementRun = False
@@ -173,6 +175,14 @@ class generalReconUploader(appionScript.AppionScript):
 		self.initializeRefinementUploadVariables()
 
 		return
+	
+	#=====================
+	def unpackResults(self):
+		''' untar results, if this hasn't been done yet '''
+		if os.path.exists(os.path.join(self.params['rundir'], "recon_results.tar.gz")):
+			apParam.runCmd("tar -xvzf recon_results.tar.gz", "SHELL")
+		if os.path.exists(os.path.join(self.params['rundir'], "volumes.tar.gz")):
+			apParam.runCmd("tar -xvzf volumes.tar.gz", "SHELL")
 
 	#=====================
 	def tryToGetJobID(self):
@@ -207,13 +217,7 @@ class generalReconUploader(appionScript.AppionScript):
 		if not os.path.isdir(self.resultspath):
 			os.mkdir(self.resultspath)		
 		self.reconpath = os.path.abspath(os.path.join(self.params['rundir'], self.runparams['reconstruction_working_dir']))
-			
-		### untar results, if this hasn't been done yet
-		if os.path.exists(os.path.join(self.params['rundir'], "results.tar.gz")):
-			apParam.runCmd("tar -xvzf results.tar.gz", "SHELL")
-		if os.path.exists(os.path.join(self.params['rundir'], "volumes.tar.gz")):
-			apParam.runCmd("tar -xvzf volumes.tar.gz", "SHELL")
-			
+						
 		### get all stack parameters, map particles in reconstruction to particles in stack, get all model data
 		self.stackdata = apStack.getOnlyStackData(self.runparams['stackid'])
 		self.stackmapping = apRecon.partnum2defid(self.runparams['stackid'])
@@ -242,8 +246,8 @@ class generalReconUploader(appionScript.AppionScript):
 				apDisplay.printWarning("Could not find run parameters pickle file ... trying to get values from logfile")
 				try:
 					runparams = self.parseFileForRunParameters()
-				except:
-					apDisplay.printError("Could not determine run parameters for refinement ... try uploading as an external package")
+				except Exception, e:
+					apDisplay.printError("Could not determine run parameters for refinement: %s ...you may try uploading as an external package." % e)
 			else:
 				f = open(paramfile[0], "r")
 				runparams = cPickle.load(f)
@@ -335,7 +339,7 @@ class generalReconUploader(appionScript.AppionScript):
 			multimodelq['runname'] = self.params['runname']
 			multimodelq['REF|projectdata|projects|project'] = apProject.getProjectIdFromStackId(self.runparams['stackid'])
 			multimodelq['session'] = apStack.getSessionDataFromStackId(self.runparams['stackid'])
-			multimodelq['num_refinements'] = self.runparams['numberOfReferences']
+			multimodelq['num_refinements'] = self.runparams['NumberOfReferences']
 			self.multimodelq = multimodelq
 		
 		### fill in ApRefineRunData object
@@ -392,7 +396,7 @@ class generalReconUploader(appionScript.AppionScript):
 			print e
 			apDisplay.printWarning("FSC file does not exist or is unreadable")
 			resq = None
-
+			
 		### fill in ApRefineIterData object
 		iterationParamsq = appiondata.ApRefineIterData()
 		if package_table is not None and package_database_object is not None:
@@ -405,7 +409,11 @@ class generalReconUploader(appionScript.AppionScript):
 		iterationParamsq['imask'] = apRecon.getComponentFromVector(self.runparams['imask'], iteration-1)
 		iterationParamsq['alignmentInnerRadius'] = apRecon.getComponentFromVector(self.runparams['alignmentInnerRadius'], iteration-1)
 		iterationParamsq['alignmentOuterRadius'] = apRecon.getComponentFromVector(self.runparams['alignmentOuterRadius'], iteration-1)
-		iterationParamsq['symmetry'] = self.runparams['symmetry']
+		try:
+			iterationParamsq['symmetry'] = self.runparams['symmetry']
+		except Exception, e:
+			symmetry = self.runparams['symmetry'].split()[0]
+			iterationParamsq['symmetry'] = apSymmetry.findSymmetry( symmetry )
 		iterationParamsq['exemplar'] = False
 		iterationParamsq['volumeDensity'] = "recon_%s_it%.3d_vol%.3d.mrc" % (self.params['timestamp'], iteration, reference_number)
 		projections_and_avgs = "proj-avgs_%s_it%.3d_vol%.3d.img" \

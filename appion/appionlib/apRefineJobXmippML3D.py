@@ -97,33 +97,33 @@ class XmippML3DRefineJob(apRefineJob.RefineJob):
 				sf.write("%s\t1\n" % os.path.join(self.params['rundir'], model))
 			sf.close()		
 			protocolPrm["SeedsSelfile"]				=	os.path.join(self.params['rundir'], "reference_volumes.sel")
-			protocolPrm["DoGenerateSeeds"]				=	False			
+			protocolPrm["DoGenerateSeeds"]			=	False			
 		else:
 			protocolPrm["SeedsSelfile"]				=	""
-			protocolPrm["DoGenerateSeeds"]				=	True
+			protocolPrm["DoGenerateSeeds"]			=	True
 		protocolPrm["InSelFile"]					=	"partlist.sel" ### this maybe should not be hardcoded
 		protocolPrm["WorkingDir"]					=	"ml3d"
-		protocolPrm["DoDeleteWorkingDir"]				=	False
+		protocolPrm["DoDeleteWorkingDir"]			=	False
 		protocolPrm["ProjectDir"]					=	self.params['recondir']
 		protocolPrm["LogDir"]						=	"Logs"
 		protocolPrm["DoMlf"]						=	self.params['DoMlf']
-		protocolPrm["DoCorrectAmplitudes"]				=	False	
+		protocolPrm["DoCorrectAmplitudes"]			=	False	
 		protocolPrm["InCtfDatFile"]					=	"all_images.ctfdat"
 		protocolPrm["HighResLimit"]					=	self.params['HighResLimit']
-		protocolPrm["ImagesArePhaseFlipped"]				=	self.params['ImagesArePhaseFlipped']
-		protocolPrm["InitialMapIsAmplitudeCorrected"]			=	False
-		protocolPrm["SeedsAreAmplitudeCorrected"]			=	False
+		protocolPrm["ImagesArePhaseFlipped"]		=	self.params['ImagesArePhaseFlipped']
+		protocolPrm["InitialMapIsAmplitudeCorrected"]	=	False
+		protocolPrm["SeedsAreAmplitudeCorrected"]		=	False
 		protocolPrm["DoCorrectGreyScale"]				=	self.params['DoCorrectGreyScale']	
 		protocolPrm["ProjMatchSampling"]				=	self.params['ProjMatchSampling']
 		if (self.params['LowPassFilter']>1) is True:
-			protocolPrm["DoLowPassFilterReference"]			=	True	
+			protocolPrm["DoLowPassFilterReference"]		=	True	
 			protocolPrm["LowPassFilter"]				=	self.params['LowPassFilter']
 		else:
-			protocolPrm["DoLowPassFilterReference"]			= 	False
+			protocolPrm["DoLowPassFilterReference"]		= 	False
 			protocolPrm["LowPassFilter"]				=	self.params['LowPassFilter']
-		protocolPrm["PixelSize"]					=	self.params['apix']
+		protocolPrm["PixelSize"]				        =	self.params['apix']
 		protocolPrm["NumberOfReferences"]				=	self.params['NumberOfReferences']
-		protocolPrm["DoJustRefine"]					=	False
+		protocolPrm["DoJustRefine"]					    =	False
 		protocolPrm["DoML3DClassification"]				=	True
 		protocolPrm["AngularSampling"]					=	self.params['AngularSampling']
 		protocolPrm["NumberOfIterations"]				=	self.params['numiter']
@@ -149,20 +149,41 @@ class XmippML3DRefineJob(apRefineJob.RefineJob):
 		self.runparams['remoterundir'] = self.params['remoterundir']
 #		self.runparams['reconstruction_working_dir'] = protocolPrm["WorkingDir"]		
 		self.runparams['reconstruction_working_dir'] = protocolPrm['WorkingDir']+"/RunML3D"
+		self.runparams['numiter'] = protocolPrm['NumberOfIterations']
+		self.runparams['NumberOfReferences'] = protocolPrm['NumberOfReferences']
+		self.runparams['symmetry'] = protocolPrm["Symmetry"]
 		self.runparams['package_params'] = protocolPrm
-		paramfile = os.path.join(self.params['rundir'], "xmipp_ml3d_"+self.timestamp+"-params.pickle")
+		paramfile = os.path.join(self.params['remoterundir'], "xmipp_ml3d_"+self.timestamp+"-params.pickle")
 		apParam.dumpParameters(self.runparams, paramfile)
 		
 		### finished setup of input files, now run xmipp_protocols_ml3d.py from jobfile
 		apDisplay.printMsg("finished setting up input files, now running xmipp_protocols_ml3d.py")
 				
 		return protocolfile, protocolPrm
+	
+	def makeNewTrialScript(self):
+		print self.params['modelnames'][0]
+		self.addSimpleCommand('ln -s %s %s' % (self.params['modelnames'][0], 
+			os.path.join(self.params['remoterundir'], self.params['modelnames'][0])))
+		partar = os.path.join(self.params['remoterundir'],'partfiles.tar.gz')
+		partpath = os.path.join(self.params['remoterundir'],'partfiles')
+		if not os.path.isdir(partpath):
+			# partfiles need to be untared in its directory
+			self.addSimpleCommand('mkdir %s' % partpath)
+			self.addSimpleCommand('cd %s' % partpath)
+			self.addSimpleCommand('tar xvf %s' % partar)
+			# return to recondir
+			self.addSimpleCommand('cd %s' % self.params['recondir'])
 				
 	#=====================
 	def makePreIterationScript(self):
 		tasks = {}
 		self.addToLog('....Setting up Xmipp ML3D Protocol....')
 		protocolfile, protocolPrm = self.setupXmippML3DProtocol()
+
+		### check for variable root directories between file systems
+		apXmipp.checkSelOrDocFileRootDirectoryInDirectoryTree(self.params['remoterundir'], self.params['rundir'], self.params['remoterundir'])
+		
 		self.addToLog('....Start running Xmipp Protocol....')
 		tasks = self.addToTasks(tasks,'python %s' % protocolfile,self.calcRefineMem(),self.params['nproc'])
 		protocol_pyname = os.path.basename(protocolfile)

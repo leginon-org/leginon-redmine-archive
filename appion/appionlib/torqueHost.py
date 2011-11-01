@@ -23,12 +23,9 @@ class TorqueHost(processingHost.ProcessingHost):
         else:
             raise UnboundLocalError ("Current Job not set")
         #Every Shell Script starts by indicating shell type
-        header = "#!" + self.shell + "\n"
+        header = "#!" + self.getShell() + "\n"
                
         #add job attribute headers
-        if currentJob.getName():
-            header += self.scriptPrefix +" -N " + currentJob.getName() + "\n"
-        
         if currentJob.getWalltime():
             header += self.scriptPrefix +" -l walltime=" + str(currentJob.getWalltime())+":00:00\n"
         
@@ -90,18 +87,18 @@ class TorqueHost(processingHost.ProcessingHost):
                                         shell=True)
             returnCode =process.wait()
             
-            if returnCode > 0:
-                #return unkown status if check resulted in a error
+            if returnCode != 0:
+                #return unknown status if check resulted in a error
                 returnStatus = 'U'
             else:
                 rstring = process.communicate()[0]
                 status =  rstring.split('\n')[2].split()[4]
                 #translate torque status codes to appion codes
-                if status == "C" or status == "E":
+                if status == 'C' or status == 'E':
                     #Job completed of is exiting
                     returnStatus = 'D'
                   
-                elif status == "R":
+                elif status == 'R':
                     #Job is running
                     returnStatus = 'R'
                 else:
