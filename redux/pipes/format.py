@@ -1,7 +1,9 @@
 # standard lib
 import cStringIO
+import json
 
 # 3rd party
+import numpy
 import scipy.misc
 
 # myami
@@ -10,15 +12,39 @@ import pyami.mrc
 # local
 from redux.pipe import Pipe
 
+class ReduxJSONEncoder(json.JSONEncoder):
+	def default(self, obj):
+		## convert numpy types to built-in python types
+		if isinstance(obj, numpy.bool_):
+			return bool(obj)
+		elif isinstance(obj, numpy.integer):
+			return long(obj)
+		elif isinstance(obj, numpy.floating):
+			return float(obj)
+		elif isinstance(obj, numpy.complexfloating):
+			return complex(obj)
+		elif isinstance(obj, numpy.dtype):
+			return str(obj)
+		return json.JSONEncoder.default(self, obj)
+
 class Format(Pipe):
 	required_args = {'oformat': str}
-	file_formats = {'JPEG': '.jpg', 'GIF': '.gif', 'TIFF': '.tif', 'PNG': '.png', 'MRC': '.mrc'}
+	file_formats = {
+		'JPEG': '.jpg',
+		'GIF': '.gif',
+		'TIFF': '.tif',
+		'PNG': '.png',
+		'MRC': '.mrc',
+		'JSON': '.json',
+	}
 	def run(self, input, oformat):
 		if oformat not in self.file_formats:
 			raise ValueError('oformat: %s' % (oformat,))
 
 		if oformat == 'MRC':
 			s = self.run_mrc(input)
+		elif oformat == 'JSON':
+			s = self.run_json(input)
 		else:
 			s = self.run_pil(input, oformat)
 
@@ -30,6 +56,10 @@ class Format(Pipe):
 		image_string = file_object.getvalue()
 		file_object.close()
 		return image_string
+
+	def run_json(self, input):
+		outstring = json.dumps(input, cls=ReduxJSONEncoder)
+		return outstring
 
 	def run_pil(self, input, oformat):
 		pil_image = scipy.misc.toimage(input)

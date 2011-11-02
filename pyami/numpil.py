@@ -58,6 +58,14 @@ def read(imfile):
 	im = im2numpy(im)
 	return im
 
+def readInfo(imfile):
+	im = Image.open(imfile)
+	info = {}
+	info.update(im.info)
+	info['nx'], info['ny'] = im.size
+	info['nz'] = 1
+	return info
+
 def write(a, imfile=None, format=None, limits=None, writefloat=False):
 	'''
 	Convert array to 8 bit gray scale and save to filename.
