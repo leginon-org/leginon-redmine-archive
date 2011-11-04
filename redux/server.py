@@ -25,8 +25,10 @@ class RequestHandler(SocketServer.StreamRequestHandler):
 	def run_process(self, request):
 		try:
 			kwargs = redux.utility.request_to_kwargs(request)
-			if 'pipeorder' in kwargs:
-				raise NotImplementedError('what to do with pipeorder?')
+			if 'pipeline' in kwargs:
+				pipeline = redux.pipeline.pipeline_by_preset(kwargs['pipeline'])
+			elif 'pipes' in kwargs:
+				pipeline = redux.pipeline.pipeline_by_string(kwargs['pipes'])		
 			else:
 				pipeline = redux.pipeline.pipeline_by_preset('standard')
 			result = pipeline.process(**kwargs)
