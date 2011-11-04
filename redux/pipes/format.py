@@ -10,11 +10,13 @@ import scipy.misc
 import pyami.mrc
 
 # local
-from redux.pipe import Pipe
+import redux.pipe
 import redux.utility
 
-class Format(Pipe):
+class Format(redux.pipe.Pipe):
 	required_args = {'oformat': str}
+	optional_args = {'rgb': redux.pipe.bool_converter}
+	optional_defaults = {'rgb': False}
 	file_formats = {
 		'JPEG': '.jpg',
 		'GIF': '.gif',
@@ -23,7 +25,7 @@ class Format(Pipe):
 		'MRC': '.mrc',
 		'JSON': '.json',
 	}
-	def run(self, input, oformat):
+	def run(self, input, oformat, rgb):
 		if oformat not in self.file_formats:
 			raise ValueError('oformat: %s' % (oformat,))
 
@@ -32,7 +34,7 @@ class Format(Pipe):
 		elif oformat == 'JSON':
 			s = self.run_json(input)
 		else:
-			s = self.run_pil(input, oformat)
+			s = self.run_pil(input, oformat, rgb)
 
 		return s
 
@@ -47,8 +49,10 @@ class Format(Pipe):
 		outstring = json.dumps(input, cls=redux.utility.ReduxJSONEncoder)
 		return outstring
 
-	def run_pil(self, input, oformat):
+	def run_pil(self, input, oformat, rgb):
 		pil_image = scipy.misc.toimage(input)
+		if rgb:
+			pil_image = pil_image.convert('RGB')
 		file_object = cStringIO.StringIO()
 		pil_image.save(file_object, oformat)
 		image_string = file_object.getvalue()
