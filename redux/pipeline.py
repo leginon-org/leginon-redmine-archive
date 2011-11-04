@@ -35,6 +35,12 @@ def pipeline_by_preset(name):
 	pl = pipeline_by_pipes(pipes)
 	return pl
 
+def pipeline_by_string(pipestring):
+	pipes = pipestring.split(',')
+	pipes = [pipe.split(':') for pipe in pipes]
+	pl = pipeline_by_pipes(pipes)
+	return pl
+
 ## you have to create subclass with pipeorder attribute
 ## or instantiate Pipeline class directly, giving it pipeorder arg
 class Pipeline(object):

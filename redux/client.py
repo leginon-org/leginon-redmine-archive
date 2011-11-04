@@ -41,7 +41,12 @@ class SimpleClient(Client):
 		return self.process_kwargs(**kwargs)
 
 	def process_kwargs(self, **kwargs):
-		pl = redux.pipeline.pipeline_by_preset('standard')
+		if 'pipeline' in kwargs:
+			pl = redux.pipeline.pipeline_by_preset(kwargs['pipeline'])
+		elif 'pipes' in kwargs:
+			pl = redux.pipeline.pipeline_by_string(kwargs['pipes'])		
+		else:
+			pl = redux.pipeline.pipeline_by_preset('standard')
 		return pl.process(**kwargs)
 
 def add_option(parser, optname, help):
@@ -69,6 +74,8 @@ def parse_argv():
 	add_option(parser, 'request', 'full request as a single URL option string')
 	add_option(parser, 'server_host', 'redux server host name (if not given, will start built-in redux processor)')
 	add_option(parser, 'server_port', 'redux server port (if not given, will use default port)')
+	add_option(parser, 'pipeline', 'pipeline preset to use')
+	add_option(parser, 'pipes', 'pipeline defined by sequence of pipes:  name:cls,namecls,...')
 
 	(options, args) = parser.parse_args()
 
