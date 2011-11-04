@@ -11,21 +11,7 @@ import pyami.mrc
 
 # local
 from redux.pipe import Pipe
-
-class ReduxJSONEncoder(json.JSONEncoder):
-	def default(self, obj):
-		## convert numpy types to built-in python types
-		if isinstance(obj, numpy.bool_):
-			return bool(obj)
-		elif isinstance(obj, numpy.integer):
-			return long(obj)
-		elif isinstance(obj, numpy.floating):
-			return float(obj)
-		elif isinstance(obj, numpy.complexfloating):
-			return complex(obj)
-		elif isinstance(obj, numpy.dtype):
-			return str(obj)
-		return json.JSONEncoder.default(self, obj)
+import redux.utility
 
 class Format(Pipe):
 	required_args = {'oformat': str}
@@ -58,7 +44,7 @@ class Format(Pipe):
 		return image_string
 
 	def run_json(self, input):
-		outstring = json.dumps(input, cls=ReduxJSONEncoder)
+		outstring = json.dumps(input, cls=redux.utility.ReduxJSONEncoder)
 		return outstring
 
 	def run_pil(self, input, oformat):
