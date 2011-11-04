@@ -37,4 +37,6 @@ class ReduxJSONEncoder(json.JSONEncoder):
 			return complex(obj)
 		elif isinstance(obj, numpy.dtype):
 			return str(obj)
+		elif isinstance(obj, numpy.ndarray):
+			return obj.tolist()	
 		return json.JSONEncoder.default(self, obj)

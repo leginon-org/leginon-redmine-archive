@@ -23,3 +23,5 @@ from sqrt import Sqrt
 register(Sqrt)
 from pad import Pad
 register(Pad)
+from histogram import Histogram
+register(Histogram)

@@ -8,5 +8,6 @@ pipes = (
 	('sqrt', 'Sqrt'),
 	('lpf', 'LPF'),
 	('scale', 'Scale'),
+	('histogram', 'Histogram'),
 	('format', 'Format'),
 )
