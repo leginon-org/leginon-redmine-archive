@@ -5,8 +5,8 @@ import logging
 
 # local
 import redux.utility
-from redux.pipelines import StandardPipeline
 import redux.exceptions
+import redux.pipeline
 
 ### set up logging
 logger = logging.getLogger('redux')
@@ -25,7 +25,11 @@ class RequestHandler(SocketServer.StreamRequestHandler):
 	def run_process(self, request):
 		try:
 			kwargs = redux.utility.request_to_kwargs(request)
-			result = StandardPipeline().process(**kwargs)
+			if 'pipeorder' in kwargs:
+				raise NotImplementedError('what to do with pipeorder?')
+			else:
+				pipeline = redux.pipeline.pipeline_by_preset('standard')
+			result = pipeline.process(**kwargs)
 		except redux.exceptions.ArgumentError, e:
 			result = e.error_detail()
 		except Exception, e:
@@ -50,7 +54,8 @@ def test_request():
 	request = sys.argv[2]
 	kwargs = redux.utility.request_to_kwargs(request)
 	t0 = time.time()
-	result = StandardPipeline().process(**kwargs)
+	pl = redux.pipeline.pipeline_by_preset('standard')
+	result = pl.process(**kwargs)
 	t1 = time.time()
 	sys.stderr.write('TIME: %s\n' % (t1-t0))
 	print result

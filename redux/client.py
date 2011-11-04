@@ -4,7 +4,9 @@ import sys
 import socket
 import utility
 from optparse import OptionParser
-from redux.pipelines import StandardPipeline
+import redux.pipes
+import redux.pipeline
+import redux.pipelines
 
 class Client(object):
 	def process_request(self, request):
@@ -39,7 +41,8 @@ class SimpleClient(Client):
 		return self.process_kwargs(**kwargs)
 
 	def process_kwargs(self, **kwargs):
-		return StandardPipeline().process(**kwargs)
+		pl = redux.pipeline.pipeline_by_preset('standard')
+		return pl.process(**kwargs)
 
 def add_option(parser, optname, help):
 			dest = optname
@@ -48,18 +51,19 @@ def add_option(parser, optname, help):
 
 def parse_argv():
 	parser = OptionParser()
-	for pipe in StandardPipeline.pipeorder:
-		pipe_name = pipe.__name__
-		if pipe.switch_arg:
-			help = '%s: boolean switch to turn it on' % (pipe_name,)
-			add_option(parser, pipe.switch_arg, help)
-		if pipe.required_args:
-			for arg in pipe.required_args:
-				help = '%s: required' % (pipe_name,)
+	pipes = redux.pipelines.registered['standard']
+	for name,clsname in pipes:
+		cls = redux.pipes.registered[clsname]
+		if cls.switch_arg:
+			help = '%s: boolean switch to turn it on' % (name,)
+			add_option(parser, cls.switch_arg, help)
+		if cls.required_args:
+			for arg in cls.required_args:
+				help = '%s: required' % (name,)
 				add_option(parser, arg, help)
-		if pipe.optional_args:
-			for arg in pipe.optional_args:
-				help = '%s: optional' % (pipe_name,)
+		if cls.optional_args:
+			for arg in cls.optional_args:
+				help = '%s: optional' % (name,)
 				add_option(parser, arg, help)
 
 	add_option(parser, 'request', 'full request as a single URL option string')
