@@ -1,0 +1,14 @@
+# this is not necessarily functional, but currently necessary for the
+# option parser to be built correctly
+pipes = (
+	('read', 'Read'),
+	('pad', 'Pad'),
+	('power', 'Power'),
+	('shape', 'Shape'),
+	('mask', 'Mask'),
+	('sqrt', 'Sqrt'),
+	('lpf', 'LPF'),
+	('scale', 'Scale'),
+	('histogram', 'Histogram'),
+	('format', 'Format'),
+)

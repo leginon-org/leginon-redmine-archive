@@ -7,4 +7,5 @@ def register(name, pipes):
 
 import standard
 register('standard', standard.pipes)
-
+import allpipes
+register('all', allpipes.pipes)

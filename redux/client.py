@@ -56,7 +56,7 @@ def add_option(parser, optname, help):
 
 def parse_argv():
 	parser = OptionParser()
-	pipes = redux.pipelines.registered['standard']
+	pipes = redux.pipelines.registered['all']
 	for name,clsname in pipes:
 		cls = redux.pipes.registered[clsname]
 		if cls.switch_arg:
