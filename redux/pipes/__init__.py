@@ -25,3 +25,5 @@ from pad import Pad
 register(Pad)
 from histogram import Histogram
 register(Histogram)
+from simulate import Simulate
+register(Simulate)

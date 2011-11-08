@@ -1,5 +1,6 @@
 # this is the standard pipeline currently used by default
 pipes = (
+	('sim', 'Simulate'),
 	('read', 'Read'),
 	('pad', 'Pad'),
 	('power', 'Power'),
