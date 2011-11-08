@@ -11,12 +11,22 @@ def debug(s):
 		sys.stderr.write('\n')
 
 class Cache(pyami.resultcache.ResultCache):
+	def check_disable(self, pipeline):
+		for pipe in pipeline:
+			if pipe.disable_cache:
+				return True
+		return False
+
 	def put(self, pipeline, result):
+		if self.check_disable(pipeline):
+			return
 		pyami.resultcache.ResultCache.put(self, pipeline, result)
 		if pipeline[-1].cache_file:
 			self.file_put(pipeline, result)
 
 	def get(self, pipeline):
+		if self.check_disable(pipeline):
+			return
 		## try memory cache
 		result = pyami.resultcache.ResultCache.get(self, pipeline)
 
@@ -77,7 +87,7 @@ class Cache(pyami.resultcache.ResultCache):
 		return path
 
 	def cache_path(self):
-		return '/srv/cache/myamiweb/redux'
+		return '/tmp/redux'
 
 	def pipeline_path(self, pipeline):
 		parts = [pipe.dirname() for pipe in pipeline]

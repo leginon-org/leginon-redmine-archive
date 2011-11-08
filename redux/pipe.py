@@ -63,6 +63,7 @@ class Pipe(object):
 	optional_defaults = {}
 	cache_file = True
 	def __init__(self, **kwargs):
+		self.disable_cache = False
 		self.parse_args(**kwargs)
 		self.make_hash()
 		self.make_names()

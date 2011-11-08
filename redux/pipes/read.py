@@ -16,9 +16,14 @@ class Read(Pipe):
 	optional_defaults = {'info': False}
 
 	def make_dirname(self):
-		abs = os.path.abspath(self.kwargs['filename'])
-		drive,tail = os.path.splitdrive(self.kwargs['filename'])
-		self._dirname = tail[1:]
+		## disable caching for frame requests
+		if 'frame' in self.kwargs:
+			self.disable_cache = True
+			self._dirname = None
+		else:
+			self.disable_cache = False
+			drive,tail = os.path.splitdrive(self.kwargs['filename'])
+			self._dirname = tail[1:]
 
 	def run(self, input, filename, info, frame=None):
 		## input ignored
