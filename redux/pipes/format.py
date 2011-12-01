@@ -1,6 +1,5 @@
 # standard lib
 import cStringIO
-import json
 
 # 3rd party
 import numpy
@@ -46,7 +45,7 @@ class Format(redux.pipe.Pipe):
 		return image_string
 
 	def run_json(self, input):
-		outstring = json.dumps(input, cls=redux.utility.ReduxJSONEncoder)
+		outstring = redux.utility.json_encode(input)
 		return outstring
 
 	def run_pil(self, input, oformat, rgb):
