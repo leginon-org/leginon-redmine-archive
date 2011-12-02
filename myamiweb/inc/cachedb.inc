@@ -26,11 +26,15 @@ function startcache($session) {
     return;
   }
 	updateCacheTime($session);
+	// TO DO: redux caching will not be on webserver CACHE_PATH
   $outpath=CACHE_PATH.$session;
+	if (!is_dir(CACHE_PATH)) exec("mkdir ".CACHE_PATH);
   $log=CACHE_PATH.$session.".log";
   $option="session='$session' s=512 outpath='$outpath'";
+	$option .= (USE_REDUX_CACHE) ? ' redux=1':'';
+	if (!USE_REDUX_CACHE && !is_dir($outpath)) exec("mkdir $outpath");
   $cmd="/usr/bin/php -q $script $option > $log &";
-  exec($cmd);
+	exec($cmd);
 }
 
 function isrunning($cmd, $pattern) {
@@ -58,6 +62,18 @@ function updateCacheTime($session) {
 	$q = "replace `viewer_cache` set session='".$session."'";
 
 	$result = $dbc->SQLQuery($q);
+}
+
+function useCache($filepath,$sessionname) {
+	//redux cache is searched using the original file path.
+	if (USE_REDUX_CACHE) return $filepath;
+	//search for php-mrc cache jpg file.
+	$filename = basename($filepath);
+	$jpgfilename = ereg_replace('mrc$', 'jpg', $filename);
+	$jpgpath = CACHE_PATH.$session."/";
+	$jpgpic = $jpgpath.$jpgfilename;
+	if (@is_file($jpgpic)) $filepath = $jpgpic;
+	return $filepath;
 }
 
 ?>

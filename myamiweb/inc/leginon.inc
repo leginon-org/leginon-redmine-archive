@@ -949,9 +949,9 @@ class leginondata {
 		return $filenames;
 	}
 
-	function getFilenameFromId($id, $path="") {
+	function getFilenameFromId($id, $prepend_path=false) {
 			list($filename) = $this->getFilename($id);
-			$path = ($path) ? $this->getImagePath($filename['sessionId']) : "";
+			$path = ($prepend_path) ? $this->getImagePath($filename['sessionId']) : "";
 			return $path.$filename['filename'];
 	}
 
@@ -1214,7 +1214,6 @@ class leginondata {
 			."on (pp.DEF_id=parent.`REF|PresetData|preset`) "
 			."where " 
 			."a.`DEF_id` ='".$imgId."' "; 
-
 		if($Rparent = $this->mysql->getSQLResult($q))
 			return $Rparent[0];
 		else
@@ -1476,7 +1475,8 @@ class leginondata {
 			."t.`DEF_id` as tId, "
 			."t.`version` as tversion, "
 			."t.`status` as tstatus, "
-			."t.`number` as tnumber "
+			."t.`number` as tnumber, "
+			."t.`type` as ttype "
 			."from AcquisitionImageData as a "
 			."left join AcquisitionImageTargetData as t "
 			."on (a.`DEF_id` = t.`REF|AcquisitionImageData|image`) "

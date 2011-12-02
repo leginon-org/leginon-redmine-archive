@@ -64,7 +64,7 @@ if ($g) {
 	);
 
 	$img = getImageXML($XML_DATA, $id, $preset, $params);
-
+/*
 	Header( "Content-type: $type ");
 	Header( "Content-Disposition: inline; filename=".$filename);
         if ($t=='png')
@@ -72,6 +72,7 @@ if ($g) {
         else
                 imagejpeg($img,'',$quality);
 	imagedestroy($img);
+*/
 } else {
 	Header("Content-type: image/x-png");
 	$blkimg = blankimage();

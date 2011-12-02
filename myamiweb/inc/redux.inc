@@ -10,16 +10,22 @@ $validator = new formValidator();
 
 class redux{
 	private $filename;		//input image filename with full location path.
+	private $pipeline;		//preset pipeline [choices: ('standard', 'histdata')]
 	private $padShape;		// need to be x, y array (need to be bigger than original file size)
 	private $padPos;		// need to be x, y array (start positions).
 	private $padValue;		// float
 	private $power;			// boolean
 	private $maskRadius;	// float 
 	private $shape;			// x, y array (output size)
+	private $frame;		// integer
+	private $histBins;		// integer
+	private $histMin;		// float
+	private $histMax;		// float
 	private $lpf;			// low pass filter, float (the default is not use at all)
 	private $scaleMin;		// float
 	private $scaleMax;		// float
 	private $scaleType;		// image scale type [choices ("minmax", "stdev", "cdf")]
+	private $info;			// boolean
 	private $oFormat;		// image output format [choices: ('JPEG', 'GIF', 'TIFF', 'PNG', 'MRC')]
 	private $errMsg;		// error message array contain name - message pair.
 	
@@ -33,8 +39,8 @@ class redux{
 		$this->setFilename($filename);	
 		
 		// set default output format to JPEG
-		$oFormat = (empty($oFormat))? 'JPEG': $oFormat;
-		$this->setOFormat('JPEG');
+		$oFormat = (empty($oFormat))? '': $oFormat;
+		$this->setOFormat($oFormat);
 	}
 	
 	/*
@@ -52,8 +58,15 @@ class redux{
 	
 	function getPadValue() 		{ return $this->padValue; }
 	
+	function getFrameValue() 		{ return $this->frameValue; }
+	
 	function getPower(){
 		$str = $this->power ? '1' : '0'; 
+		return $str;
+	}
+	
+	function getInfo(){
+		$str = $this->info ? '1' : '0'; 
 		return $str;
 	}
 	
@@ -71,6 +84,10 @@ class redux{
 	function getScaleMax() 		{ return $this->scaleMax; }
 	function getScaleType() 	{ return $this->scaleType; }
 	function getOFormat() 		{ return $this->oFormat; }
+	function getPipeline() 		{ return $this->pipeline; }
+	function getHistBins() 		{ return $this->histBins; }
+	function getHistMin() 		{ return $this->histMin; }
+	function getHistMax() 		{ return $this->histMax; }
 	
 	function getErrMsg(){ 
 		$this->validateInputs();
@@ -84,8 +101,26 @@ class redux{
 		$this->filename = $filename; 
 	}
 	
+	function setHistBins($histBins){
+		global $validator;
+		$validator->addValidation("histBins", $histBins, "num", "number of bins in histogram must be a positive integer");
+		$this->histBins = $histBins; 
+	}
+
+	function setHistMin($histMin){
+		global $validator;
+		$validator->addValidation("histMin", $histMin, "float", "Minimum histogram range must be float");
+		$this->histMin = $histMin;
+	}
+
+	function setHistMax($histMax){
+		global $validator;
+		$validator->addValidation("histMax", $histMax, "float", "Maximum histogram range must be float");
+		$this->histMax = $histMax; 
+	}
+
 	function setPadShape($padShape){ 
-		
+
 		global $validator;
 
 		if(!is_array($padShape) || (count($padShape) != 2)) 
@@ -113,6 +148,21 @@ class redux{
 		global $validator;
 		$validator->addValidation("padValue", $padValue, "float", "Pad value must be an float.");
 		$this->padValue = $padValue; 
+	}
+
+	function setFrameValue($frameValue){ 
+		
+		global $validator;
+		$validator->addValidation("frameValue", $frameValue, "num", "Frame numer value must be an integer.");
+		$this->frameValue = $frameValue; 
+	}
+
+	function setInfo($infoflag){ 
+		
+		global $validator;
+		if(!is_bool($infoflag))
+			$validator->setErrorMessage("power", "The value of info flag must be boolean (true, flase).");
+		$this->info = $infoflag; 
 	}
 
 	function setPower($power){ 
@@ -192,7 +242,6 @@ class redux{
 				$validator->setErrorMessage("scaleType", "Image scale type can only be \"minmax\", \"pctminmax\", \"stdev\", or \"cdf\".");
 		}
 		
-		
 		$this->scaleType = $scaleType; 
 	}
 	
@@ -210,11 +259,25 @@ class redux{
 			case "TIFF":
 			case "PNG":
 			case "MRC":
+			case "JSON":
 				break;
 			default:
-				$validator->setErrorMessage("oFormat", "Image output format can only be \"JPEG\", \"GIF\", \"TIFF\", \"PNG\", or \"MRC\".");
+				$validator->setErrorMessage("oFormat", "Image output format can only be \"JPEG\", \"GIF\", \"TIFF\", \"PNG\", or \"MRC\", or \"JSON\".");
 		}
 		$this->oFormat = $oFormat; 
+	}
+	
+		function setPipeline($pipeline='standard'){ 
+		
+		global $validator;
+		switch($pieline){
+			case "standard":
+			case "histdata":
+				break;
+			default:
+				$validator->setErrorMessage("pipeline", "Available pipelines are \"standard\" and \"histdata\".");
+		}
+		$this->pipeline = $pipeline; 
 	}
 	
 	function validateInputs(){
@@ -226,17 +289,23 @@ class redux{
 	function constructRequestString(){
 		/* Comment out some functions because Redux server has not fully tested yet */
 		
-		$str = 'filename=' . $this->getFilename();
+		$str .= empty($this->pipeline) ? '' : 'pipeline=' . $this->getPipeline().'&';
+		$str .= 'filename=' . $this->getFilename();
 		//$str .= empty($this->padShape) ? '' : '&padshape=' . $this->getPadShape();
 		$str .= empty($this->power) ? '' : '&power=' . $this->getPower();
+		$str .= empty($this->info) ? '' : '&info=' . $this->getInfo();
 		$str .= empty($this->maskRadius) ? '' : '&maskradius=' . $this->getMaskRadius();
 		$str .= empty($this->shape) ? '' : '&shape=' . $this->getShape();
 		$str .= empty($this->scaleType) ? '' : '&scaletype=' . $this->getScaleType();
-		$str .= empty($this->scaleMin) ? '' : '&scalemin=' . $this->getScaleMin();
-		$str .= empty($this->scaleMax) ? '' : '&scalemax=' . $this->getScaleMax();
+		$str .= !is_numeric($this->scaleMin) ? '' : '&scalemin=' . $this->getScaleMin();
+		$str .= !is_numeric($this->scaleMax) ? '' : '&scalemax=' . $this->getScaleMax();
 		$str .= empty($this->oFormat) ? '' : '&oformat=' . $this->getOFormat();
+		$str .= empty($this->histBins) ? '' : '&histbins=' . $this->getHistBins();
+		$str .= !is_numeric($this->histMin) ? '' : '&histmin=' . $this->getHistMin();
+		$str .= !is_numeric($this->histMax) ? '' : '&histmax=' . $this->getHistMax();
 		//$str .= empty($this->padPos) ? '' : '&padpos=' . $this->getPadPos();
 		//$str .= empty($this->padValue) ? '' : '&padvalue=' . $this->getPadValue();	
+		$str .= empty($this->frameValue) ? '&frame=0' : '&frame=' . $this->getFrameValue();	
 		$str .= empty($this->lpf) ? '' : '&lpf=' . $this->getLpf();	
 
 		return $str;

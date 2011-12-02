@@ -1,5 +1,6 @@
 <?php
-require 'inc/leginon.inc';
+require_once 'inc/leginon.inc';
+require_once "inc/imageutil.inc";
 // --- get image parameters from URL
 $id=$_GET['id'];
 if (!$imgscript=$_GET['imgsc'])
@@ -29,26 +30,24 @@ $options = $tg.$sb.$minpix.$maxpix.$fft.$fftbin.$filter.$autoscale.$psel.$acepar
 
 $nimgId = $leginondata->findImage($id, $preset);
 $imginfo = $leginondata->getImageInfo($nimgId['id']);
+$dimx = $imginfo['dimx'];
+$dimy = $imginfo['dimy'];
 
-if (!$imgwidth = $imginfo['dimx'])
-	$imgwidth=1024;
-if (!$imgheight= $imginfo['dimy'])
-	$imgheight=1024;
-
+$imageUtil = new imageUtil();
 $imgbinning = $_GET['binning'];
-if ($_GET['binning']=='auto') {
-	$imgbinning = ($imgwidth > 1024) ? (($imgwidth > 2048) ? 4 : 2 ) : 1;
-	if ($fftflag && $binorder=='b')
-		$imgbinning = ($imgwidth > 2048) ? 2 : 1;
-}
-
+$xyDim = $imageUtil->imageBinning($dimx, $dimy, $imgbinning);
+$imgwidth = $xyDim[0];
+$imgheight = $xyDim[1];
+$imgbinning = $dimx / $imgwidth;
 // --- set image map size and binning
-$imgmapsize=128;
-$mapbinning = ($imgwidth> 1024) ? (($imgwidth> 2048) ? 16 : 8 ) : 4;
+$imgmapwidth=128;
+$frame_size=$imgmapwidth;
+$mapxyDim = $imageUtil->imageFitIn($dimx, $dimy, $frame_size);
+$mapbinning = $dimx / $mapxyDim[0];
+$imgmapheight = $mapxyDim[1];
 if ($fftflag && $binorder=='b')
 	$mapbinning = $imgbinning;
-
-$ratio = $imgwidth/$imgbinning/$imgmapsize;
+$ratio = $imgwidth/$imgmapwidth;
 
 // --- for colored images display area in black
 $areacolor = ($_GET['gr']=="spectrum") ? "#000000" : "#00FF00";
@@ -67,9 +66,8 @@ if ($binorder == 'b') {
 }
 $filename = $imginfo['filename'];
 
-$imgmapsrc = $imgscript."?preset=".$preset."&session=".$session."&id=".$id."&t=75&s=$imgmapsize&binning=$mapbinning".$options;
-$imgsrc = $imgscript."?preset=".$preset."&session=".$session."&id=".$id.$quality.$binning.$options;
-
+$imgmapsrc = $imgscript."?preset=".$preset."&session=".$session."&id=".$id."&t=75&s=$imgmapwidth&binning=$mapbinning".$options;
+$imgsrc = $imgscript."?preset=".$preset."&session=".$session."&id=".$id.$quality."&binning=$imgbinning".$options;
 ?>
 <html>
 <head>
@@ -89,7 +87,7 @@ var jssize=<?=$imgsize; ?>
 
 var jsimgheight=<?=$imgheight; ?>
 
-var jsmapsize = <?=$imgmapsize; ?>
+var jsmapsize = <?=$imgmapwidth; ?>
 
 var ratio=<?=$ratio; ?>
 
@@ -397,7 +395,7 @@ function getDistance() {
 		onmousemove = "areamousemove(event)"
 		onmouseout	= "areamouseup(event)"
 	></div>
-	<div id="imgmap" style="position:relative; height:<?=$imgmapsize?>px; width:<?=$imgmapsize?>px; background:url('<?=$imgmapsrc?>')"
+	<div id="imgmap" style="position:relative; height:<?=$imgmapheight?>px; width:<?=$imgmapwidth?>px; background:url('<?=$imgmapsrc?>')"
 		onmousemove = "areamousemove(event)"
 		onmousedown	= "imgmapmousedown(event)" ></div>
 	<div	id="divcoord"
@@ -415,7 +413,7 @@ function getDistance() {
 </div>
 </div>
 <div id="divimg" style="z-index:1; position:absolute; width:100%; height:100%; overflow:auto;cursor:crosshair; ">
-<div id="img" style="position:absolute; top:0px; left:0px; width:<?=$imgsize;?>px; height:<?=$imgsize;?>; background:url('<?php echo $imgsrc; ?>')"
+<div id="img" style="position:absolute; top:0px; left:0px; width:<?=$imgwidth;?>px; height:<?=$imgheight;?>; background:url('<?php echo $imgsrc; ?>')"
 	onmousemove	=	"imgmousemove(event)";
 	onmousedown	=	"imgmousedown(event)";
 	onmouseup		=	"imgmouseup(event)";
