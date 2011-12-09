@@ -153,30 +153,10 @@ function getImageFromRequester($pic,$imginfo,$p) {
 	else
 		$xyDim = $imageUtil->imageBinning($dimx, $dimy, $binning, $default_size);
 
-	if ($p['autoscale']) 
-		list($type,$arg1, $arg2)=explode(";", $p['autoscale']);
-	else $type = '0';
-	
-	switch($type){
-		// when scale type is 'minmax'
-		case ('0'):
-			$scaletype = "minmax";
-			$pctminmax = $imageUtil->scaleMinMaxConvert($p['minpix'], $p['maxpix']);
-			$arg1 = $pctminmax['minpix'];
-			$arg2 = $pctminmax['maxpix'];
-			break;
-		// when scale type is 'cdf'
-		case ('c'):
-			$scaletype = "cdf";
-			break;
-		// when scale type is 'stdev'
-		default:
-			$scaletype = "stdev";
-			$arg2=($arg1>=1) ? $arg1 : 3;
-			$arg1= -1 * $arg1;
-			break;
-	}
-
+	$iscalearray = getIntensityScale($p);
+	$scaletype = $iscalearray[0];
+	$arg1 = $iscalearray[1];
+	$arg2 = $iscalearray[2];
 	//filtering
 	if (function_exists($p['filter']))
 		$lpf_sigma = $p['filter']();
@@ -186,6 +166,7 @@ function getImageFromRequester($pic,$imginfo,$p) {
 	} else {
 		$prefftDim = getImageXYDimFromBinningParams($imginfo,$p);
 		$imgstr = $imagerequest->requestImage($pic,'PNG',$prefftDim,$scaletype,$arg1,$arg2,0,false);
+		if (!is_dir(TEMP_IMAGES_DIR)) mkdir(TEMP_IMAGES_DIR,0777,true);
 		$tmpfile = TEMP_IMAGES_DIR.'tmp.png';
 		file_put_contents($tmpfile,$imgstr);
 		$imgstr = $imagerequest->requestImage($tmpfile,'JPEG',$xyDim,$scaletype,$arg1,$arg2,$lpf_sigma,true);
@@ -218,6 +199,35 @@ function getDisplayPixelSize($img,$imginfo,$isfft,$fftbintype,$prefftDim) {
 	$display_dimx = imagesx($img);
 	$prefft_dimx = $prefftDim[0];
 	return $imageUtil->getDisplayPixelSize($input_calpixelsize,$input_cambinning,$input_dimx,$display_dimx,$isfft,$fftbintype,$prefft_dimx);
+}
+function getIntensityScale($p) {
+	$imageUtil = new imageUtil();
+	if ($p['autoscale']) 
+		list($type,$arg1, $arg2)=explode(";", $p['autoscale']);
+	else $type = '0';
+	
+	switch($type){
+		// when scale type is 'minmax'
+		case ('0'):
+			$scaletype = "minmax";
+			#$pctminmax = $imageUtil->scaleMinMaxConvert($p['minpix'], $p['maxpix']);
+			#$arg1 = $pctminmax['minpix'];
+			#$arg1 = $pctminmax['minpix'];
+			$arg1 = $p['minpix'];
+			$arg2 = $p['maxpix'];
+			break;
+		// when scale type is 'cdf'
+		case ('c'):
+			$scaletype = "cdf";
+			break;
+		// when scale type is 'stdev'
+		default:
+			$scaletype = "stdev";
+			$arg2=($arg1>=1) ? $arg1 : 3;
+			$arg1= -1 * $arg1;
+			break;
+	}
+	return array($scaletype,$arg1,$arg2);
 }
 
 function addScaleBarRingToImage($img,$display_pixelsize,$isfft,$fftbintype) {
@@ -354,43 +364,6 @@ function addAppionOverlays($leginondata,$img,$imginfo,$p) {
 	imagestring($img, 2, 10, 30, $debug_message, imagecolorallocate($img,0,255,255));
 	return $img;
 }
-
-/*
-function the_rest() {
-// There are still php-gd part need to convert //
-		
-	// if we found the file //
-	if (@is_file($pic)) {
-
-		$imginfo = $leginondata->getImageInfo($imageId);
-
-		$dimx = $imginfo['dimx'];
-		
-		// fft => power
-		if ($p['loadjpg'] && !$p['fft']) {
-			$sessioninfo=$leginondata->getSessionInfo($sessionId);
-			$session=$sessioninfo['Name'];
-			$jpgfilename = ereg_replace('mrc$', 'jpg', $filename);
-			$jpgpath = CACHE_PATH.$session."/";
-			$jpgpic = $jpgpath.$jpgfilename;
-		}
-
-		if (@is_file($jpgpic)) {
-			$img = imagecreatefromjpeg($jpgpic);
-			// found at the binning = original mrc image size / size of the JPEG image
-			$binning=$dimx/imagesx($img);
-		} else {
-			//This is for autoscale = c or s, when using customize size do not run this if statement.
-			if ($p['autoscale']) {
-				list($type,$arg1, $arg2)=explode(";", $p['autoscale']);
-			
-				$densitymax = MAX_PIXEL_VAL;
-				if ($type=="c") {
-					$mrcimg = mrcread($pic);
-					mrcupdateheader($mrcimg);
-					list($p['minpix'], $p['maxpix'])=mrccdfscale($mrcimg, $arg1, $arg2);
->>>>>>> .r16154
-*/
 
 function makeFakeImageInfo($parent) {
 	$targetinfo = array();
