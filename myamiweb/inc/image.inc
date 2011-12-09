@@ -42,7 +42,6 @@ function getImageFile($leginondata,$imageId,$preset='all',$loadjpg=false,$is_fft
 }
 function getImage($sessionId, $imageId, $preset, $params = array()) {
 	// autoscale => $scaleMin, $scaleMax, $scaleType
-	//var_dump($params);
 	$p = array (
 		'size'=> '',
 		'minpix' => 0,
@@ -82,7 +81,8 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 	}
 	$imginfo = $leginondata->getImageInfo($imageId);
 
-	return getImageFromRequester($pic,$imginfo,$p);
+	$img =  getImageFromRequester($pic,$imginfo,$p);
+	return addAppionOverlays($leginondata,$img,$imginfo,$p);
 }
 
 function getImageXML($xmlfile, $imageId, $preset, $params = array()) {
@@ -126,9 +126,14 @@ function getImageXML($xmlfile, $imageId, $preset, $params = array()) {
 		$imginfo = $xmldata->getImageInfo($imageId);
 		return getImageFromRequester($pic,$imginfo,$p);
 	}
-}
+}	
 
 function getImageFromRequester($pic,$imginfo,$p) {
+	/* This function get image in the required dimension, 
+			format, and pixel processing. Scale bar and ring
+			are added if asked.  It is called by both
+			getImg and getImageXML and does not use database.
+	*/
 	// create imageRequester and imageUtil instances to begin.
 	$imagerequest = new imageRequester();
 	$imageUtil = new imageUtil();
@@ -142,10 +147,11 @@ function getImageFromRequester($pic,$imginfo,$p) {
 	$binning = $p['binning'];
 	$loadjpg = $p['loadjpg'];
 	// find out the proper x, y for display
+	$default_size = $imageUtil->getDefaultImageSize($p['fft'],$p['fftbin']);
 	if ($frame_size)
 		$xyDim = $imageUtil->imageFitIn($dimx, $dimy, $frame_size);
 	else
-		$xyDim = $imageUtil->imageBinning($dimx, $dimy, $binning);
+		$xyDim = $imageUtil->imageBinning($dimx, $dimy, $binning, $default_size);
 
 	if ($p['autoscale']) 
 		list($type,$arg1, $arg2)=explode(";", $p['autoscale']);
@@ -174,42 +180,79 @@ function getImageFromRequester($pic,$imginfo,$p) {
 	//filtering
 	if (function_exists($p['filter']))
 		$lpf_sigma = $p['filter']();
-	if ($p['fftbin']!='b' || !$p['fft'] || $dimx==$xyDim['x']) {
+	if (!isBinBeforeFFT($p) || $dimx==$xyDim['x']) {
 		$imgstr = $imagerequest->requestImage($pic,'JPEG',$xyDim,$scaletype,$arg1,$arg2,$lpf_sigma,(bool)$p['fft']);
+		$prefftDim = $xyDim;
 	} else {
-		$default_size = 2048;
-		$fftDim = $imageUtil->imageBinning($dimx, $dimy, $binning, $default_size);
-		$imgstr = $imagerequest->requestImage($pic,'PNG',$fftDim,$scaletype,$arg1,$arg2,0,false);
+		$prefftDim = getImageXYDimFromBinningParams($imginfo,$p);
+		$imgstr = $imagerequest->requestImage($pic,'PNG',$prefftDim,$scaletype,$arg1,$arg2,0,false);
 		$tmpfile = TEMP_IMAGES_DIR.'tmp.png';
 		file_put_contents($tmpfile,$imgstr);
 		$imgstr = $imagerequest->requestImage($tmpfile,'JPEG',$xyDim,$scaletype,$arg1,$arg2,$lpf_sigma,true);
 	}
 	$img = imagecreatefromstring($imgstr);
+	$display_pixelsize = getDisplayPixelSize($img,$imginfo,$p['fft'],$p['fftbin'],$prefftDim);
 
 	if (!$img) 
 		$img = blankimage(512);
+	if ($p['scalebar']) 
+		$img = addScaleBarRingToImage($img,$display_pixelsize,$p['fft'],$p['fftbin']);
+	// This is a good place to add debug message as a string on the image
+	$debug_message = (1/$display_pixelsize);
+	$debug_message .= ' fftDim'.$prefftDim[0].' xyDim'.$xyDim[0];
+	$debug_message .= ' :getImageFromRequester ';
+	imagestring($img, 4, 11, 21, $debug_message, imagecolorallocate($img,0,0,255));
+	imagestring($img, 4, 10, 20, $debug_message, imagecolorallocate($img,255,255,255));
+	return $img;
+}
 
+function isBinBeforeFFT($p) {
+	return ($p['fft'] && $p['fftbin'] == 'b');
+}
+
+function getDisplayPixelSize($img,$imginfo,$isfft,$fftbintype,$prefftDim) {
+	$imageUtil = new imageUtil();
+	$input_dimx = $imginfo['dimx'];
+	$input_calpixelsize = $imginfo['pixelsize'];
+	$input_cambinning = $imginfo['binning'];
+	$display_dimx = imagesx($img);
+	$prefft_dimx = $prefftDim[0];
+	return $imageUtil->getDisplayPixelSize($input_calpixelsize,$input_cambinning,$input_dimx,$display_dimx,$isfft,$fftbintype,$prefft_dimx);
+}
+
+function addScaleBarRingToImage($img,$display_pixelsize,$isfft,$fftbintype) {
 	// create image overlay on image object
 	$overlay = new imageOverlay($img);
 
+	$xyDim = array(imagesx($img),imagesy($img));
 	// display scale bar //
-	if ($p['scalebar']) {
-		if (!$p['fft']) {
-			$overlay->addScaleBar($imginfo,$xyDim);
-		} else {
-			$overlay->addScaleRing($imginfo,$xyDim,$p['fftbin']);
-		}
+	if (!$isfft) {
+		$overlay->addScaleBar($display_pixelsize,$xyDim);
+	} else {
+		$overlay->addScaleRing($display_pixelsize,$xyDim,$fftbintype);
 	}
-	if (!$img) 
-		$img = blankimage(512);
-	// This is a good place to add debug message as a string on the image
-	$debug_message = $lpf_sigma.' fftDim='.$fftDim[0].' xyDim='.$xyDim[0].' '.imagesx($img);
-	imagestring($img, 2, 10, 20, $debug_message, imagecolorallocate($img,0,255,255));
 	return $img;
-}	
+}
 
-/*
+function getImageXYDimFromBinningParams($imginfo,$p) {
+	$imageUtil = new imageUtil();
+	$dimx = $imginfo['dimx'];
+	$dimy = $imginfo['dimy'];
+	$binning = $p['binning'];
+	$default_size = $imageUtil->getDefaultImageSize($p['fft'],$p['fftbin']);
+	$xyDim = $imageUtil->imageBinning($dimx, $dimy, $binning, $default_size);
+	return $xyDim;
+}
+
+function addAppionOverlays($leginondata,$img,$imginfo,$p) {
+	$prefftDim = getImageXYDimFromBinningParams($imginfo,$p);
+	$display_pixelsize = getDisplayPixelSize($img,$imginfo,$p['fft'],$p['fftbin'],$prefftDim);
 	$debug_message = '';
+	$sessionId = $imginfo['sessionId'];
+	$imageId = $imginfo['imageId'];
+	$dimx = $imginfo['dimx'];
+	$xyDim = array(imagesx($img),imagesy($img));
+	$display_bin = $dimx/$xyDim[0];
 	// display targets //
 	if ($p['displaytargets']) {
 		$acqtargets = $leginondata->getImageTargets($imageId);
@@ -235,23 +278,22 @@ function getImageFromRequester($pic,$imginfo,$p) {
 		$colorby = $p['newptcl']['colorby'];
 		// --- Color by: l => label; d => diameter --- //
 		$colorby = ($colorby=='l') ? 'label' : 'diameter';
-		$display_bin = $dimx/$xyDim[0];
 		$labeled_particleinfo = getParticles($sessionId,$p['ptclsel'],$p['newptcl'],$imginfo,$display_bin);
 
 		$particleinfo=$labeled_particleinfo[0];
 		$selectionparams=$labeled_particleinfo[1];;
 		$particlelabels = $labeled_particleinfo[2];
 		$labeldata = $labeled_particleinfo[3];
-
+		$particlerun = $selectionparams['runId'];
 		$cx = 10;
 		$cy = 30;
 		$lsize = 10;
 
 		$particlelabelparams = setParticleLabelParams($img,$particlelabels,$labeldata);
 		// --- pixelsize in angstrom --- //
-		$apix = $imginfo['pixelsize']*1e10;
-		$diam_scalefactor = 1/$apix/$imginfo['binning']/$display_bin;
-		if (!$diam || $diam = $selectionparams['diam']) {
+		$apix = $display_pixelsize*1e10;
+		$diam_scalefactor = 1/$apix;
+		if (!$diam || $diam == $selectionparams['diam']) {
 			// apply scaling if not applied before
 			$diam = $selectionparams['diam'] * $diam_scalefactor;
 		} elseif ($diam) {
@@ -259,10 +301,9 @@ function getImageFromRequester($pic,$imginfo,$p) {
 		}
 		$groupcolors = setGroupColors($particleinfo,$img);
 
-		$scalefactor=1;
 		foreach ((array)$particleinfo as $particle) {
-			$cx = $particle['xcoord']/$display_bin*$scalefactor;
-			$cy = $particle['ycoord']/$display_bin*$scalefactor;
+			$cx = $particle['xcoord']/$display_bin;
+			$cy = $particle['ycoord']/$display_bin;
 
 			$col=$groupcolors[(int)$particle['diameter']];
 			//set diam and threshhold by particle label
@@ -289,7 +330,7 @@ function getImageFromRequester($pic,$imginfo,$p) {
 		}
 		//draw object trace
 		if ($selectionparams['trace']) {
-			$traces = $particledata->getTracesFromImageId($particlerun, $imageId);
+			$traces = getTraces($particlerun, $imageId);
 			if (!empty($traces)) {
 				$col = imagecolorallocate($img, 0,255,0);
 				foreach ($traces as $t) {
@@ -297,38 +338,23 @@ function getImageFromRequester($pic,$imginfo,$p) {
 					$linearpoints = array();
 					$pointcount = count($t);
 					foreach ($t as $point) {
-						$linearpoints[] = $point['x'] * $selectionparams['bin'] / $display_bin * $scalefactor ;
-						$linearpoints[] = $point['y'] * $selectionparams['bin'] / $display_bin * $scalefactor ;
+						$linearpoints[] = $point['x'] * $selectionparams['bin'] / $display_bin ;
+						$linearpoints[] = $point['y'] * $selectionparams['bin'] / $display_bin ;
 					}
 					drawpolygon($img,$linearpoints,$col,true);
 				}
 			}	
 		}
 	}
-*/
-
-function addScaleBar($img,$imginfo,$xyDim) {
-	if ($imginfo) {
-		$size = ($xyDim[0]) ? $xyDim[0]: 1;
-		$ratio = $imginfo['dimx']/$size ;
-		$value = $imginfo['pixelsize']*$imginfo['binning']*$ratio;
-		$scalebar = new ScaleBar($img, $size, $value);
-		$scalebar->display();
-	}
+	if (!$img) 
+		$img = blankimage(512);
+	// This is a good place to add debug message as a string on the image
+	$debug_message = 'trace';
+	$debug_message .= ' :addAppionOverlay';
+	imagestring($img, 2, 10, 30, $debug_message, imagecolorallocate($img,0,255,255));
+	return $img;
 }
 
-function addScaleRing($img,$imginfo,$xyDim,$fftbin) {
-	if ($imginfo) {
-		$size = ($xyDim[0]) ? $xyDim[0]: 1;
-		$ratio = $imginfo['dimx']/$size ;
-		//value is the resolution limit in Fourier space
-		$value = $imginfo['pixelsize']*$imginfo['binning']*$ratio*2;
-		if ($fftbin == 'a') 
-			$value = $imginfo['pixelsize']*$imginfo['binning']*2;
-		$scalebar = new ScaleRing($img, $size, $value);
-		$scalebar->display();
-	}
-}
 /*
 function the_rest() {
 // There are still php-gd part need to convert //
@@ -404,9 +430,14 @@ function getTargetLocation ($leginondata,$imageId,$imginfo,$parent,$target) {
 	return array(array($cx,$cy,$angle,$truedim*$ratioX),$child_shown,$msg);
 }
 
+function getTraces($particlerun, $imageId) {
+	require_once "inc/particledata.inc";
+	$particledata = new particledata();
+	return $particledata->getTracesFromImageId($particlerun, $imageId);
+}
 function getParticles($sessionId,$ptclsel,$newptcl,$imginfo,$binning) {
-		require "inc/particledata.inc";
-		require "inc/histogram.inc";
+		require_once "inc/particledata.inc";
+		require_once "inc/histogram.inc";
 		$particledata = new particledata();
 		$particlerun=$particledata->getLastParticleRun($sessionId);
 		if ($ptclsel) {
@@ -422,6 +453,7 @@ function getParticles($sessionId,$ptclsel,$newptcl,$imginfo,$binning) {
 		if (!$diam) {
 			$diam = $selectionparams['diam'];
 		}
+		$selectionparams['runId'] = $particlerun;
 		$labeldata=array();
 		$particlelabels =$particledata->getParticleLabels($particlerun);
 		// --- parse particle params

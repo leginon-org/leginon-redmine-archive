@@ -25,8 +25,7 @@ $nptcl = ($_GET['nptcl']) ? '&nptcl='.$_GET['nptcl'] : '';
 $acepar = ($_GET['g']) ? '&g='.($_GET['g']) : ''; 
 $gradient= ($_GET['gr']) ? '&gr='.$_GET['gr'] : '';
 $autoscale = ($_GET['autoscale']) ? '&autoscale='.$_GET['autoscale'] : '';
-
-$options = $tg.$sb.$minpix.$maxpix.$fft.$fftbin.$filter.$autoscale.$psel.$acepar.$gradient.$autoscale.$nptcl;
+$options = $binning.$tg.$sb.$minpix.$maxpix.$fft.$fftbin.$filter.$autoscale.$psel.$acepar.$gradient.$autoscale.$nptcl;
 
 $nimgId = $leginondata->findImage($id, $preset);
 $imginfo = $leginondata->getImageInfo($nimgId['id']);
@@ -35,39 +34,29 @@ $dimy = $imginfo['dimy'];
 
 $imageUtil = new imageUtil();
 $imgbinning = $_GET['binning'];
-$xyDim = $imageUtil->imageBinning($dimx, $dimy, $imgbinning);
+$default_size = $imageUtil->getDefaultImageSize($fftflag,$binorder);
+$xyDim = $imageUtil->imageBinning($dimx, $dimy, $imgbinning,$default_size);
 $imgwidth = $xyDim[0];
 $imgheight = $xyDim[1];
+// -- set real image binning
 $imgbinning = $dimx / $imgwidth;
-// --- set image map size and binning
+// --- set image map size
 $imgmapwidth=128;
-$frame_size=$imgmapwidth;
-$mapxyDim = $imageUtil->imageFitIn($dimx, $dimy, $frame_size);
-$mapbinning = $dimx / $mapxyDim[0];
+$mapframe_size=$imgmapwidth;
+$mapxyDim = $imageUtil->imageFitIn($dimx, $dimy, $mapframe_size);
 $imgmapheight = $mapxyDim[1];
-if ($fftflag && $binorder=='b')
-	$mapbinning = $imgbinning;
 $ratio = $imgwidth/$imgmapwidth;
 
 // --- for colored images display area in black
 $areacolor = ($_GET['gr']=="spectrum") ? "#000000" : "#00FF00";
 
 // --- set scale
-$imgsize = ($imgbinning) ? $imgwidth/$imgbinning : $imgwidth;
-if (!$imgsize)
-	$imgsize=1;
-$imgratio = $imgwidth/$imgsize ;
-$pixelsize = $imginfo['pixelsize']*$imginfo['binning']*$imgratio;
-# binning of the display is done with power spectrum image
-if ($binorder == 'b') {
-	$fftpixelsize = $imgratio/($imgwidth*$imginfo['pixelsize']*$imgbinning*$imginfo['binning']);
-} else {
-	$fftpixelsize = $imgratio/($imgwidth*$imginfo['pixelsize']*$imginfo['binning']);
-}
+$imgratio = $imgbinning ;
+$display_pixelsize = $imageUtil->getDisplayPixelSize($imginfo['pixelsize'],$imginfo['binning'],$imginfo['dimx'],$imgwidth,$fftflag,$binorder,$imgwidth);
 $filename = $imginfo['filename'];
-
-$imgmapsrc = $imgscript."?preset=".$preset."&session=".$session."&id=".$id."&t=75&s=$imgmapwidth&binning=$mapbinning".$options;
-$imgsrc = $imgscript."?preset=".$preset."&session=".$session."&id=".$id.$quality."&binning=$imgbinning".$options;
+//image width is used as the first factor to determine display size
+$imgmapsrc = $imgscript."?preset=".$preset."&session=".$session."&id=".$id."&t=75&s=$imgmapwidth".$options;
+$imgsrc = $imgscript."?preset=".$preset."&session=".$session."&id=".$id.$quality."&s=$imgwidth".$options;
 ?>
 <html>
 <head>
@@ -79,11 +68,10 @@ MAP: <?php echo $filename; ?>
 <script language="javascript" src="js/scale.js"></script>
 <script>
 var filename="<?=$filename; ?>"
-var pixsize ="<?= ($fftflag) ? $fftpixelsize : $pixelsize; ?>"
+var pixsize ="<?=$display_pixelsize; ?>"
 var fftflag="<?=$fftflag; ?>"
-var jsimgwidth=<?=$imgwidth; ?>
 
-var jssize=<?=$imgsize; ?>
+var jssize=<?=$imgwidth; ?>
 
 var jsimgheight=<?=$imgheight; ?>
 

@@ -8,8 +8,13 @@ class imageUtil{
 	 * otherwise use their original image size.
 	 * When binning has been set, find x, y by given binning.
 	 */
+	function getDefaultImageSize($isfft,$binorder) {
+		if ($isfft && $binorder == 'b')
+			return 2048;
+		return 1024;
+	}
+
 	function imageBinning($dimx, $dimy, $bin, $default_size=1024){
-		
 		if($bin == 'auto'){
 			$dimMax = max((int)$dimx, (int)$dimy);
 
@@ -54,6 +59,34 @@ class imageUtil{
 		$min = (255/100) * $min;
 		$max = (255/100) * $max;
 		return array('minpix'=>$min, 'maxpix'=>$max);
+	}
+
+	function getDisplayPixelSize($calpixelsize,$camera_binning,$db_dimx,$display_dimx,$isfft=false,$fftbintype='b',$prefft_dimx=2048) {
+		if (!$isfft) {
+			return $this->getRealSpaceDisplayPixelSize($calpixelsize,$camera_binning,$db_dimx,$display_dimx);
+		} else {
+			if ($fftbintype=='b') {
+				return $this->getBinBeforeFFTDisplayPixelSize($calpixelsize,$camera_binning,$db_dimx,$display_dimx,$prefft_dimx);
+			} else {
+				return $this->getBinAfterFFTDisplayPixelSize($calpixelsize,$camera_binning,$db_dimx,$display_dimx);
+			}
+		}
+	}
+
+	function getRealSpaceDisplayPixelSize($calpixelsize,$camera_binning,$db_dimx,$display_dimx) {
+		$ratio = $db_dimx / $display_dimx;
+		$pixelsize = $calpixelsize*$camera_binning*$ratio;
+		return $pixelsize;
+	}
+	function getBinBeforeFFTDisplayPixelSize($calpixelsize,$camera_binning,$db_dimx,$display_dimx,$prefft_dimx) {
+		// result is in 1/m
+		$prefft_binning = $db_dimx / $prefft_dimx;
+		return  1 / ($calpixelsize*$camera_binning*$prefft_binning*$display_dimx);
+	}
+
+	function getBinAfterFFTDisplayPixelSize($calpixelsize,$camera_binning,$db_dimx,$display_dimx) {
+		// result is in 1/m
+		return 1 / ($calpixelsize*$camera_binning*$display_dimx);
 	}
 }
 ?>

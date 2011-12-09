@@ -23,24 +23,20 @@ class imageOverlay {
 		$this->red = imagecolorallocate($this->img, 255,0,0);
 	}
 
-	function addScaleBar($imginfo,$xyDim) {
-		if ($imginfo) {
+	function addScaleBar($pixelsize,$xyDim) {
+		if ($pixelsize) {
 			$size = ($xyDim[0]) ? $xyDim[0]: 1;
-			$ratio = $imginfo['dimx']/$size ;
-			$value = $imginfo['pixelsize']*$imginfo['binning']*$ratio;
+			$value = $pixelsize;
 			$scalebar = new ScaleBar($this->img, $size, $value);
 			$scalebar->display();
 		}
 	}
 
-	function addScaleRing($imginfo,$xyDim,$fftbin) {
-		if ($imginfo) {
+	function addScaleRing($fftpixelsize,$xyDim,$fftbin) {
+		if ($fftpixelsize) {
 			$size = ($xyDim[0]) ? $xyDim[0]: 1;
-			$ratio = $imginfo['dimx']/$size ;
-			//value is the resolution limit in Fourier space
-			$value = $imginfo['pixelsize']*$imginfo['binning']*$ratio*2;
-			if ($fftbin == 'a') 
-				$value = $imginfo['pixelsize']*$imginfo['binning']*2;
+			//value is the pixelsize in Fourier space in 1/meters
+			$value = $fftpixelsize;
 			$scalebar = new ScaleRing($this->img, $size, $value);
 			$scalebar->display();
 		}
