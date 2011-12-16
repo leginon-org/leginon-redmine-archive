@@ -42,7 +42,7 @@ $maxpix = $fileinfo->amean + $range * $fileinfo->rms;
 $nb_bars = 40;
 if ($_GET['tf']==1) {
 	$data = $imagerequest->requestHistdata($filepath, $nb_bars, $minpix, $maxpix);
-	array_pop($data[1]);
+	if (count($data[1]) > count($data[0])) array_pop($data[1]);
 	$datax = $data[1];
 	$datay = $data[0];
 }
