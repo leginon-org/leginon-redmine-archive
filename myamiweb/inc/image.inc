@@ -153,23 +153,26 @@ function getImageFromRequester($pic,$imginfo,$p) {
 	else
 		$xyDim = $imageUtil->imageBinning($dimx, $dimy, $binning, $default_size);
 
-	$iscalearray = getIntensityScale($p);
+	$imgheaderinfo = $imagerequest->requestInfo($pic);
+	$iscalearray = getIntensityScale($p,$imgheaderinfo);
 	$scaletype = $iscalearray[0];
 	$arg1 = $iscalearray[1];
 	$arg2 = $iscalearray[2];
 	//filtering
 	if (function_exists($p['filter']))
-		$lpf_sigma = $p['filter']();
-	if (!isBinBeforeFFT($p) || $dimx==$xyDim['x']) {
+		$lpf_sigma = $p['filter']() * $xyDim[0] / $dimx;;
+	if (!isBinBeforeFFT($p) || $dimx==$xyDim[0]) {
 		$imgstr = $imagerequest->requestImage($pic,'JPEG',$xyDim,$scaletype,$arg1,$arg2,$lpf_sigma,(bool)$p['fft']);
 		$prefftDim = $xyDim;
 	} else {
 		$prefftDim = getImageXYDimFromBinningParams($imginfo,$p);
 		$imgstr = $imagerequest->requestImage($pic,'PNG',$prefftDim,$scaletype,$arg1,$arg2,0,false);
+		$imageId = $imginfo['imageId'];
 		if (!is_dir(TEMP_IMAGES_DIR)) mkdir(TEMP_IMAGES_DIR,0777,true);
-		$tmpfile = TEMP_IMAGES_DIR.'tmp.png';
+		$tmpfile = TEMP_IMAGES_DIR.'tmp'.$imginfo['imageId'].'_'.$prefftDim[0].'.png';
 		file_put_contents($tmpfile,$imgstr);
 		$imgstr = $imagerequest->requestImage($tmpfile,'JPEG',$xyDim,$scaletype,$arg1,$arg2,$lpf_sigma,true);
+		unlink($tmpfile);
 	}
 	$img = imagecreatefromstring($imgstr);
 	$display_pixelsize = getDisplayPixelSize($img,$imginfo,$p['fft'],$p['fftbin'],$prefftDim);
@@ -179,8 +182,8 @@ function getImageFromRequester($pic,$imginfo,$p) {
 	if ($p['scalebar']) 
 		$img = addScaleBarRingToImage($img,$display_pixelsize,$p['fft'],$p['fftbin']);
 	// This is a good place to add debug message as a string on the image
-	$debug_message = (1/$display_pixelsize);
-	$debug_message .= ' fftDim'.$prefftDim[0].' xyDim'.$xyDim[0];
+	$debug_message = $imgheaderinfo->amax.' '.$imgheaderinfo->amin;
+	$debug_message .= ' lpf'.$lpf_sigma.' dimx'.$dimx.' xyDim'.$xyDim[0];
 	$debug_message .= ' :getImageFromRequester ';
 	imagestring($img, 4, 11, 21, $debug_message, imagecolorallocate($img,0,0,255));
 	imagestring($img, 4, 10, 20, $debug_message, imagecolorallocate($img,255,255,255));
@@ -200,7 +203,7 @@ function getDisplayPixelSize($img,$imginfo,$isfft,$fftbintype,$prefftDim) {
 	$prefft_dimx = $prefftDim[0];
 	return $imageUtil->getDisplayPixelSize($input_calpixelsize,$input_cambinning,$input_dimx,$display_dimx,$isfft,$fftbintype,$prefft_dimx);
 }
-function getIntensityScale($p) {
+function getIntensityScale($p,$imgheaderinfo) {
 	$imageUtil = new imageUtil();
 	if ($p['autoscale']) 
 		list($type,$arg1, $arg2)=explode(";", $p['autoscale']);
@@ -210,11 +213,14 @@ function getIntensityScale($p) {
 		// when scale type is 'minmax'
 		case ('0'):
 			$scaletype = "minmax";
+			$min = $imgheaderinfo->amin;
+			$max = $imgheaderinfo->amax;
+			$slope = ($max - $min) / 100.0;
 			#$pctminmax = $imageUtil->scaleMinMaxConvert($p['minpix'], $p['maxpix']);
 			#$arg1 = $pctminmax['minpix'];
 			#$arg1 = $pctminmax['minpix'];
-			$arg1 = $p['minpix'];
-			$arg2 = $p['maxpix'];
+			$arg1 = $p['minpix'] * $slope + $min;
+			$arg2 = $p['maxpix'] * $slope + $min;
 			break;
 		// when scale type is 'cdf'
 		case ('c'):
