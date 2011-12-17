@@ -1220,6 +1220,16 @@ class leginondata {
 			return NULL;
 	}
 
+	function getSessionInfoFromImage($imgId) {
+		$q = "selection s.*, s.`DEF_id` as sessionId "
+			."from SessionData s "
+			."left join AcquisitionImageData a "
+			."on a.`REF|SessionData|session` = s.`DEF_id` "
+			."where "
+			."a.`DEF_id` ='".$imgId."' "; 
+		list($r) = $this->mysql->getSQLResult($q);
+		return $r;
+	}
 	function getImageInfo($imgId) {
 		// --- grid query
 		$gridtable = $this->mysql->isTable('GridData');

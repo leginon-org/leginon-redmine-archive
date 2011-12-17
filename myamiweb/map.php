@@ -29,8 +29,12 @@ $options = $binning.$tg.$sb.$minpix.$maxpix.$fft.$fftbin.$filter.$autoscale.$pse
 
 $nimgId = $leginondata->findImage($id, $preset);
 $imginfo = $leginondata->getImageInfo($nimgId['id']);
-$dimx = $imginfo['dimx'];
-$dimy = $imginfo['dimy'];
+//xmldata has no $imginfo
+//ruler and scale bar does not work on xmldata
+//it is not worth while fixing it.
+$xmlimgsize = 1024;
+$dimx = ($imginfo) ? $imginfo['dimx']:$xmlimgsize;
+$dimy = ($imginfo) ? $imginfo['dimy']:$xmlimgsize;
 
 $imageUtil = new imageUtil();
 $imgbinning = $_GET['binning'];

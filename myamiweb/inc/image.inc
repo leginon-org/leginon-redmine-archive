@@ -16,13 +16,21 @@ require_once "inc/imageutil.inc";
 require_once "inc/imagerequest.inc";
 
 function getImageFile($leginondata,$imageId,$preset='all',$loadjpg=false,$is_fft=false) {
+	$newimageId = getImageIdFromPreset($leginondata,$imageId,$preset);
+	return __getImageFile($leginondata,$newimageId,$loadjpg,$is_fft);
+}
+
+function getImageIdFromPreset($leginondata,$imageId,$preset='all') {
+	$newimage = $leginondata->findImage($imageId, $preset);
+	$imageId = $newimage['id'];
+	return $imageId;
+}
+
+function __getImageFile($leginondata,$imageId,$loadjpg=false,$is_fft=false) {
 	//get image file with full path
 	$path = $leginondata->getImagePathFromImageId($imageId);
 
 	// --- find image
-	$newimage = $leginondata->findImage($imageId, $preset);
-	$imageId = $newimage['id'];
-	$parent = $leginondata->getImageInfo($newimage['childid']);
 	if ($is_fft) {
 		$fftinfo = $leginondata->getImageFFT($imageId);
 		if (!$filename = $fftinfo['fftimage']);
@@ -34,12 +42,13 @@ function getImageFile($leginondata,$imageId,$preset='all',$loadjpg=false,$is_fft
 	if (!$pic) return false;
 	// Use Cached jpeg image if available
 	if ($loadjpg && !$is_fft && ENABLE_CACHE) {
-		$sessioninfo=$leginondata->getSessionInfo($sessionId);
+		$sessioninfo=$leginondata->getSessionInfoFromImage($imageId);
 		$session=$sessioninfo['Name'];
 		$pic = useCache($pic,$session);
 	}
 	return $pic;
 }
+
 function getImage($sessionId, $imageId, $preset, $params = array()) {
 	// autoscale => $scaleMin, $scaleMax, $scaleType
 	$p = array (
@@ -74,15 +83,17 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 		$p['newptcl']=false;
 	}
 
-	$pic = getImageFile($leginondata,$imageId,$preset,$p['loadjpg'],$p['fft']);
+	$parentId = getImageIdFromPreset($leginondata,$imageId,$preset);
+	$pic = __getImageFile($leginondata,$parentId,$p['loadjpg'],$p['fft']);
 	if (!$pic) {
 		$img = blankimage(512);
 		return $img;
 	}
-	$imginfo = $leginondata->getImageInfo($imageId);
+	$childimginfo = $leginondata->getImageInfo($imageId);
 
-	$img =  getImageFromRequester($pic,$imginfo,$p);
-	return addAppionOverlays($leginondata,$img,$imginfo,$p);
+	$shownimginfo = $leginondata->getImageInfo($parentId);
+	$img =  getImageFromRequester($pic,$shownimginfo,$p);
+	return addAppionOverlays($leginondata,$img,$childimginfo,$shownimginfo,$p);
 }
 
 function getImageXML($xmlfile, $imageId, $preset, $params = array()) {
@@ -152,7 +163,6 @@ function getImageFromRequester($pic,$imginfo,$p) {
 		$xyDim = $imageUtil->imageFitIn($dimx, $dimy, $frame_size);
 	else
 		$xyDim = $imageUtil->imageBinning($dimx, $dimy, $binning, $default_size);
-
 	$imgheaderinfo = $imagerequest->requestInfo($pic);
 	$iscalearray = getIntensityScale($p,$imgheaderinfo);
 	$scaletype = $iscalearray[0];
@@ -176,9 +186,9 @@ function getImageFromRequester($pic,$imginfo,$p) {
 	}
 	$img = imagecreatefromstring($imgstr);
 	$display_pixelsize = getDisplayPixelSize($img,$imginfo,$p['fft'],$p['fftbin'],$prefftDim);
-
-	if (!$img) 
+	if (!$img) {
 		$img = blankimage(512);
+	}
 	if ($p['scalebar']) 
 		$img = addScaleBarRingToImage($img,$display_pixelsize,$p['fft'],$p['fftbin']);
 	// This is a good place to add debug message as a string on the image
@@ -260,7 +270,12 @@ function getImageXYDimFromBinningParams($imginfo,$p) {
 	return $xyDim;
 }
 
-function addAppionOverlays($leginondata,$img,$imginfo,$p) {
+function addAppionOverlays($leginondata,$img,$childinfo,$imginfo,$p) {
+	//$imginfo is the information of the image that the overlay is put on.
+	//$childinfo is the information of the original image that getimg is passed in
+	// create image overlay on image object
+	$overlay = new imageOverlay($img);
+
 	$prefftDim = getImageXYDimFromBinningParams($imginfo,$p);
 	$display_pixelsize = getDisplayPixelSize($img,$imginfo,$p['fft'],$p['fftbin'],$prefftDim);
 	$debug_message = '';
@@ -278,7 +293,7 @@ function addAppionOverlays($leginondata,$img,$imginfo,$p) {
 			foreach ($targets as $target) {
 				$tId=(int)$target['childId'];
 				if ($tId == 0 && $targettype == 'acq') $targettype = 'new';
-				$locationresults = getTargetLocation($leginondata,$imageId,$imginfo,$parent,$target);
+				$locationresults = getTargetLocation($leginondata,$imageId,$imginfo,$childinfo,$target,imagesx($img));
 				$child_shown = $locationresults[1];
 				$square_params = $locationresults[0];
 				if ($tId || $targettype != 'acq') 
@@ -379,12 +394,12 @@ function makeFakeImageInfo($parent) {
 	return $targetinfo;
 }
 
-function getTargetLocation ($leginondata,$imageId,$imginfo,$parent,$target) {
+function getTargetLocation ($leginondata,$imageId,$imginfo,$parentimginfo,$target,$frame_size) {
 	$tId=(int)$target['childId'];
 	if ($tId) {
 		$targetinfo = $leginondata->getImageInfo($tId);
 	} else {
-		$targetinfo = makeFakeImageInfo($parent);
+		$targetinfo = makeFakeImageInfo($parentimginfo);
 	}
 	// --- use "stage position" or "image shift" based on magnification
 	$type = ($targetinfo['magnification']>2500 && $imginfo['magnification']>2500) ? "image shift" : "stage position";
@@ -393,8 +408,8 @@ function getTargetLocation ($leginondata,$imageId,$imginfo,$parent,$target) {
 	$parentcal = $leginondata->getImageMatrixCalibration($imageId, $type);
 	$truedim=$targetinfo['targetdim'];
 	#$msg .= 'target=('.$target[x].','.$target[y].'), parenttarget=('.$parent['targetx'].','.$parent['targety'].') ';
-	if (abs($target[x]-$parent['targetx'])<5
-		&& abs($target[y]-$parent['targety'])<5 ){
+	if (abs($target[x]-$parentimginfo['targetx'])<5
+		&& abs($target[y]-$parentimginfo['targety'])<5 ){
 		$child_shown = true;
 	} else {
 		$child_shown = false;
