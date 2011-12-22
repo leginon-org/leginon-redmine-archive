@@ -377,14 +377,20 @@ function createMakestackForm($extra=false, $title='Makestack.py Launcher', $head
 		$partrundata = $particle->getSelectionParams($partrunval);
 		$imgid = $particle->getImgIdFromSelectionRun($partrunval);
 		$partdiam = $partrundata[0]['diam'];
+		$helicalstep = $partrundata[0]['helicalstep'];
 		$pixelsize = $particle->getPixelSizeFromImgId($imgid)*1e10;
 		//echo "Diameter: $partdiam &Aring;<br/>\n";
 		//echo "Image id: $imgid<br/>\n";
 		//echo "Pixel size: $pixelsize &Aring;<br/>\n";
-		$pixdiam = (int) ($partdiam/$pixelsize);
-		//echo "Pixel diam: $pixdiam pixels<br/>\n";
-		$boxdiam = (int) ($partdiam/$pixelsize*1.4);
-		//echo "Box diam: $boxdiam pixels<br/>\n";
+		if ($helicalstep) {
+			$boxdiam = (int) ($helicalstep/$pixelsize);
+		}
+		else {
+			$pixdiam = (int) ($partdiam/$pixelsize);
+			//echo "Pixel diam: $pixdiam pixels<br/>\n";
+			$boxdiam = (int) ($partdiam/$pixelsize*1.4);
+			//echo "Box diam: $boxdiam pixels<br/>\n";
+		}
 		global $goodboxes;
 		foreach ($goodboxes as $box) {
 			if ($box >= $boxdiam) {
@@ -447,8 +453,8 @@ function createMakestackForm($extra=false, $title='Makestack.py Launcher', $head
 	echo"<input type='checkbox' name='selexcheck' onclick='enableselex(this)' $selexcheck>\n";
 	echo docpop('partcutoff','Particle Correlation Cutoff');
 	echo "<br />\n";
-	echo "Use Values Above:<input type='text' name='correlationmin' $selexdisable value='$selexminval' size='4'><br/>\n";
-	echo "Use Values Below:<input type='text' name='correlationmax' $selexdisable value='$selexmaxval' size='4'><br/>\n";
+	echo "Remove particles with CCC below:<input type='text' name='correlationmin' $selexdisable value='$selexminval' size='4'><br/>\n";
+	echo "Remove particles with CCC above:<input type='text' name='correlationmax' $selexdisable value='$selexmaxval' size='4'><br/>\n";
 	echo "<br/>\n";
 
 	echo "<b>Defocal pairs:</b>\n";
