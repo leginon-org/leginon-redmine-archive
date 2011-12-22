@@ -17,7 +17,7 @@ class redux{
 	private $power;			// boolean
 	private $maskRadius;	// float 
 	private $shape;			// x, y array (output size)
-	private $frame;		// integer
+	private $frame;		// integer or false (means no frame selection)
 	private $histBins;		// integer
 	private $histMin;		// float
 	private $histMax;		// float
@@ -151,9 +151,12 @@ class redux{
 	}
 
 	function setFrameValue($frameValue){ 
-		
-		global $validator;
-		$validator->addValidation("frameValue", $frameValue, "num", "Frame numer value must be an integer.");
+		# pass boolean false to indicate whole image is read
+		# otherwise frame=0 will trigger disable_cache
+		if ($frameValue !== false) {	
+			global $validator;
+			$validator->addValidation("frameValue", $frameValue, "num", "Frame numer value must be an integer.");
+		}
 		$this->frameValue = $frameValue; 
 	}
 
@@ -305,7 +308,8 @@ class redux{
 		$str .= !is_numeric($this->histMax) ? '' : '&histmax=' . $this->getHistMax();
 		//$str .= empty($this->padPos) ? '' : '&padpos=' . $this->getPadPos();
 		//$str .= empty($this->padValue) ? '' : '&padvalue=' . $this->getPadValue();	
-		$str .= empty($this->frameValue) ? '&frame=0' : '&frame=' . $this->getFrameValue();	
+		# Be more specific about frame since frame=0 triggers disable_cache in redux
+		$str .= ($this->frameValue===false || $this->frameValue===null) ? '' : '&frame=' . $this->getFrameValue();	
 		$str .= empty($this->lpf) ? '' : '&lpf=' . $this->getLpf();	
 
 		return $str;

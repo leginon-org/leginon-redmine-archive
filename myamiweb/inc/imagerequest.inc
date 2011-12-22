@@ -6,7 +6,7 @@ class imageRequester {
 	// filepath is the full path to file ex: /a/b/c.d
 	// filename is the base name of file path ex: c.d
 	// fileroot is the root name of the filename ex: c
-	function requestImage($filepath,$oFormat,$shape=array(512,512),$scaleType='stdev',$scaleMin=-1,$scaleMax=1,$lpf,$power=false,$frame=0) {
+	function requestImage($filepath,$oFormat,$shape=array(512,512),$scaleType='stdev',$scaleMin=-1,$scaleMax=1,$lpf,$power=false,$frame=false) {
 		if (empty($filepath)) return false;
 		$redux = new redux($filepath, $oFormat);
 		$redux->setPipeline('standard');
