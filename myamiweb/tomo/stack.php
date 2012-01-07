@@ -375,7 +375,7 @@ if ($tiltSeriesNumber < 10) {
 	}
 }
 
-if (!eregi("\.mrc$", $filename))
+if (!preg_match("%\.mrc$%i", $filename))
 	$filename = ereg_replace("$", ".mrc", $filename);
 
 writeHeader($filename, $stack_size);

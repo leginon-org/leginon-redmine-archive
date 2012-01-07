@@ -326,7 +326,7 @@ if (!empty($ctfdata)) {
 		foreach($r as $k=>$v) {
 			if (!in_array($k, $ctf_display_fields))
 				continue;	
-			if (eregi('defocus', $k))
+			if (preg_match('%defocus%i', $k))
 				$display = format_micro_number($v);
 			elseif ($v-floor($v)) 
 				$display = format_sci_number($v,4,2);
@@ -339,7 +339,7 @@ if (!empty($ctfdata)) {
 				$display=$graph1name=$v;
 			else
 				$display = $v;
-			if (!ereg('^graph',$k))
+			if (!preg+match('%^graph%',$k))
 				echo formatHtmlRow($k,$display);
 		}
 		$graph1=$graphpath."/".$graph1name;

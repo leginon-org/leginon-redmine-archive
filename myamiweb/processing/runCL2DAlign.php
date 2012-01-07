@@ -95,7 +95,7 @@ function createCL2DAlignForm($extra=false, $title='runXmippCL2D.py Launcher', $h
 	$runname = ($_POST['runname']) ? $_POST['runname'] : 'cl2d'.($alignruns+1);
 	$description = $_POST['description'];
 	$stackidstr = $_POST['stackval'];
-	list($stackidval) = split('\|--\|',$stackidstr);
+	list($stackidval) = preg_split('%\|--\|%',$stackidstr);
 	$bin = ($_POST['bin']) ? $_POST['bin'] : '1';
 	$numpart = ($_POST['numpart']) ? $_POST['numpart'] : '3000';
 	$lowpass = ($_POST['lowpass']) ? $_POST['lowpass'] : '10';

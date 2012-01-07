@@ -435,7 +435,7 @@ function getNumberOfRequiredNodes($nproc, $ppn)
 // Appion on a single machine.
 //
 //*****************************************************************************
-function addAppionWrapper($command, $processhost) 
+function addAppionWrapper($command, $processhost='localhost') 
 {
 	if ( USE_APPION_WRAPPER ) {
 		$cluster = new Cluster( $processhost );
@@ -555,7 +555,7 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc)
 		
 	} else {
 		// Option 2: just show command
-		$bits = split(" ", $command);
+		$bits = preg_split("% %", $command);
 		$function = $bits[0];
 
 		processing_header("Just Show $function Command", "Just Show $function Command");
@@ -593,7 +593,6 @@ function justShowCommandTable($command, $processhost, $skip_command=false) {
 	
 	// remove the first token, which should be the file name
 	$function = array_shift($tokens);	
-	
 	// Add the Appion wrapper to support muliple installations of Appion
 	$command =  addAppionWrapper($command, $processhost);
 
@@ -769,7 +768,7 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 		if (!$gooddisk) {
 			$ingood = True;
 		} else {
-			$ingood = (ereg($gooddisk,$rundir))? True: $ingood;
+			$ingood = (preg_match('%'.$gooddisk.'%',$rundir))? True: $ingood;
 		}
 		if (!$ingood)
 		return 'could not create directory '.$rundir.'<br/> try using '.implode(' or ',$DATA_DIRS);
@@ -1153,7 +1152,7 @@ function getPngList($dir) {
 	//sort pngs
 	$eulerstr = 'euler.*\.png$';
 	foreach ($pngfiles as $pngfile) {
-		if (eregi($eulerstr, $pngfile))
+		if (preg_match('%'.$eulerstr.'%', $pngfile))
 		$pngimages['eulerfiles'][] = $pngfile;
 		else
 		$pngimages['pngfiles'][] = $pngfile;

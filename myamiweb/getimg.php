@@ -196,7 +196,7 @@ if ($g) {
 		imagestringshadow($img, $font, $xpos, $ypos, $tag, imagecolorallocate($img,255,255,255));
 	}
 
-	$filename = ereg_replace('mrc$', $ext, $filename);
+	$filename = preg_replace('%mrc$%', $ext, $filename);
 
 	$imagerequest = new imageRequester();
 	$imagerequest->displayImageObj($img,$ext,$quality,$filename);

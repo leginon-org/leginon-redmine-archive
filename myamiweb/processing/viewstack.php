@@ -127,11 +127,11 @@ function getimagicfilenames($file) {
 	return array($file_hed, $file_img);
 }
 
-if (ereg(".spi$", $filename)) {
+if (preg_match("%.spi$%", $filename)) {
 	$file_hed=$file_img=$filename;
 	$info=spiderinfo($file_hed);
 	$n_images=$info['nimg'];
-} else if (ereg(".hdf5$", $filename)) {
+} else if (preg_match("%.hdf5$%", $filename)) {
 	$file_hed=$file_img=$filename;
 	$n_images=100;
 } else {
