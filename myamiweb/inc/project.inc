@@ -23,7 +23,7 @@ define('PROJECT_DB', $PROJECT_DB);
 setsession();
 
 function setDatabase($expId="") {
-	$leginondata=&new leginondata;
+	$leginondata= new leginondata;
 	if (!$expId) {
 		$expId= ($_POST['sessionId']) ? $_POST['sessionId'] : $_GET['expId'];
 	}
