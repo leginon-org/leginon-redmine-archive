@@ -51,11 +51,13 @@ if (preg_match('`\.gif$`i',$filename) && $rawgif) {
 		$new_height = $height;
 	}
 	$xyDim = array($new_width, $new_height);
+
+	$rgb = (substr_compare($filename,'jpg',-3,true) || substr_compare($filename,'png',-3,true)) ? true:false;
 	// request image
 	if (!$rescale && $pmin != $pmax) 
-		$imgstr = $imagerequest->requestImage($filename,$oformat,$xyDim,'minmax',$pmin,$pmax,0,false,$frame);
+		$imgstr = $imagerequest->requestImage($filename,$oformat,$xyDim,'minmax',$pmin,$pmax,0,$rgb,false,$frame);
 	else
-		$imgstr = $imagerequest->requestImage($filename,$oformat,$xyDim,'stdev',-3,3,0,false,$frame);
+		$imgstr = $imagerequest->requestImage($filename,$oformat,$xyDim,'stdev',-3,3,0,$rgb,false,$frame);
 	$imagerequest->displayImageString($imgstr,$oformat,$filename);
 }
 
