@@ -47,9 +47,9 @@ function isrunning($cmd, $pattern) {
   // the reason to put 4 is because "ps" use one and "grep" use one.
   if($numOfRun >= 4)
   	return true;
-  	
+$pattern = "%".$pattern."%";  	
   foreach($res as $row) {
-    if (ereg($pattern, $row)) {
+    if (preg_match($pattern, $row)) {
       $isrunning=true;
       break;
     }
@@ -58,7 +58,7 @@ function isrunning($cmd, $pattern) {
 }
 
 function updateCacheTime($session) {
-	$dbc = &new mysql(DB_HOST, DB_USER, DB_PASS, DB_LEGINON);
+	$dbc = new mysql(DB_HOST, DB_USER, DB_PASS, DB_LEGINON);
 	$q = "replace `viewer_cache` set session='".$session."'";
 
 	$result = $dbc->SQLQuery($q);
@@ -69,7 +69,7 @@ function useCache($filepath,$sessionname) {
 	if (USE_REDUX_CACHE) return $filepath;
 	//search for php-mrc cache jpg file.
 	$filename = basename($filepath);
-	$jpgfilename = ereg_replace('mrc$', 'jpg', $filename);
+	$jpgfilename = preg_replace('mrc$', 'jpg', $filename);
 	$jpgpath = CACHE_PATH.$session."/";
 	$jpgpic = $jpgpath.$jpgfilename;
 	if (@is_file($jpgpic)) $filepath = $jpgpic;
