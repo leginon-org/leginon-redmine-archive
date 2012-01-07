@@ -50,7 +50,7 @@ class leginondata {
 	);
 
 	function leginondata() {
-		$this->mysql = &new mysql(DB_HOST, DB_USER, DB_PASS, DB_LEGINON);
+		$this->mysql = new mysql(DB_HOST, DB_USER, DB_PASS, DB_LEGINON);
 		if (!$this->mysql->checkDBConnection()) {
 			$this->mysql->dbError();
 		}
@@ -1624,7 +1624,7 @@ class leginondata {
 						$schema_create .= "      extra=\"$row[Extra]\" $crlf";
 					$schema_create .= "    />$crlf";
 			}
-			$schema_create = ereg_replace(",".$crlf."$", "", $schema_create);
+			$schema_create = preg_replace(",".$crlf."$", "", $schema_create);
 			$result = $this->mysql->SQLQuery("SHOW KEYS FROM $table") ;
 			while($row = mysql_fetch_array($result))
 			{
@@ -1706,7 +1706,7 @@ class leginondata {
 			foreach($tables as $table) {
 				$result = $this->mysql->SQLQuery("SHOW FIELDS FROM $table"); 
 				while($row = mysql_fetch_array($result))
-			if (ereg("^REF\|SessionData", $row['Field']))
+			if (preg_match("^REF\|SessionData", $row['Field']))
 				if(!in_array($table,$ref_tables))
 					$ref_tables[]=$table;
 
@@ -1831,7 +1831,7 @@ class leginondata {
 			continue;
 				$result = $this->mysql->SQLQuery("SHOW FIELDS FROM $table"); 
 				while($row = mysql_fetch_array($result))
-			if (ereg("^REF\|$tbl_applicationdata", $row['Field']))
+			if (preg_match("^REF\|$tbl_applicationdata", $row['Field']))
 				if(!in_array($table,$ref_tables))
 					$ref_tables[]=$table;
 			}
@@ -2000,7 +2000,7 @@ class leginondata {
 		//--- Check if application exits
 		$applicationinfo = $fieldvalues['ApplicationData'];
 		foreach($applicationinfo as $k=>$v) {
-			if (ereg('DEF_',$k) || ereg('version',$k)) continue;
+			if (preg_match('DEF_',$k) || preg_match('version',$k)) continue;
 			$sqlwhere[] = "`$k`=$v";
 		}
 		$where = implode(" AND ", $sqlwhere);
@@ -2758,17 +2758,17 @@ class leginondata {
 		while  ($row  =  mysql_fetch_row($Rq))  {
 			for  ($i=0;  $i<mysql_num_fields($Rq);  $i++)  {
 				$field = mysql_field_name(($Rq), $i);
-				if (ereg("^REF\|",$field)){
-					$ref = ereg_replace("^REF\|",'',$field);
-					$ref .= '|'.ereg_replace("'","",$row[$i]);
+				if (preg_match("%^REF\|%",$field)){
+					$ref = preg_replace("%^REF\|%",'',$field);
+					$ref .= '|'.preg_replace("%'%","",$row[$i]);
 					$refinfo = explode("|", $ref);
 					$qref="select * from `$refinfo[0]` where `DEF_id`=".$refinfo[2];
 					$Rqref = $this->mysql->SQLQuery($qref);
 					if ($recursive)
 					$this->readDataTree($arr_node,$Rqref,$refname.'|'.$refinfo[1],false);
-				} else if (!ereg("^DEF_|^filename",$field)){
+				} else if (!preg_match("%^DEF_|^filename%",$field)){
 					// filename not a field for image anymore
-					$f = $refname.'|'.ereg_replace("SUBD\||ARRAY\||^SEQ\||^MRC\|",'',$field);
+					$f = $refname.'|'.preg_replace("%SUBD\||ARRAY\||^SEQ\||^MRC\|%",'',$field);
 					if (strstr($f,'defocus')) 
 						$this->formatDefocus($row[$i]); 
 
@@ -2781,9 +2781,9 @@ class leginondata {
 					if (strstr($f,'exposure time')) 
 						$this->formatExposuretime($row[$i]);
 
-					$f .= '|'.ereg_replace("'","",$row[$i]);
-					if (eregi("\n", $f)) {
-						$f = ereg_replace("\n|\r", " ", $f);
+					$f .= '|'.preg_replace("%'%","",$row[$i]);
+					if (preg_match("%\n%i", $f)) {
+						$f = preg_replace("%\n|\r%", " ", $f);
 					}
 					$nodes= explode("|", $f);
 					$s="";
@@ -2855,13 +2855,13 @@ class leginondata {
 		}
 		foreach($nodeId as $i) {
 			foreach($nodeId as $l) {
-				if (ereg ("^".$node[$i].".+", $node[$l])) {
+				if (preg_match ("%^".$node[$i].".+%", $node[$l])) {
 					$nodeparent[$l]=$nodeId[$i];
 					continue;
 				}
 			}
-			$file = ereg_replace ($node[$nodeparent[$i]], "", $node[$i]);
-			$file = ereg_replace ("^\/","", $file);
+			$file = preg_replace ('%'.$node[$nodeparent[$i]].'%', "", $node[$i]);
+			$file = preg_replace ("%^\/%","", $file);
 			if ($i<>0) 
 				$tree .= $jsvar[$i]."=\"".$nodeId[$i]
 				."|".$nodeparent[$i]."|".$file."|"
