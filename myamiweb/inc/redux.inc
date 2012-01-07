@@ -25,6 +25,7 @@ class redux{
 	private $scaleMin;		// float
 	private $scaleMax;		// float
 	private $scaleType;		// image scale type [choices ("minmax", "stdev", "cdf")]
+	private $rgb;			// boolean (the default is false and means grayscale if it is an image)
 	private $info;			// boolean
 	private $oFormat;		// image output format [choices: ('JPEG', 'GIF', 'TIFF', 'PNG', 'MRC')]
 	private $errMsg;		// error message array contain name - message pair.
@@ -62,6 +63,11 @@ class redux{
 	
 	function getPower(){
 		$str = $this->power ? '1' : '0'; 
+		return $str;
+	}
+	
+	function getRGB(){
+		$str = $this->rgb ? '1' : '0'; 
 		return $str;
 	}
 	
@@ -164,7 +170,7 @@ class redux{
 		
 		global $validator;
 		if(!is_bool($infoflag))
-			$validator->setErrorMessage("power", "The value of info flag must be boolean (true, flase).");
+			$validator->setErrorMessage("info", "The value of info flag must be boolean (true, flase).");
 		$this->info = $infoflag; 
 	}
 
@@ -194,6 +200,14 @@ class redux{
 		$this->maskRadius = $maskRadius; 
 	}
 	
+	function setRGB($rgb){ 
+		
+		global $validator;
+		if(!is_bool($rgb))
+			$validator->setErrorMessage("rgb", "The value of rgb must be boolean (true, flase).");
+		$this->rgb = $rgb; 
+	}
+
 	function setShape($shape){ 
 		
 		global $validator;
@@ -298,6 +312,7 @@ class redux{
 		$str .= empty($this->power) ? '' : '&power=' . $this->getPower();
 		$str .= empty($this->info) ? '' : '&info=' . $this->getInfo();
 		$str .= empty($this->maskRadius) ? '' : '&maskradius=' . $this->getMaskRadius();
+		$str .= empty($this->rgb) ? '' : '&rgb=' . $this->getRGB();
 		$str .= empty($this->shape) ? '' : '&shape=' . $this->getShape();
 		$str .= empty($this->scaleType) ? '' : '&scaletype=' . $this->getScaleType();
 		$str .= !is_numeric($this->scaleMin) ? '' : '&scalemin=' . $this->getScaleMin();
