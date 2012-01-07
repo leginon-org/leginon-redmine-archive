@@ -290,14 +290,15 @@ function addAppionOverlays($leginondata,$img,$childinfo,$imginfo,$p) {
 		$focustargets = $leginondata->getImageTargets($imageId,'focus');
 		foreach (array('acq'=>$acqtargets,'focus'=>$focustargets) as $targettype=>$targets) {
 			if ($targettype == 'acq') $targets = $leginondata->matchVersionTargets($targets);
-			foreach ($targets as $target) {
-				$tId=(int)$target['childId'];
-				if ($tId == 0 && $targettype == 'acq') $targettype = 'new';
-				$locationresults = getTargetLocation($leginondata,$imageId,$imginfo,$childinfo,$target,imagesx($img));
-				$child_shown = $locationresults[1];
-				$square_params = $locationresults[0];
-				if ($tId || $targettype != 'acq') 
-					$overlay->drawTarget($square_params,$child_shown,$targettype);
+			if (!empty($targets))
+				foreach ($targets as $target) {
+					$tId=(int)$target['childId'];
+					if ($tId == 0 && $targettype == 'acq') $targettype = 'new';
+					$locationresults = getTargetLocation($leginondata,$imageId,$imginfo,$childinfo,$target,imagesx($img));
+					$child_shown = $locationresults[1];
+					$square_params = $locationresults[0];
+					if ($tId || $targettype != 'acq') 
+						$overlay->drawTarget($square_params,$child_shown,$targettype);
 			}
 		}
 	}
