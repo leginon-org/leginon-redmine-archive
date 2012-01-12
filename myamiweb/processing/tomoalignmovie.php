@@ -35,22 +35,6 @@ if (!$alignerid) {
 	exit;
 }
 
-// --- Display Flash Movie from flv --- //
-@require_once('getid3/getid3.php');
-function getflvsize($filename) {
-	if (!class_exists('getID3')) {
-		return false;
-	}
-	$getID3 = new getID3;
-	$i = $getID3->analyze($filename);
-	$w = $i['meta']['onMetaData']['width'];
-	$h = $i['meta']['onMetaData']['height'];
-	return array($w, $h);
-}
-
-if (!defined('FLASHPLAYER_URL')) {
-	echo "<p style='color: #FF0000'>FLASHPLAYER_URL is not defined in config.php</p>";
-}
 if (!is_null($cycle)) {
 	$flvfile = $refinedata[0]['path']."/align/minialign".sprintf('%02d',$cycle).".flv";
 } else {
@@ -60,6 +44,8 @@ if (!is_null($cycle)) {
 		$flvfile = $refinedata[0]['path']."/minialign.flv";
 	}
 }	
+
+// --- Display Flash Movie from flv --- //
 if (file_exists($flvfile)) {
 	echo "<table><tr><td>Alignment Stack:</td></tr>\n";
 	echo "<tr><td>".$flvfile."</td></tr>\n";
