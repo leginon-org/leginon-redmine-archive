@@ -291,7 +291,7 @@ function runMaskMaker() {
 		$wrappedcmd = addAppionWrapper($command);
 		
 		echo  " <B>MaskMaker Command:</B><br>$wrappedcmd<HR>";
-		$testjpg=ereg_replace(".mrc","",$testimage);
+		$testjpg=preg_replace("%.mrc%","",$testimage);
 		$testdir=$outdir.$runname."/tests/";
 		if (file_exists($testdir)) {
      	// open image directory

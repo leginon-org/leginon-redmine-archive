@@ -218,7 +218,7 @@ function get_preset_mag($info, $mag) {
 		if (!preg_match("%^Total_.* x%", $k)) {
 			continue;
 		}
-		list($imgnb, $dose, $defocusmin, $defocusmax) = split("	", $info[$k]);
+		list($imgnb, $dose, $defocusmin, $defocusmax) = preg_split("%	%", $info[$k]);
 		
 		preg_match("%Total_(.*) x%", $k, $match);
 		$preset=$match[1];

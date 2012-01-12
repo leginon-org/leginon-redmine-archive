@@ -178,7 +178,7 @@ function submitJob($extra=False) {
 	$jobnum = trim($jobnumstr);
 
 	echo "<tr><td>Cluster Job Id</td><td>$jobnum</td></tr>\n";
-	$jobnum = ereg_replace('\..*','',$jobnum);
+	$jobnum = preg_replace('%\..*%','',$jobnum);
 	
 	// Chech for non-connection related error in job submission.	
 	if (!is_numeric($jobnum)) {
@@ -317,14 +317,14 @@ function jobForm($extra=false) {
 	$sessiondata = $leginondata->getSessionInfo($expId);
 	$sessionpath = $sessiondata['Image path'];
 	$sessionpath=getBaseAppionPath($sessiondata).'/recon';
-	ereg("(.*)appion(.*)recon", $sessionpath, $reg_match);
+	preg_match("%(.*)appion(.*)recon%", $sessionpath, $reg_match);
 	if (!is_null($reg_match)) {
 		$rootpath = "appion".$reg_match[2]."recon/";
 	} else {
 		// get stack data for output if the sessionpath is not regular.  This may happen when the rawdata is archived
 		$stackinfo = explode('|--|',$_POST['stackval']);
 		$stackpath = $stackinfo[4];
-		ereg("(.*)appion(.*)stacks(.*)", $stackpath, $reg_match);
+		preg_match("%(.*)appion(.*)stacks(.*)%", $stackpath, $reg_match);
 		if (!is_null($reg_match)) {
 			$rootpath = "appion".$reg_match[2]."recon/";
 			$sessionpath=$reg_match[1].$rootpath;

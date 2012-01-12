@@ -33,7 +33,7 @@ if (file_exists($pic))  {
 		}
 		$imagerequest = new imageRequester();
 		$imgstr = $imagerequest->requestDefaultFullImage($pic,$fileformat,$fft);
-		$filename= ereg_replace("mrc$",$fileext,$filename);
+		$filename= preg_replace("%mrc$%",$fileext,$filename);
 		$tmpfile=tempnam("/tmp", "leginon");
 		file_put_contents($tmpfile,$imgstr);
 		$pic=$tmpfile;

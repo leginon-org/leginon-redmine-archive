@@ -32,7 +32,7 @@ if($_POST){
 	$reply = $imagerequest->requestImage($_POST['filename'],$_POST['oFormat'],
 		array($_POST['shapeX'],$_POST['shapeY']),
 		$_POST['scaleType'],$_POST['scaleMin'],$_POST['scaleMax'],
-		$powerValue);
+		0,false,$powerValue);
 	
 	header('Content-Type: image/jpeg');
 	echo($reply);

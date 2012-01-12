@@ -395,11 +395,11 @@ function runTemplateCorrelator() {
 	// get the list of templates
 	$i=1;
 	$templateList = $_POST['templateList'];
-	$templates=split(",", $templateList);
+	$templates=preg_split("%,%", $templateList);
 	$templateliststr = "";
 	$rangeliststr = "";
 	foreach ($templates as $template) {
-		list($num, $templateid) = split(":",$template);
+		list($num, $templateid) = preg_split("%:%",$template);
 		$templateliststr .= $templateid.",";
 		$start = "template".$num."strt";
 		$end   = "template".$num."end";
@@ -436,8 +436,8 @@ function runTemplateCorrelator() {
 	if ($_POST['testimage']=="on") {
 		if ($_POST['testfilename']) $testimage=trim($_POST['testfilename']);
 		// replace other spaces with commas
-		$testimage = ereg_replace(" ",",",$testimage);
-		$testimage = ereg_replace(",,",",",$testimage);
+		$testimage = preg_replace("% %",",",$testimage);
+		$testimage = preg_replace("%,,%",",",$testimage);
 	
 
 		if ($_POST['process']=="Run Correlator") {
@@ -465,7 +465,7 @@ function runTemplateCorrelator() {
 		$results.= "<b>Template Correlator Command:</b><br />$wrappedcmd";
 		$results.= "</td></tr></table>\n";
 		$results.= "<br />\n";
-		$testjpg=ereg_replace(".mrc","",$testimage);
+		$testjpg=preg_replace("%.mrc%","",$testimage);
 
 		$jpgimg=$outdir.$runname."/jpgs/".$testjpg.".prtl.jpg";
 		$ccclist = glob($outdir.$runname."/maps/".$testjpg."*.jpg");

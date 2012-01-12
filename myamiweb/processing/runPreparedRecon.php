@@ -172,7 +172,7 @@ function jobForm($extra=false) {
 	$leginondata = new leginondata();
 	$sessiondata = $leginondata->getSessionInfo($expId);
 	$sessionpath = $sessiondata['Image path'];
-	ereg("(.*)leginon(.*)rawdata", $sessionpath, $reg_match);
+	preg_match("%(.*)leginon(.*)rawdata%", $sessionpath, $reg_match);
 	$rootpath = "appion".$reg_match[2]."recon/";
 	$sessionpath=$reg_match[1].$rootpath;
 	$clusterdata->set_rootpath($rootpath);
@@ -229,7 +229,7 @@ function jobForm($extra=false) {
 	echo "<tr><td><b>Run Name:</b></td><td>$name</td></tr>\n";
 	echo "<input type='hidden' name='jobname' value='$name'>\n";
 	echo "<tr><td><b>Run Directory:</b></td><td>$rundir</td></tr>\n";
-	$outdir = ereg_replace($name."$", "", $rundir);
+	$outdir = preg_replace('%'.$name."$%", "", $rundir);
 	echo "<input type='hidden' name='rundir' value='$rundir'>\n";
 	echo "<input type='hidden' name='outdir' value='$outdir'>\n";
 	echo "</table>\n";
@@ -549,7 +549,7 @@ function submitJob($extra=False) {
 	
 	$jobnum = trim($jobnumstr);
 	echo "<tr><td>Cluster Job Id</td><td>$jobnum</td></tr>\n";
-	$jobnum = ereg_replace('\..*','',$jobnum);
+	$jobnum = preg_replace('%\..*%','',$jobnum);
 	
 	// Chech for no-connection related error in job submission.
 	if (!is_numeric($jobnum)) {

@@ -669,7 +669,7 @@ function ls($dir, $filter="") {
 		$filter=".*";
 	if ($dh = opendir($dir)) {
     while (($file = readdir($dh)) !== false) {
-     if (ereg($filter,$file)) {
+     if (preg_match('%'.$filter.'%',$file)) {
 			 $files[]=$file;
      }
 		}

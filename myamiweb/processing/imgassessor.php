@@ -442,7 +442,7 @@ function printToolBar() {
 function getImageStatus ($imgname,$leginondata,$particle,$assessmentrid) {
 	// get the status of the image index
 	
-	$imgbase=split("\.",$imgname);
+	$imgbase=preg_split("%\.%",$imgname);
 	$imgbase=$imgbase[0].".mrc";
 	$statdata['id']=$leginondata->getId(array('MRC|image'=>$imgbase),'AcquisitionImageData','DEF_id');
 	$statdata['status']=$particle->getKeepStatus($statdata['id'],$assessmentrid);

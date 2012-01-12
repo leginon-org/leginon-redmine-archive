@@ -242,7 +242,7 @@ function runjpgmaker() {
 		$images.= "</td></tr></table>\n";
 		$images.= "<br />\n";
 		$jpgdir = 'jpgs/';
-		$testjpg=ereg_replace(".mrc","",$testimage);
+		$testjpg=preg_replace("%.mrc%","",$testimage);
 		$jpgimg=$outdir.$jpgdir.$testjpg.".jpg";
 		$images.= writeTestResults($jpgimg,array(),1);
 	}

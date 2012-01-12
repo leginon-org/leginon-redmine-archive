@@ -169,7 +169,7 @@ class Cluster
 	// uses the separator defined in the config file specific to this cluster instance.
 	function formatEndPath($path) 
 	{
-		$path = ereg($this->dirSeparator."$", $path) ? $path : $path.$this->dirSeparator;
+		$path = preg_match('%'.$this->dirSeparator."$%", $path) ? $path : $path.$this->dirSeparator;
 		return $path;
 	}
 	

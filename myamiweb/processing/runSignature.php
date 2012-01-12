@@ -415,10 +415,10 @@ function runSignaturePicker() {
 	// get the list of templates
 	$templatenum=1;
 	$templateList = $_POST['templateList'];
-	$templates=split(",", $templateList);
+	$templates=preg_split("%,%", $templateList);
 	$templateliststr = "";
 	foreach ($templates as $template) {
-		list($num, $templateid) = split(":",$template);
+		list($num, $templateid) = preg_split("%:%",$template);
 		$templateliststr .= $templateid.",";
 		$templatenum++;
 	}
@@ -439,8 +439,8 @@ function runSignaturePicker() {
 	if ($_POST['testimage']=="on") {
 		if ($_POST['testfilename']) $testimage=trim($_POST['testfilename']);
 		// replace other spaces with commas
-		$testimage = ereg_replace(" ",",",$testimage);
-		$testimage = ereg_replace(",,",",",$testimage);
+		$testimage = preg_replace("% %",",",$testimage);
+		$testimage = preg_replace("%,,%",",",$testimage);
 	}
 	
 	if ($_POST['process']=="Run Signature" && $testimage) {
@@ -469,7 +469,7 @@ function runSignaturePicker() {
 		$results.= "<b>Signature Picker Command:</b><br />$wrappedcmd";
 		$results.= "</td></tr></table>\n";
 		$results.= "<br />\n";
-		$testjpg=ereg_replace(".mrc","",$testimage);
+		$testjpg=preg_replace("%.mrc%","",$testimage);
 
 		$jpgimg=$outdir.$runname."/jpgs/".$testjpg.".prtl.jpg";
 		$ccclist = glob($outdir.$runname."/maps/".$testjpg."*.jpg");

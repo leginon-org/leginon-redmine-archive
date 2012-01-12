@@ -748,7 +748,7 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 	//Check if filesystem is full
 	$cmd = "df $outdir";
 	$fscheck = exec_over_ssh($processhost,$user,$pass,$cmd,True);
-	$fsbits = split(" ", trim($fscheck));
+	$fsbits = preg_split("% %", trim($fscheck));
 	foreach ($fsbits as $fsbit) {
 		if (preg_match("/^[0-9]+%$/", $fsbit))
 		$percent = (float) preg_replace("/%/", "", $fsbit);

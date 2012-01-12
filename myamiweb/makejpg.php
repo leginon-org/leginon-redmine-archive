@@ -51,7 +51,7 @@ if ($preset) {
 if (!$path=$sessioninfo['Image path'])
 	$path="/tmp/".$sessioninfo['Name']."/";
 
-$path = ereg_replace("rawdata", "jpegs", $path);
+$path = preg_replace("%rawdata%", "jpegs", $path);
 
 if ($args['outpath'])
 	$path=$args['outpath'];
@@ -102,7 +102,7 @@ $existing_files = getfiles($path);
 $pbar = new Console_ProgressBar('* %fraction% %bar% %percent% %estimate% ', '#', '-',60, $n_images);
 foreach ($imageIds as $i=>$id) {
 	list($res) = $leginondata->getFilename($id);
-	$filename = ereg_replace('mrc$', $ext, $res['filename']);
+	$filename = preg_replace('%mrc$%', $ext, $res['filename']);
 
 	$filename=$path."/".$filename;
 	

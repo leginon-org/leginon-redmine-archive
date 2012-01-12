@@ -51,7 +51,7 @@ function createAppionLoopTable ($sessiondata, $defrunname, $outdirname, $leginon
 		}
 		
 		if ($leg_check) {
-			$sessionpath=ereg_replace("rawdata","",$sessionpath);		
+			$sessionpath=preg_replace("%rawdata%","",$sessionpath);		
 		}
 	}
 

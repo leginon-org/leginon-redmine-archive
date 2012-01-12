@@ -290,7 +290,7 @@ function runCL2DAlign() {
 	$nproc = ($_POST['nproc']) ? $_POST['nproc'] : 1;
 
 	// get stack id, apix, & box size from input
-	list($stackid,$apix,$boxsz) = split('\|--\|',$stackval);
+	list($stackid,$apix,$boxsz) = preg_split('%\|--\|%',$stackval);
 
 	if (!$description)
 		createCL2DAlignForm("<B>ERROR:</B> Enter a brief description of the particles to be aligned");
