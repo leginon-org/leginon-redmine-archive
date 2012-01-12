@@ -1,10 +1,13 @@
 # standard lib
 import os
 
+import scipy.misc
+
 # myami
 import pyami.mrc
 import pyami.numpil
 import pyami.imagic
+import pyami.spidernew
 
 # local
 from redux.pipe import Pipe
@@ -33,6 +36,8 @@ class Read(Pipe):
 			input_format = 'mrc'
 		elif filename[-3:].lower() in ('img', 'hed'):
 			input_format = 'imagic'
+		elif filename[-3:].lower() == 'spi':
+			input_format = 'spider'
 		else:
 			## use PIL to read
 			input_format = 'PIL'
@@ -55,5 +60,10 @@ class Read(Pipe):
 				result = pyami.numpil.readInfo(filename)
 			else:
 				result = pyami.numpil.read(filename)
+		elif input_format == 'spider':
+			if info:
+				result = pyami.spidernew.read_info(filename, frame)
+			else:
+				result = pyami.spidernew.read(filename, frame)
 		return result
 
