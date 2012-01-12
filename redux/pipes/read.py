@@ -59,7 +59,7 @@ class Read(Pipe):
 			if info:
 				result = pyami.numpil.readInfo(filename)
 			else:
-				result = pyami.numpil.read(filename)
+				result = scipy.misc.imread(filename)
 		elif input_format == 'spider':
 			if info:
 				result = pyami.spidernew.read_info(filename, frame)
