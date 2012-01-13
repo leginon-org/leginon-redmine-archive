@@ -12,8 +12,14 @@ class Shape(Pipe):
 	required_args = {'shape': shape_converter}
 	def run(self, input, shape):
 		# make sure shape is same dimensions as input image
+		# rgb input image would have one extra dimension
 		if len(shape) != len(input.shape):
-			raise ValueError('mismatch in number of dimensions: %s -> %s' % (input.shape, shape))
+			if len(shape) +1 != len(input.shape):
+				raise ValueError('mismatch in number of dimensions: %s -> %s' % (input.shape, shape))
+			else:
+				is_rgb=True
+		else:
+			is_rgb=False
 
 		# determine whether to use imagefun.bin or scipy.ndimage.zoom
 		# for now, bin function only allows same bin factor on all axes
@@ -30,7 +36,9 @@ class Shape(Pipe):
 			# check bin factor on this axis same as other axes
 			if input.shape[i] / shape[i] != binfactor:
 				binfactor = None  # binning will not work
-
+		if is_rgb:
+			zoomfactors.append(1.0)
+			binfactor=None
 		if binfactor:
 			output = pyami.imagefun.bin(input, binfactor)
 		else:
