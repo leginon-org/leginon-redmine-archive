@@ -75,7 +75,7 @@ function findScale(imgsize, pixelsize) {
 			rscale= 1/scale
 			nbpixels = rscale / pixelsize
 			r = imgsize/nbpixels;
-			if (r > 2 && r <4) {
+			if (r > 2 && r <5) {
 				break;
 			}
 		}

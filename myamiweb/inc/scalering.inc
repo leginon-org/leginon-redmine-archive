@@ -59,9 +59,9 @@ class ScaleRing {
 		foreach ($this->scales as $this->label=>$scale) {
 			$rscale = 1 / $scale;
 			$this->nbpixels = $rscale / $this->value;;
-			#echo "for ".$this->label." nbpixels=".$this->nbpixels." ****";
 			$r = $this->size/$this->nbpixels;
-			if ($r > 2 && $r < 4) {
+			#echo "for ".$this->label." nbpixels=".$this->nbpixels." r=".$r." ****";
+			if ($r > 2 && $r < 5) {
 				break;
 			}
 		}

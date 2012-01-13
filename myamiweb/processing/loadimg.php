@@ -27,32 +27,33 @@ if (preg_match('`\.gif$`i',$filename) && $rawgif) {
 	$oformat = 'PNG';
 	$frame=0;
 	if ($scale) {
-		$new_width = $width * $scale;
-		$new_height = $height * $scale;
+		$new_width = (int) ($width * $scale);
+		$new_height = (int) ($height * $scale);
 	}
 	elseif ($w) {
 		// set width, maintain height ratio
-		$new_width = $w;
-		$new_height = $height * $w / $width;
+		$new_width = (int) $w;
+		$new_height = (int) ($height * $w / $width);
 	}
 	elseif ($h) {
 		// set height, maintain width ratio
-		$new_height = $h;
-		$new_width = $width * $h / $height;
+		$new_height = (int) $h;
+		$new_width = (int) ($width * $h / $height);
 	}
 	elseif ($s) {
 		// set width and height, force image to be square
-		$new_width = $s;
-		$new_height = $s;
+		$new_width = (int) $s;
+		$new_height = (int) $s;
 	}
 	else {
 		// set to original width and heigth
-		$new_width = $width;
-		$new_height = $height;
+		$new_width = (int) $width;
+		$new_height = (int) $height;
 	}
 	$xyDim = array($new_width, $new_height);
 
 	$rgb = (substr_compare($filename,'jpg',-3,true) || substr_compare($filename,'png',-3,true)) ? true:false;
+	$frame = (substr_compare($filename,'jpg',-3,true) || substr_compare($filename,'png',-3,true)) ? null:$frame;
 	// request image
 	if (!$rescale && $pmin != $pmax) 
 		$imgstr = $imagerequest->requestImage($filename,$oformat,$xyDim,'minmax',$pmin,$pmax,0,$rgb,false,$frame);
