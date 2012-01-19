@@ -21,7 +21,7 @@ class CentosInstallation(object):
 		#self.svnCmd = "svn co http://ami.scripps.edu/svn/myami/trunk " + self.svnMyamiDir
 		# redhat release related values
 		self.redhadRelease = '6.5'
-	self.torqueLibPath = '/var/lib/torque/'
+		self.torqueLibPath = '/var/lib/torque/'
 
 		# SHA-1 digest of a registration key provided by AMI. When we change the key that we give to
 		# registered users, we need to update this value.
@@ -152,8 +152,8 @@ class CentosInstallation(object):
 	def yumUpdate(self):
 		print "Updating system files...."
 
-	redhatMajorRelease = self.redhatRelease.split('.')[0]
-	redhatMinorRelease = self.redhatRelease.split('.')[1]
+		redhatMajorRelease = self.redhatRelease.split('.')[0]
+		redhatMinorRelease = self.redhatRelease.split('.')[1]
 		self.runCommand("rpm -Uvh http://download.fedora.redhat.com/pub/epel/%s/`uname -i`/epel-release-%s-%s.noarch.rpm" % (redhatMajorRelease,redhatMajorRelease,redhadMinorRelease))
 
 		self.runCommand("yum -y update yum*")
@@ -219,7 +219,7 @@ class CentosInstallation(object):
 		os.chdir(self.currentDir)
 
 	def processServerExtraPythonPackageInstall(self):
-	packagelist = [
+		packagelist = [
 			{
 				# PyFFTW
 				'targzFileName':'PyFFTW3-0.2.2.tar.gz',
@@ -601,29 +601,7 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 		self.runCommand(command)
 
 		# set environment variables
-		# For BASH, create an spider.sh
-		f = open('spider.sh', 'w')
-		f.write('''export SPIDERDIR=/usr/local/spider
-export SPBIN_DIR=${SPIDERDIR}/bin/
-export SPPROC_DIR=${SPIDERDIR}/proc/
-export SPMAN_DIR=${SPIDERDIR}/man/
-''')
-		f.close()
-
-		# For C shell, create an spider.csh
-		f = open('spider.csh', 'w')
-		f.write('''setenv SPIDERDIR /usr/local/spider
-setenv SPMAN_DIR ${SPIDERDIR}/man/
-setenv SPPROC_DIR ${SPIDERDIR}/proc/
-setenv SPBIN_DIR ${SPIDERDIR}/bin/''')
-		f.close()
-		
-		# add them to the global /etc/profile.d/ folder
-		shutil.copy("spider.sh", "/etc/profile.d/spider.sh")
-		shutil.copy("spider.csh", "/etc/profile.d/spider.csh")
-		os.chmod("/etc/profile.d/spider.sh", 0755)
-		os.chmod("/etc/profile.d/spider.csh", 0755)
-
+		# Nothing to set.
 
 
 	def processServerYumInstall(self):
