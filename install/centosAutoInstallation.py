@@ -218,6 +218,44 @@ class CentosInstallation(object):
 		self.runCommand(command)
 		os.chdir(self.currentDir)
 
+	def linkMpiRun(self):
+		# mpirun is not automatically available for use
+		filename = 'mpirun'
+		command = 'which %s' % (filename)
+		resultstring = self.runCommand(command)
+		if filename in resultstring:
+			self.writeToLog("mpirun already in path, nothing to do")
+			return True
+		# find the source in some bin directory and link it	
+		command = 'locate '+filename
+		resultstring = self.runCommand(command)
+		if ( filename not in resultstring ):
+			self.writeToLog("Failed to enable mpirun: link source not found")
+			return False
+		else:
+			lines = resultstring.split('\n')
+			binMpiPath = None
+			for source in lines:
+				if source.split(filename) <2:
+					continue
+				binMpiPath = source.split(filename)[0]
+				if len(binMpiPath.split('bin')) > 1:
+					break
+			if binMpiPath:
+				destination = '/usr/local/bin/%s' % filename
+				if os.path.isfile(destination):
+					self.writeToLog("Error in Linking: Existing mpirun in /usr/local/bin is a file")
+					return False
+				if os.path.islink(destination):
+					os.remove(destination)
+				command = 'ln -s %s %s' % (source,destination)
+				self.runCommand(command)
+				self.writeToLog("%s is linked to %s"%(destination,source))
+				return True
+
+	def processServerPackageEnable(self):
+		self.linkMpiRun()
+
 	def processServerExtraPythonPackageInstall(self):
 		packagelist = [
 			{
@@ -270,7 +308,10 @@ class CentosInstallation(object):
 	def setupProcessServer(self):
 		self.writeToLog("--- Start install Processing Server")
 		self.processServerYumInstall()
-		
+
+		# make certain yum package binary available
+		self.processServerPackageEnable()
+
 		# install non-Yum packages
 		self.processServerExtraPythonPackageInstall()
  
@@ -598,6 +639,8 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 
 		# create a link to the selected file in /usr/local/bin
 		command = "ln -sv /usr/local/frealign_v8.09/bin/" + fileName + " /usr/local/bin/frealign"
+		# appion actually calls the mp version only:  Need to decide what to do
+		command = "ln -sv /usr/local/frealign_v8.09/bin/" + fileName + " /usr/local/bin/frealign_mp"
 		self.runCommand(command)
 
 		# set environment variables
