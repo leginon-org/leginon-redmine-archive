@@ -7,12 +7,13 @@
  *	see  http://ami.scripps.edu/software/leginon-license
  */
 
-require "inc/particledata.inc";
-require "inc/leginon.inc";
-require "inc/project.inc";
-require "inc/viewer.inc";
-require "inc/processing.inc";
-require "inc/viewstack.inc";
+require_once "inc/particledata.inc";
+require_once "inc/leginon.inc";
+require_once "inc/project.inc";
+require_once "inc/viewer.inc";
+require_once "inc/processing.inc";
+require_once "inc/viewstack.inc";
+require_once "inc/imagerequest.inc";
 
 $filename=$_GET['file'];
 $expId =$_GET['expId'];
@@ -129,17 +130,20 @@ function getimagicfilenames($file) {
 
 if (preg_match("%.spi$%", $filename)) {
 	$file_hed=$file_img=$filename;
-	$info=spiderinfo($file_hed);
-	$n_images=$info['nimg'];
 } else if (preg_match("%.hdf5$%", $filename)) {
 	$file_hed=$file_img=$filename;
-	$n_images=100;
+} else if (preg_match("%.mrc$%", $filename)) {
+	$file_hed=$file_img=$filename;
 } else {
 	list($file_hed, $file_img)=getimagicfilenames($filename);
-	#$info=imagicinfo($file_hed);
-	$info = array('count'=>100);
-	$n_images=$info['count']+1;
 }
+
+// create imageRequester
+$imagerequest = new imageRequester();
+// find out frame counts in the stack
+$imginfo = $imagerequest->requestInfo($file_hed);
+$frames = $imginfo->nz;
+$info = array('count'=>$frames);
 
 //get session name
 if ($expId){
@@ -151,8 +155,7 @@ $sessiondata=getSessionList($projectId,$sessionId);
 $sessioninfo=$sessiondata['info'];
 $sessionname=$sessioninfo['Name'];
 
-#$info=imagicinfo($file_hed);
-$n_images = ($substack || $substacktype || $subStackClassesString != "") ? $numbad : $info['count']+1;
+$n_images = ($substack || $substacktype || $subStackClassesString != "") ? $numbad : $info['count'];
 
 ?>
 <html>
