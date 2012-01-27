@@ -20,7 +20,7 @@ class CentosInstallation(object):
 		
 		#self.svnCmd = "svn co http://ami.scripps.edu/svn/myami/trunk " + self.svnMyamiDir
 		# redhat release related values
-		self.redhadRelease = '6.5'
+		self.redhatRelease = '6.5'
 		self.torqueLibPath = '/var/lib/torque/'
 
 		# SHA-1 digest of a registration key provided by AMI. When we change the key that we give to
@@ -46,7 +46,8 @@ class CentosInstallation(object):
 
 		print "Current OS Information: " + flavor
 		self.writeToLog("CentOS info: " + flavor)
-	
+		#self.redhatRelease = flavor.split()[2]
+		
 	def  determineNumberOfCPUs(self):
 		""" Number of virtual or physical CPUs on this system """
 
@@ -54,7 +55,7 @@ class CentosInstallation(object):
 		try:
 			import multiprocessing
 			return multiprocessing.cpu_count()
-		except (ImportError,NotImplementedError):
+		except (ImportError, NotImplementedError):
 			pass
 
 		# POSIX
@@ -63,7 +64,7 @@ class CentosInstallation(object):
 
 			if res > 0:
 				return res
-		except (AttributeError,ValueError):
+		except (AttributeError, ValueError):
 			pass
 
 	def checkRoot(self):
@@ -151,10 +152,10 @@ class CentosInstallation(object):
 
 	def yumUpdate(self):
 		print "Updating system files...."
-
 		redhatMajorRelease = self.redhatRelease.split('.')[0]
 		redhatMinorRelease = self.redhatRelease.split('.')[1]
-		self.runCommand("rpm -Uvh http://download.fedora.redhat.com/pub/epel/%s/`uname -i`/epel-release-%s-%s.noarch.rpm" % (redhatMajorRelease,redhatMajorRelease,redhadMinorRelease))
+
+		self.runCommand("rpm -Uvh http://download.fedora.redhat.com/pub/epel/%s/`uname -i`/epel-release-%s-%s.noarch.rpm" % (redhatMajorRelease, redhatMajorRelease, redhatMinorRelease))
 
 		self.runCommand("yum -y update yum*")
 
@@ -169,7 +170,7 @@ class CentosInstallation(object):
 		
 		self.writeToLog("#===================================================")
 		self.writeToLog("Run the following Command:")
-		self.writeToLog("%s"%(cmd,))
+		self.writeToLog("%s" % (cmd,))
 		print cmd + '\n'
 		print 'Please wait......(This may take a few minutes.)\n'
 
@@ -200,15 +201,15 @@ class CentosInstallation(object):
 
 	def openFirewallPort(self, port):
 			
-		self.runCommand("/sbin/iptables --insert RH-Firewall-1-INPUT --proto tcp --dport %d --jump ACCEPT"%(port))
+		self.runCommand("/sbin/iptables --insert RH-Firewall-1-INPUT --proto tcp --dport %d --jump ACCEPT" % (port))
 		self.runCommand("/sbin/iptables-save > /etc/sysconfig/iptables")
 		self.runCommand("/etc/init.d/iptables restart")
-		self.writeToLog("firewall port %d opened"%(port))
+		self.writeToLog("firewall port %d opened" % (port))
 
-	def installPythonPackage(self,targzFileName,fileLocation,unpackDirName):
+	def installPythonPackage(self, targzFileName, fileLocation, unpackDirName):
 		os.chdir(self.currentDir)
 		# download the tar file and unzip it
-		command = "wget -c " + os.path.join(fileLocation,targzFileName)
+		command = "wget -c " + os.path.join(fileLocation, targzFileName)
 		self.runCommand(command)
 		command = "tar -zxvf " + targzFileName
 		self.runCommand(command)
@@ -266,12 +267,12 @@ class CentosInstallation(object):
 			}
 		]
 		for p in packagelist:
-			self.installPythonPackage(p['targzFileName'],p['fileLocation'],p['unpackDirName'])
+			self.installPythonPackage(p['targzFileName'], p['fileLocation'], p['unpackDirName'])
 
 	def setupWebServer(self):
 		self.writeToLog("--- Start install Web Server")
 		
-		packagelist = ['fftw3-devel', 'gcc', 'httpd', 'libssh2-devel', 'php', 'php-mysql', 'phpMyAdmin.noarch', 'php-devel', 'php-gd',]
+		packagelist = ['fftw3-devel', 'gcc', 'httpd', 'libssh2-devel', 'php', 'php-mysql', 'phpMyAdmin.noarch', 'php-devel', 'php-gd', ]
 		self.yumInstall(packagelist)
 
 		self.editPhpIni()
@@ -298,7 +299,7 @@ class CentosInstallation(object):
 		self.runCommand("/sbin/service mysqld restart")
 		
 		# run database setup script.
-		cmd = os.path.join(self.svnMyamiDir, 'install/newDBsetup.php -L %s -P %s -H %s -U %s -E %s'%(self.leginonDB, self.projectDB, self.dbHost, self.dbUser, self.adminEmail))
+		cmd = os.path.join(self.svnMyamiDir, 'install/newDBsetup.php -L %s -P %s -H %s -U %s -E %s' % (self.leginonDB, self.projectDB, self.dbHost, self.dbUser, self.adminEmail))
 		cmd = 'php ' + cmd
 
 		#self.runCommand(cmd)
@@ -347,18 +348,18 @@ class CentosInstallation(object):
 	def setupJobServer(self):
 		self.writeToLog("--- Start install Job Server")
 
-		packagelist = ['torque-server', 'torque-scheduler',]
+		packagelist = ['torque-server', 'torque-scheduler', ]
 		self.yumInstall(packagelist)
 
 		self.runCommand("/sbin/chkconfig pbs_server on")
 		self.runCommand("/sbin/chkconfig pbs_sched on")
 
-		f = open(self.torqueLibPath+'server_priv/nodes', 'w')
-		f.write("%s np=%d"%(self.hostname, self.nproc))
+		f = open(self.torqueLibPath + 'server_priv/nodes', 'w')
+		f.write("%s np=%d" % (self.hostname, self.nproc))
 		f.close()
 
-		f = open(self.torqueLibPath+'server_name', 'w')
-		f.write("%s"%(self.hostname))
+		f = open(self.torqueLibPath + 'server_name', 'w')
+		f.write("%s" % (self.hostname))
 		f.close()
 
 		# edit /var/hosts file
@@ -516,14 +517,14 @@ setenv SPBIN_DIR ${SPIDERDIR}/bin/''')
 		libMpiPath = self.runCommand(command)
 
 		# format mpi include and lib paths
-		if ( mpifile in libMpiPath ):
+		if (mpifile in libMpiPath):
 			matchPattern = "lib/" + mpifile
-			libMpiPath = libMpiPath.split( matchPattern )
+			libMpiPath = libMpiPath.split(matchPattern)
 			libMpiPath = libMpiPath[0]
 		
 		# make sure the path is what we expect, ending with gcc/
-		if ( not libMpiPath.endswith( "gcc/" ) ):
-			self.writeToLog("--- Error installing Xmipp. Could not locate and parse the path to %s" % (mpifile, ))
+		if (not libMpiPath.endswith("gcc/")):
+			self.writeToLog("--- Error installing Xmipp. Could not locate and parse the path to %s" % (mpifile,))
 			return False
 
 		includeDir = libMpiPath + "include/"
@@ -566,7 +567,7 @@ setenv SPBIN_DIR ${SPIDERDIR}/bin/''')
 
 		command = "./scons.configure"
 		output = self.runCommand(command)
-		if ( "Checking for MPI ... yes" not in output ):
+		if ("Checking for MPI ... yes" not in output):
 			self.writeToLog("--- Error installing Xmipp. Could not find MPI during configuration.")
 			return False
 
@@ -649,15 +650,15 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 
 	def processServerYumInstall(self):
 
-		packagelist = ['ImageMagick', 'MySQL-python', 'compat-gcc-34-g77', 'fftw3-devel', 'gcc-c++', 'gcc-gfortran', 'gcc-objc', 'gnuplot', 'grace', 'gsl-devel', 'libtiff-devel', 'netpbm-progs', 'numpy', 'openmpi-devel', 'python-devel', 'python-imaging', 'python-matplotlib', 'python-tools', 'scipy', 'wxPython', 'xorg-x11-server-Xvfb','libjpeg-devel','zlib-devel',]
+		packagelist = ['ImageMagick', 'MySQL-python', 'compat-gcc-34-g77', 'fftw3-devel', 'gcc-c++', 'gcc-gfortran', 'gcc-objc', 'gnuplot', 'grace', 'gsl-devel', 'libtiff-devel', 'netpbm-progs', 'numpy', 'openmpi-devel', 'python-devel', 'python-imaging', 'python-matplotlib', 'python-tools', 'scipy', 'wxPython', 'xorg-x11-server-Xvfb', 'libjpeg-devel', 'zlib-devel', ]
 		self.yumInstall(packagelist)
 
 	def enableTorqueComputeNode(self):
-		packagelist = ['torque-mom', 'torque-client',]
+		packagelist = ['torque-mom', 'torque-client', ]
 		self.yumInstall(packagelist)
 		self.runCommand("/sbin/chkconfig pbs_mom on")
 		
-		f = open(self.torqueLibPath+'mom_priv/config', 'w')
+		f = open(self.torqueLibPath + 'mom_priv/config', 'w')
 		f.write("$pbsserver localhost # running pbs_server on this host")
 		
 		self.runCommand('qmgr -c "s s scheduling=true"')
@@ -673,7 +674,7 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 		f.close()
 
 	def mysqlYumInstall(self):
-		packagelist = ['mysql-server', 'php', 'php-mysql',]
+		packagelist = ['mysql-server', 'php', 'php-mysql', ]
 		self.yumInstall(packagelist)
 	
 	def setupLeginonCfg(self, leginonCfgDir):
@@ -682,14 +683,14 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 
 		for line in inf:
 			if line.startswith('path:'):
-				outf.write('path: %s/leginon\n'%(self.imagesDir))
+				outf.write('path: %s/leginon\n' % (self.imagesDir))
 			else:
 				outf.write(line)
 		inf.close()
 		outf.close()
 
 	def setupPyscopeCfg(self, pyscopeCfgDir):
-		shutil.copy(pyscopeCfgDir +'/instruments.cfg.template', pyscopeCfgDir +'/instruments.cfg')
+		shutil.copy(pyscopeCfgDir + '/instruments.cfg.template', pyscopeCfgDir + '/instruments.cfg')
 
 
 	def setupSinedonCfg(self, sinedonDir):
@@ -714,7 +715,7 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 		for line in inf:
 			line = line.rstrip()
 			if "127.0.0.1" in line:
-				outf.write("127.0.0.1		%s localhost.localdomain localhost\n"%(self.hostname))
+				outf.write("127.0.0.1		%s localhost.localdomain localhost\n" % (self.hostname))
 			else:
 				outf.write(line + '\n')
 		
@@ -853,13 +854,13 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 	def installMyamiWeb(self):
 		svnMyamiwebDir = os.path.join(self.svnMyamiDir, "myamiweb")
 		centosWebDir = "/var/www/html"
-		self.runCommand("cp -rf %s %s"%(svnMyamiwebDir, centosWebDir))
+		self.runCommand("cp -rf %s %s" % (svnMyamiwebDir, centosWebDir))
 
 	def editMyamiWebConfig(self):
 	
 		configFile = os.path.join("/var/www/html/myamiweb/config.php")
 
-		inf = open(configFile+".template", 'r')
+		inf = open(configFile + ".template", 'r')
 		outf = open(configFile, 'w')
 
 		for line in inf:
@@ -867,31 +868,31 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 			if line.startswith('// --- ') or len(line) == 0:
 				outf.write(line + "\n")
 			elif line.startswith("define('ENABLE_LOGIN'"):
-				outf.write("define('ENABLE_LOGIN', %s);\n"%(self.enableLogin))
+				outf.write("define('ENABLE_LOGIN', %s);\n" % (self.enableLogin))
 			elif line.startswith("define('DB_HOST'"):
-				outf.write("define('DB_HOST', '%s');\n"%(self.dbHost))
+				outf.write("define('DB_HOST', '%s');\n" % (self.dbHost))
 			elif line.startswith("define('DB_USER'"):
-				outf.write("define('DB_USER', '%s');\n"%(self.dbUser))
+				outf.write("define('DB_USER', '%s');\n" % (self.dbUser))
 			elif line.startswith("define('DB_PASS'"):
-				outf.write("define('DB_PASS', '%s');\n"%(self.dbPass))
+				outf.write("define('DB_PASS', '%s');\n" % (self.dbPass))
 			elif line.startswith("define('ADMIN_EMAIL'"):
-				outf.write("define('ADMIN_EMAIL', '%s');\n"%(self.adminEmail))
+				outf.write("define('ADMIN_EMAIL', '%s');\n" % (self.adminEmail))
 			elif line.startswith("define('DB_LEGINON'"):
-				outf.write("define('DB_LEGINON', '%s');\n"%(self.leginonDB))
+				outf.write("define('DB_LEGINON', '%s');\n" % (self.leginonDB))
 			elif line.startswith("define('DB_PROJECT'"):
-				outf.write("define('DB_PROJECT', '%s');\n"%(self.projectDB))
+				outf.write("define('DB_PROJECT', '%s');\n" % (self.projectDB))
 			elif line.startswith("define('MRC2ANY'"):
-				outf.write("define('MRC2ANY', '%s');\n"%(self.mrc2any))
+				outf.write("define('MRC2ANY', '%s');\n" % (self.mrc2any))
 			elif "addplugin(\"processing\");" in line:
 				outf.write("addplugin(\"processing\");\n")
 			elif "// $PROCESSING_HOSTS[]" in line:
-				outf.write("$PROCESSING_HOSTS[] = array('host' => '%s', 'nproc' => %d);\n"%(self.dbHost, self.nproc))
+				outf.write("$PROCESSING_HOSTS[] = array('host' => '%s', 'nproc' => %d);\n" % (self.dbHost, self.nproc))
 			elif "// $CLUSTER_CONFIGS[]" in line:
 				outf.write("$CLUSTER_CONFIGS[] = 'default_cluster';\n")
 			elif line.startswith("define('TEMP_IMAGES_DIR', "):
 				outf.write("define('TEMP_IMAGES_DIR', '/tmp');\n")
 			elif line.startswith("define('DEFAULTCS', "):
-				outf.write("define('DEFAULTCS', '%.1f');\n"%(self.csValue))		
+				outf.write("define('DEFAULTCS', '%.1f');\n" % (self.csValue))		
 			else:
 				outf.write(line + '\n')
 
@@ -974,7 +975,7 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 	def checkRegistrationKey(self):
 		# used sha-1. This has been deprecated as of python 2.5.
 		# we now use the hashlib instead: http://docs.python.org/library/hashlib.html#module-hashlib
-		if (hashlib.new(self.regKey).digest() != self.regKeyHash):
+		if (hashlib.sha1(self.regKey).digest() != self.regKeyHash):
 			print "The registration key provided is incorrect. Exiting installation..."
 			self.writeToLog("ERROR: registration key (%s) is incorrect ---" % (self.regKey,))
 			return False
@@ -982,12 +983,10 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 		print "Registration Key confirmed."
 		self.writeToLog("Registration Key confirmed.")
 		return True
-		
-	def setCurrentDir(self,path):
-		self.currentDir = path		
+			
 		
 	def run(self):
-		self.currentDir = self.setCurrentDir(os.getcwd())
+		self.currentDir = os.getcwd()
 		self.logFilename = 'installation.log'
 		self.svnMyamiDir = '/tmp/myami/'
 		self.enableLogin = 'false'
