@@ -351,10 +351,17 @@ class CentosInstallation(object):
 		packagelist = ['torque-server', 'torque-scheduler', ]
 		self.yumInstall(packagelist)
 
+		nodes_file = self.torqueLibPath + 'server_priv/nodes'
+		if not os.path.exists(nodes_file):
+			message = "\nWarning: "+nodes_file+" not found.\n"
+			print message 
+			self.writeToLog(message)
+			return True
+
 		self.runCommand("/sbin/chkconfig pbs_server on")
 		self.runCommand("/sbin/chkconfig pbs_sched on")
-
-		f = open(self.torqueLibPath + 'server_priv/nodes', 'w')
+		
+		f = open(nodes_file, 'w')
 		f.write("%s np=%d" % (self.hostname, self.nproc))
 		f.close()
 
@@ -521,51 +528,15 @@ setenv SPBIN_DIR ${SPIDERDIR}/bin/''')
 			matchPattern = "lib/" + mpifile
 			libMpiPath = libMpiPath.split(matchPattern)
 			libMpiPath = libMpiPath[0]
-		
-		# make sure the path is what we expect, ending with gcc/
-		if (not libMpiPath.endswith("gcc/")):
-			self.writeToLog("--- Error installing Xmipp. Could not locate and parse the path to %s" % (mpifile,))
-			return False
 
 		includeDir = libMpiPath + "include/"
 		libDir = libMpiPath + "lib/"
 
-		# build new lines for the configuration file
-		mpiInclude = "opts.Add('MPI_INCLUDE', 'MPI headers dir ', '" + includeDir + "')"
-		mpiLibDir = "opts.Add('MPI_LIBDIR', 'MPI libraries dir ', '" + libDir + "')"
-		mpiLib = "opts.Add('MPI_LIB', 'MPI library', 'mpi')"
-
-		# create a backup of the SConstruct file and open it for writing
-		shutil.copy('SConstruct', 'SConstruct-backup')
-		shutil.move('SConstruct', 'SConstruct-tmp')
-		inf = open('SConstruct-backup', 'r')
-		outf = open('SConstruct', 'w')
-
-		# parse the SConstruct file to replace MPI paths with the new lines
-		for line in inf:
-			line = line.rstrip()
-			if line.startswith("opts.Add('MPI_INCLUDE', 'MPI headers dir ',"):
-				outf.write(mpiInclude + "\n")
-			elif line.startswith("opts.Add('MPI_LIBDIR', 'MPI libraries dir ',"):
-				outf.write(mpiLibDir + "\n")
-			elif line.startswith("opts.Add('MPI_LIB', 'MPI library',"):
-				outf.write(mpiLib + "\n")
-			else:
-				outf.write(line + '\n')
-
-		inf.close()
-		outf.close()
-		os.remove('SConstruct-tmp')
-
-		# configure
-
-		mpiCommand = "mpi-selector --verbose --yes --system --set `rpm --qf '%{NAME}-%{VERSION}-gcc-%{ARCH}\n' -q openmpi`"
-		self.runCommand(command)
-
 		binDir = libMpiPath + "bin/"
 		os.environ["PATH"] = binDir + ':' + os.environ["PATH"]
 
-		command = "./scons.configure"
+		command = "./scons.configure MPI_LIBDIR="+libDir+"  MPI_LIB=mpi  MPI_INCLUDE="+includeDir
+
 		output = self.runCommand(command)
 		if ("Checking for MPI ... yes" not in output):
 			self.writeToLog("--- Error installing Xmipp. Could not find MPI during configuration.")
@@ -657,6 +628,13 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 		packagelist = ['torque-mom', 'torque-client', ]
 		self.yumInstall(packagelist)
 		self.runCommand("/sbin/chkconfig pbs_mom on")
+
+		torqueConfig_file = self.torqueLibPath + 'mom_priv/config'
+		if not os.path.exists(torqueConfig_file):
+			message = "\nWarning: "+torqueConfig_file+" not found.\n"
+			print message 
+			self.writeToLog(message)
+			return
 		
 		f = open(self.torqueLibPath + 'mom_priv/config', 'w')
 		f.write("$pbsserver localhost # running pbs_server on this host")
@@ -816,9 +794,9 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 			return
 		
 		cwd = os.getcwd()
-		self.runCommand("wget -c http://pecl.php.net/get/ssh2-0.11.0.tgz")
-		self.runCommand("tar zxvf ssh2-0.11.0.tgz")
-		sshdir = os.path.join(cwd, "ssh2-0.11.0")
+		self.runCommand("wget -c http://pecl.php.net/get/ssh2-0.11.3.tgz")
+		self.runCommand("tar zxvf ssh2-0.11.3.tgz")
+		sshdir = os.path.join(cwd, "ssh2-0.11.3")
 		os.chdir(sshdir)
 		self.runCommand("phpize")
 		self.runCommand("./configure")
@@ -905,6 +883,7 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 		logfile.close()
 			
 	def getMyami(self):
+		#TODO: handle "svn: is already a working copy for a different URL" case
 		self.runCommand(self.svnCmd)
 
 	def getDefaultValues(self):
