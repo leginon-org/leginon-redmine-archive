@@ -12,7 +12,7 @@ import redux.pipelines
 CACHE_ON = False
 
 if CACHE_ON:
-	disk_cache_path = '/home/pulokas/dev/myami-redux/redux/cachedir'
+	disk_cache_path = '/tmp/redux'
 	disk_cache_size = 10*1024*1024  # 10 MB
 	mem_cache_size = 400*1024*1024  # 400 MB
 	results = redux.cache.Cache(disk_cache_path, disk_cache_size, size_max=mem_cache_size)
