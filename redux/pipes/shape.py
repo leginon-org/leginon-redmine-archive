@@ -22,8 +22,7 @@ class Shape(Pipe):
 			is_rgb=False
 
 		# determine whether to use imagefun.bin or scipy.ndimage.zoom
-		# for now, bin function only allows same bin factor on all axes
-		binfactor = input.shape[0] / shape[0]
+		binfactor = [input.shape[0] / shape[0], input.shape[1] / shape[1]]
 		zoomfactors = []
 		for i in range(len(shape)):
 			# zoom factor on this axis
@@ -31,16 +30,13 @@ class Shape(Pipe):
 
 			# check original shape is divisible by new shape
 			if input.shape[i] % shape[i]:
-				binfactor = None   # binning will not work
+				binfactor[i] = None   # binning will not work
 				
-			# check bin factor on this axis same as other axes
-			if input.shape[i] / shape[i] != binfactor:
-				binfactor = None  # binning will not work
 		if is_rgb:
 			zoomfactors.append(1.0)
 			binfactor=None
-		if binfactor:
-			output = pyami.imagefun.bin(input, binfactor)
+		if binfactor[0] and binfactor[1]:
+			output = pyami.imagefun.bin(input, binfactor[0], binfactor[1])
 		else:
 			output = scipy.ndimage.zoom(input, zoomfactors)
 		return output
