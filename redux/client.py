@@ -64,12 +64,14 @@ def parse_argv():
 			add_option(parser, cls.switch_arg, help)
 		if cls.required_args:
 			for arg in cls.required_args:
-				help = '%s: required' % (name,)
-				add_option(parser, arg, help)
+				if not parser.has_option('--%s' % arg):
+					help = '%s: required' % (name,)
+					add_option(parser, arg, help)
 		if cls.optional_args:
 			for arg in cls.optional_args:
-				help = '%s: optional' % (name,)
-				add_option(parser, arg, help)
+				if not parser.has_option('--%s' % arg):
+					help = '%s: optional' % (name,)
+					add_option(parser, arg, help)
 
 	add_option(parser, 'request', 'full request as a single URL option string')
 	add_option(parser, 'server_host', 'redux server host name (if not given, will start built-in redux processor)')

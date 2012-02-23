@@ -1,8 +1,6 @@
-# this is not necessarily functional, but currently necessary for the
-# option parser to be built correctly
+# this is the standard pipeline currently used by default
 pipes = (
 	('sim', 'Simulate'),
-	('read', 'Read'),
 	('leginon', 'Leginon'),
 	('pad', 'Pad'),
 	('power', 'Power'),

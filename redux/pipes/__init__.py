@@ -27,3 +27,5 @@ from histogram import Histogram
 register(Histogram)
 from simulate import Simulate
 register(Simulate)
+from leginonread import Leginon
+register(Leginon)

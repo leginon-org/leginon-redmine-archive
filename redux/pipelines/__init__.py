@@ -11,3 +11,5 @@ import allpipes
 register('all', allpipes.pipes)
 import histdata
 register('histdata', histdata.pipes)
+import leginon
+register('leginon', leginon.pipes)
