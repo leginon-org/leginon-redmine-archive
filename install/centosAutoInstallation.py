@@ -271,14 +271,16 @@ class CentosInstallation(object):
 
 	def setupWebServer(self):
 		self.writeToLog("--- Start install Web Server")
-		
-		packagelist = ['fftw3-devel', 'gcc', 'httpd', 'libssh2-devel', 'php', 'php-mysql', 'phpMyAdmin.noarch', 'php-devel', 'php-gd', ]
+		#myamiweb yum packages
+		packagelist = ['httpd', 'libssh2-devel', 'php', 'php-mysql', 'phpMyAdmin.noarch', 'php-devel', 'php-gd', ]
 		self.yumInstall(packagelist)
+
+		# Redux Server is on Web server for now.
+		self.installReduxServer()
 
 		self.editPhpIni()
 		self.editApacheConfig()
 		
-		self.installPhpMrc()
 		self.installPhpSsh2()
 		self.installMyamiWeb()
 		self.editMyamiWebConfig()
@@ -527,16 +529,18 @@ setenv SPBIN_DIR ${SPIDERDIR}/bin/''')
 		if (mpifile in libMpiPath):
 			matchPattern = "lib/" + mpifile
 			libMpiPath = libMpiPath.split(matchPattern)
-			libMpiPath = libMpiPath[0]
+			MpiBasePath = libMpiPath[0]
+		else:
+			self.writeToLog("--- Error installing Xmipp. Could not locate libmpi.so.")
+			return False
 
-		includeDir = libMpiPath + "include/"
-		libDir = libMpiPath + "lib/"
+		includeMpiDir = MpiBasePath + "include/"
+		MpiLibDir = MpiBasePath + "lib/"
 
-		binDir = libMpiPath + "bin/"
-		os.environ["PATH"] = binDir + ':' + os.environ["PATH"]
+		MpiBinDir = MpiBasePath + "bin/"
+		os.environ["PATH"] = MpiBinDir + ':' + os.environ["PATH"]
 
-		command = "./scons.configure MPI_LIBDIR="+libDir+"  MPI_LIB=mpi  MPI_INCLUDE="+includeDir
-
+		command = "./scons.configure MPI_LIBDIR="+MpiLibDir+"  MPI_LIB=mpi  MPI_INCLUDE="+includeMpiDir
 		output = self.runCommand(command)
 		if ("Checking for MPI ... yes" not in output):
 			self.writeToLog("--- Error installing Xmipp. Could not find MPI during configuration.")
@@ -564,14 +568,14 @@ setenv SPBIN_DIR ${SPIDERDIR}/bin/''')
 		f = open(bashFile, 'w')
 		f.write('''export XMIPPDIR=/usr/local/Xmipp
 export PATH=${XMIPPDIR}/bin:${PATH}
-export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${XMIPPDIR}/lib:%s''' % (MpiLibDir))
 		f.close()
 
 		# For C shell, create an xmipp.csh
 		f = open(cShellFile, 'w')
 		f.write('''setenv XMIPPDIR /usr/local/Xmipp
 setenv PATH ${XMIPPDIR}/bin:${PATH}
-setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
+setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib:%s''' % (MpiLibDir))
 		f.close()
 		
 		# add them to the global /etc/profile.d/ folder
@@ -789,6 +793,30 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 		f.close()
 		os.chdir(self.currentDir)
 
+	def installReduxServer(self):
+		# Redux prerequisits: python, numpy, scipy, pil, pyfilesystem, fftw3, pyfftw, pyami, numextension
+		#redux yum packages
+		packagelist = [ 'fftw3-devel', 'numpy', 'python-devel', 'python-imaging', 'scipy', ]
+		self.yumInstall(packagelist)
+		# Most are installed as on processingServer
+		packagelist = [
+			{
+				# PyFFTW
+				'targzFileName':'PyFFTW3-0.2.2.tar.gz',
+				'fileLocation':'http://launchpad.net/pyfftw/trunk/0.2.2/+download/',
+				'unpackDirName':'PyFFTW3-0.2.2',
+			},
+			{
+				# Pythen fs
+				'targzFileName':'fs-0.4.0.tar.gz',
+				'fileLocation':'http://pyfilesystem.googlecode.com/files/',
+				'unpackDirName':'pyfilesystem-0.4.0',
+			}
+		]
+		for p in packagelist:
+			self.installPythonPackage(p['targzFileName'], p['fileLocation'], p['unpackDirName'])
+
+
 	def installPhpSsh2(self):
 		if os.path.isfile("/etc/php.d/ssh2.ini"):
 			return
@@ -962,8 +990,7 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib''')
 		print "Registration Key confirmed."
 		self.writeToLog("Registration Key confirmed.")
 		return True
-			
-		
+
 	def run(self):
 		self.currentDir = os.getcwd()
 		self.logFilename = 'installation.log'
