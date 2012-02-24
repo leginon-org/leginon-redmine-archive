@@ -176,6 +176,9 @@ var help = {
 		'tiltlist' : 'List the nominal tilt angles in the tilt series in degrees, separated by commas.  (ex. 0,10,20,30).',
 		'defociilist' : 'List the nominal defocii in the defocal series in microns, separated by commas.  (ex. -1,-2).',
 		'rctcenter' : 'In RCT, the particle Euler angles are fixed, but the particles are not centered. Through an interative process the volume is projected in the direction of the particle and cross-correlated, then the particle is shifted to its correct location.',
+		'rctpartlp' : 'low-pass filter the tilted particles prior to reconstructing (0=off, do not low-pass filter particles)',
+		'rctparthp' : 'high-pass filter the tilted particles prior to reconstructing (0=off, do not high-pass filter particles)',
+		'rctvollp' : 'low-pass filter of the volume after reconstructing',
 		'snapfilter' : 'Fixed low pass filter used in rendering volume snapshot, leave it blank to use the FSC 0.5 result for each iteration',
 		'snapzoom' : 'Zoom in the volume data to see the volume better for a large boxsize',
 		'roi' : 'Define inner and outher radii used to compute rotational spectra (power spectrun of Fourier transform in polar coordinates)',
@@ -281,6 +284,21 @@ var help = {
 		'amask_thresh' : 'What the program wants from you is what percentage of the voxels (between 0 and 100) you expect the wanted mask to cover.  The program will then automatically generate a threshold value that leads to a 3D mask approximately covering the wanted percentage of the available voxels in the 3D volume.  <BR/><BR/> In test runs, 15 has worked well.',
 		'mra_ang_inc' : 'The angular increment for forward projectsions of your masked and filtered 3d used for multi-reference alignment.  You do not need many references here, so setting this paramter to 25 should suffice',
 		'forw_ang_inc' : 'The angular increment for forward projections of your masked and filtered 3d used for euler angle refinement (an anchor set).  This value can vary, decreasing as you increase the iterations.  <BR/><BR/>For a C1 structure, choosing 10 should probably be set as the limit, as this creates ~1000 projections which, in combination with an euler angle increment of 2, will take an entire day to perform euler angle assignments for a single iteration',
+
+		/******* Angular Reconstitution Initial Model Creation *******/
+		'nvol' : 'number of \'raw\' volumes to compute before 3D alignment and classification. If testing, 100 works. 500-1000 would be better, but will take 1-2 days to run on 8 cpus.',
+		'scale' : 'this will dramatically increase the speed of the procedure and is highly recommended.',
+		'prealign' : 'this option will iteratively align all images to each other. It may provide improvements, but may also bias the results. If starting a new project, the suggestion would be to try with and without this option.',
+		'weight_randomization' : 'If this option is checked, then the sequence of image input into angular reconstitution will be weighted by dissimilarity. The most dissimilar images will be used first. The purpose of this function is to provide a large Euler angle reference base for subsequent image addition. For each image, the selection is still randomized, albeit weighted toward the combined dissimilarity to all images that have already been used. Thus, identical sequences should not be encountered.',
+		'linmask' : 'This mask is a linear mask to be imposed on the sinogram and within which the statistics will be calculated for the normalization of the sinograms.',
+		'asqfilt' : 'ASQ filtering means Amplitude-Square-Root and is described in papers, like: Marin van Heel, Michael Schatz, and Elena Orlova, \'Correlation Functions Revisited\', Ultramicroscopy 46 (1992) 304-316. This filtering is important if one does not want the sinogram (and a sine-correlation-function derived from it) to be largely dominated by low-frequency information. The ASQ filter functions largely as a high-pass filter but is based on a rather different philosophy (see paper).',
+		'ang_inc2' : 'This angular increment is taken as an indication of how precisely you want to determine the Euler angles of the input images. The computing times required for 1 degree is FOUR times more than for 2 degrees etc.',
+		'threedfilt' : 'filter each reconstructed volume to this resolution',
+		'nref' : 'number of 3D alignment references to create during maximum-likelihood alignment calculations.',
+		'usePCA' : 'use principal components analysis to reduce the dimensionality of 3D volume comparison & determine inter-volume similarity as (1/Euclidean distance) between transformed coordinates. In tests, this has not affected the results, but dramaticallyl speeds up the calculation.',
+		'numeigens' : 'number of Eigenvolumes to compute during principal components analysis for data reduction',
+		'recalc' : 'optional parameter: specify ONLY if you wish to recalculate the 3D volumes after PCA data reduction. This option does NOT affect any results, and is only present for visualization purposes of the effects of PCA',
+		'PreferenceType' : 'preference value for affinity propation which influences the resulting number of 3D class averages. choose from \'median\', \'minimum\', or \'minlessrange\'. \'median\' will result in the greatest amount of classes, followed by \'minimum\', while \'minlessrange\' results in the fewest',
 
 		/******* Angular Reconstitution Batch Refinement *********/
 		'filtering' : '<b> particle filtering (OPTIONAL) </b><br><br> PARAMETER 1: low-pass filter stack to this value (in &Aring;ngstr&ouml;ms) prior to alignment and classification <br><br> PARAMETER 2: high-pass filter stack to this value (in &Aring;ngstr&ouml;ms) prior to alignment and classification',
@@ -499,6 +517,7 @@ var help = {
 		'setuponly' : 'If setuponly is specified, everything will be set up but frealign will not be run',
 	},
 	'cluster' : {
+		'processinghost' : 'The name of the processing computer to send this job to. ',
 		'nodes' : 'Nodes refers to the number of computer to process on simultaneously.  The more nodes you get the faster things will get process, but more nodes requires that you wait longer before being allowed to begin processing.',
 		'walltime' : 'Wall time, also called real-world time or wall-clock time, refers to elapsed time as determined by a chronometer such as a wristwatch or wall clock.  (The reference to a wall clock is how the term originally got its name.)',
 		'cput' : 'Wall time, also called real-world time or wall-clock time, refers to elapsed time as determined by a chronometer such as a wristwatch or wall clock.  (The reference to a wall clock is how the term originally got its name.)',
@@ -517,5 +536,16 @@ var help = {
 		'lowpass' : 'please add a description in help.js',
 		'highpass' : 'please add a description in help.js',
 		'bin' : 'please add a description in help.js',
+	},
+	'xmipp' : {
+		'mask' : 'Filename of a mask (0=outside particle; 1=inside particle)',
+		'maxAngularChange' : 'Maximum change in rot & tilt  (in +/- degrees). You must specify this option for each iteration. This can be done by a sequence of numbers (for instance, "1000 1000 10 10 " specifies 4 iterations, the first two set the value to 1000 (no restriction) and the last two to 10degrees. An alternative compact notation is ("2x1000 2x10", i.e., 2 iterations with value 1000, and 2 with value 10). Note: if there are less values than iterations the last value is reused. Note: if there are more values than iterations the extra value are ignored',
+		'maxChangeOffset' : 'Maximum allowed change in shift in the 3D+2D searches (in +/- pixels). Shifts larger than this value will be reset to (0,0) You must specify this option for each iteration.  This can be done by a sequence of numbers (for instance, "1000 1000 10 10 "  specifies 4 iterations, the first two set the value to 1000 (no restriction) and the last two to 10degrees. An alternative compact notation  is ("2x1000 2x10", i.e., 2 iterations with value 1000, and 2 with value 10). Note: if there are less values than iterations the last value is reused. Note: if there are more values than iterations the extra value are ignored',
+		'search5DShift' : 'Give search range from the image center for 5D searches (in +/- pixels). Values larger than 0 will results in 5D searches (which may be CPU-intensive) Give 0 for conventional 3D+2D searches.  Note that after the 5D search, for the optimal angles always  a 2D exhaustive search is performed anyway (making it ~5D+2D) Provide a sequence of numbers (for instance, "5 5 3 0" specifies 4 iterations, the first two set the value to 5, then one with 3, resp 0 pixels. An alternative compact notation is ("3x5 2x3 0", i.e., 3 iterations with value 5, and 2 with value 3 and the rest with 0). Note: if there are less values than iterations the last value is reused Note: if there are more values than iterations the extra value are ignored',
+		'search5DStep' : 'Provide a sequence of numbers (for instance, "2 2 1 1" specifies 4 iterations, the first two set the value to 2, then two with 1 pixel. An alternative compact notation is ("2x2 2x1", i.e., 2 iterations with value 2, and 2 with value 1). Note: if there are less values than iterations the last value is reused Note: if there are more values than iterations the extra value are ignored',
+		'reconMethod' : 'Provide a sequence of methods (fourier, wbp, art). See http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/Wbp and http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/Mpi_wbp and http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/Art http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/Fourier http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/Mpi_fourier for details',
+		'ARTLambda' : 'IMPORTANT: you must specify a value of lambda for each iteration even if art has not been selected. IMPORTANT: NOte that we are using the WLS version of ART that  uses geater lambdas than the plain art. See http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/Art for details You must specify this option for each iteration.  This can be done by a sequence of numbers (for instance, ".1 .1 .3 .3"  specifies 4 iterations, the first two set the value to 0.1  no restriction) and the last  two to .3. An alternative compact notation  is ("2x.1 2x.3"). Note: if there are less values than iterations the last value is reused Note: if there are more values than iterations the extra value are ignored',
+		'doComputeResolution' : '0=Do not compute resolution; 1=Compute resolution (FSC)',
+		'fourierMaxFrequencyOfInterest' : 'This number os only used in the first iteration.  From then on, it will be set to resolution computed in the resolution section',
 	}	
 }

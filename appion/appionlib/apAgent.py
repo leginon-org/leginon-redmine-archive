@@ -5,6 +5,8 @@ from appionlib import apRefineJobXmipp
 from appionlib import apRefineJobXmippML3D
 from appionlib import apGenericJob
 from appionlib import jobtest
+from appionlib import appiondata
+from appionlib import apDatabase
 import sys
 import re
 import time
@@ -232,22 +234,25 @@ class Agent (object):
         
         #if jobId is not set, assume there is no entry in ApAppionJobData for this run
         if not jobObject.getJobId():
-            jobname = jobObject.getName()
-            cluster = os.uname()[1]
-            user = os.getlogin()
-                          
-            dbconf = dbconfig.getConfig('appiondata')
-            dbConnection = MySQLdb.connect(**dbconf)          
-            cursor = dbConnection.cursor()
-           
-            insertQuery = "INSERT INTO ApAppionJobData (name, cluster, clusterjobid, status, user) \
-                     VALUES ('%s','%s','%s','%s','%s')" %(jobname, cluster, job, 'Q', user)    
-
-            if cursor.execute (insertQuery):
-                jobObject.setJobId(cursor.lastrowid)   
-
-            cursor.close()
-            dbConnection.close()
+            
+            ### insert a cluster job
+            # TODO: what happens when this runs remotely???        
+            
+            rundir = jobObject.getRundir()
+            pathq = appiondata.ApPathData(path=os.path.abspath(rundir))
+            clustq = appiondata.ApAppionJobData()
+            clustq['path'] = pathq
+            clustq['jobtype'] = jobObject.getJobType()
+            clustq['name'] = jobObject.getJobName()
+            remoterundir = jobObject.getOutputDir()
+            remoterundirq = appiondata.ApPathData(path=os.path.abspath(remoterundir))
+            clustq['clusterpath'] = remoterundirq
+            clustq['session'] = apDatabase.getSessionDataFromSessionId(jobObject.getExpId())
+            clustq['user'] = os.getlogin()
+            clustq['cluster'] = os.uname()[1]
+            clustq['clusterjobid'] = job
+            clustq['status'] = "Q"
+            clustq.insert()   
             
         return retValue
             

@@ -27,6 +27,7 @@ if (!$refinedata) {
 	$refinedata = $particle->getAlignerInfo($alignerid);
 	$alignment = $particle->getTomoAlignmentInfo($refinedata[0]['alignrunid']);
 }
+
 $javascript = addFlashPlayerJS();
 
 processing_header("Tomogram Report","Tomogram Report Page", $javascript);
@@ -43,19 +44,20 @@ if (!is_null($cycle)) {
 	} else {
 		$flvfile = $refinedata[0]['path']."/minialign.flv";
 	}
-}	
+}
 
 // --- Display Flash Movie from flv --- //
 if (file_exists($flvfile)) {
 	echo "<table><tr><td>Alignment Stack:</td></tr>\n";
 	echo "<tr><td>".$flvfile."</td></tr>\n";
+	if ($size=getMovieSize($flvfile)) {
+		list($colwidth, $rowheight)=$size;
+	}
 	echo "<tr><td>";
-	list($colwidth,$rowheight) =  getMovieSize($flvfile);
-	echo getMovieHTML($flvfile,$colwidth,$rowheight,$subid=$axis);
+	echo getMovieHTML($flvfile,$colwidth,$rowheight);
 	echo "</td></tr>";	
 	echo "</table>";
 }
-
 echo $html;
 
 processing_footer();

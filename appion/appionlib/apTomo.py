@@ -22,6 +22,7 @@ from appionlib import apDisplay
 from appionlib import apImage
 from appionlib import apFile
 from appionlib import apEMAN
+from appionlib import apMovie
 from appionlib.apSpider import volFun
 
 def getTiltdataList(tiltseriesdata,othertiltdata=None):
@@ -42,6 +43,14 @@ def getAlignerdata(alignerid):
 	q = appiondata.ApTomoAlignerParamsData()
 	alignerdata = q.direct_query(alignerid)
 	return alignerdata
+
+def getAligndir(alignerdata):
+	rundir = alignerdata['alignrun']['path']['path']
+	if alignerdata['protomo']:
+		aligndir = os.path.join(rundir,'align')
+	else:
+		aligndir = rundir
+	return aligndir
 
 def getAlignmentFromDB(alignerdata,center):
 	q = appiondata.ApProtomoModelData(aligner=alignerdata)
@@ -262,6 +271,13 @@ def getGlobalShift(ordered_imagelist, corr_bin, refimg):
 	globalshifts = shiftHalfSeries(zeroshift, globalshifts, refimg)
 	return globalshifts
 		
+def convertGlobalToLocalAffines(affines):
+	localaffines = []
+	localaffines.append(affines[0] * affines[0].I)
+	for i in range(len(affines)-1):
+		localaffines.append(affines[i+1] * affines[i].I)
+	return localaffines
+
 def simpleCorrelation(array1,array2):
 	c = correlator.Correlator()
 	p = peakfinder.PeakFinder()
@@ -636,13 +652,9 @@ def makeAlignStackMovie(filename,xsize=512):
 		array2jpg(pictpath1,slice,stats['mean']-6*stats['std'],stats['mean']+6*stats['std'],xsize)
 		array2jpg(pictpath2,slice,stats['mean']-6*stats['std'],stats['mean']+6*stats['std'],xsize)
 	apDisplay.printMsg('Putting the jpg files together to flash video...')
-	moviename = dirpath+'/minialign'+key+'.flv'
-	print 'moviename',moviename
-	cmd = 'mencoder -nosound -mf type=jpg:fps=24 -ovc lavc -lavcopts vcodec=flv -of lavf -lavfopts format=flv -o '+moviename+' "mf://'+rootpath+'_slice*.jpg"'
-	proc = subprocess.Popen(cmd, shell=True)
-	proc.wait()
-	proc = subprocess.Popen('/bin/rm '+rootpath+'_slice*.jpg', shell=True)
-	proc.wait()
+	moviepath = dirpath+'/minialign'+key+'.flv'
+	framepath = rootpath+'_slice*.jpg'
+	apMovie.makeflv('jpg',framepath,moviepath)
 
 def makeMovie(filename,xsize=512):
 	apDisplay.printMsg('Making movie','blue')
@@ -682,12 +694,9 @@ def makeMovie(filename,xsize=512):
 			# adjust and shrink each image
 			array2jpg(pictpath,slice,stats['mean']-8*stats['std'],stats['mean']+8*stats['std'],xsize)
 		apDisplay.printMsg('Putting the jpg files together to flash video...')
-		moviename = dirpath+'/minitomo%s'%key+'.flv'
-		cmd = 'mencoder -nosound -mf type=jpg:fps=24 -ovc lavc -lavcopts vcodec=flv -of lavf -lavfopts format=flv -o '+moviename+' "mf://'+rootpath+'_avg*.jpg"'
-		proc = subprocess.Popen(cmd, shell=True)
-		proc.wait()
-		proc = subprocess.Popen('/bin/rm '+rootpath+'_avg*.jpg', shell=True)
-		proc.wait()
+		moviepath = dirpath+'/minitomo%s'%key+'.flv'
+		framepath = rootpath+'_avg*.jpg'
+		apMovie.makeflv('jpg',framepath,moviepath)
 
 def makeProjection(filename,xsize=512):
 	mrcpath = filename

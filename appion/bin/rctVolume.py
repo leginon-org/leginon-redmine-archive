@@ -62,6 +62,8 @@ class rctVolumeScript(appionScript.AppionScript):
 			help="Low pass volume filter (in Angstroms)", metavar="#")
 		self.parser.add_option("--highpasspart", dest="highpasspart", type="float", default=600.0,
 			help="High pass particle filter (in Angstroms)", metavar="#")
+		self.parser.add_option("--lowpasspart", dest="lowpasspart", type="float",
+			help="Low pass particle filter (in Angstroms)", metavar="#")
 		self.parser.add_option("--min-score", "--min-spread", dest="minscore", type="float",
 			help="Minimum score/spread/cross-correlation for particles", metavar="#")
 		self.parser.add_option("--contour", dest="contour", type="float", default=3.0,
@@ -192,8 +194,11 @@ class rctVolumeScript(appionScript.AppionScript):
 		apix = apStack.getStackPixelSizeFromStackId(self.params['tiltstackid'])
 		boxsize = self.getBoxSize()
 		emancmd = ("proc2d "+emanstackfile+" "+tempstack
-			+" apix="+str(apix)+" hp="+str(self.params['highpasspart'])
-			+" ")
+			+" apix="+str(apix)+" ")
+		if self.params['highpasspart'] is not None and self.params['highpasspart'] > 0:
+			emancmd += "hp="+str(self.params['highpasspart'])+" "
+		if self.params['lowpasspart'] is not None and self.params['lowpasspart'] > 0:
+			emancmd += "lp="+str(self.params['lowpasspart'])+" "
 		if self.params['tiltbin'] > 1:
 			clipsize = boxsize*self.params['tiltbin']
 			emancmd += " shrink=%d clip=%d,%d "%(self.params['tiltbin'], clipsize, clipsize)
@@ -248,6 +253,7 @@ class rctVolumeScript(appionScript.AppionScript):
 		rctrunq['maskrad']    = self.params['radius']
 		rctrunq['lowpassvol'] = self.params['lowpassvol']
 		rctrunq['highpasspart'] = self.params['highpasspart']
+		rctrunq['lowpasspart'] = self.params['lowpasspart']
 		rctrunq['median'] = self.params['median']
 		rctrunq['description'] = self.params['description']
 		rctrunq['path']  = appiondata.ApPathData(path=os.path.abspath(self.params['rundir']))

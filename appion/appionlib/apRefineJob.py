@@ -275,7 +275,7 @@ class RefineJob(basicScript.BasicScript):
 		lines.append('files_from_remote_host\n')
 		for line in lines:
 			filename = os.path.basename(line.replace('\n',''))
-			tasks = self.addToTasks(tasks,'rsync -rotouv --partial %s %s:%s/%s' % (filename,self.params['localhost'],self.params['rundir'],filename))
+			tasks = self.addToTasks(tasks,"rsync -e 'ssh -o StrictHostKeyChecking=no' -rotouv --partial %s %s:%s/%s" % (filename,self.params['localhost'],self.params['rundir'],filename))
 		return tasks
 
 	def __addCleanUpReconDirTasks(self,tasks):
@@ -374,6 +374,8 @@ class RefineJob(basicScript.BasicScript):
 		self.logfile = os.path.join(self.params['remoterundir'],self.getName()+'.log')
 		self.commandfile = os.path.join(self.params['remoterundir'],self.getName()+'.commands')
 		self.cputime = self.params['cput']
+		self.expid = self.params['expid']
+		self.rundir = self.params['rundir']
 		# TO Do: need to get appion bin dir from appionwrapper environment variable Appion_Bin_Dir
 		self.appion_bin_dir = ''
 		
@@ -495,6 +497,8 @@ class RefineJob(basicScript.BasicScript):
 		return self.jobnamebase    
 	def setName(self, newname):
 		self.jobnamebase = newname + ".appionsub"               
+	def getJobName(self):
+		return self.jobnamebase + ".job"    
 	def getNodes(self):
 		return self.nodes
 	def getPPN(self):
@@ -519,6 +523,12 @@ class RefineJob(basicScript.BasicScript):
 		self.jobid = int(id)
 	def getProjectId(self):
 		return self.params['projectid']
+	def getJobType(self):
+		return self.jobtype    
+	def getExpId(self):
+		return self.expid    
+	def getRundir(self):
+		return self.rundir    
 	
 class Tester(RefineJob):
 	def makeRefineScript(self,iter):
