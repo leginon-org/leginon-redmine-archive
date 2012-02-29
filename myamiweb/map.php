@@ -16,7 +16,7 @@ $fft = ($_GET['fft']) ? '&fft='.$_GET['fft'] : '';
 $fftflag = ($_GET['fft']) ? 1:0;
 $filter = ($_GET['flt']) ? '&flt='.$_GET['flt'] : '';
 $fftbin = ($_GET['fftbin']) ? '&fftbin='.$_GET['fftbin'] : '';
-$binorder = ($_GET['fftbin']) ? $_GET['fftbin'] : 'b';
+$binorder = ($_GET['fftbin']) ? $_GET['fftbin'] : 'a';
 $binning = ($_GET['binning']) ? '&binning='.$_GET['binning'] : '';
 $autoscale = ($_GET['autoscale']) ? '&autoscale='.$_GET['autoscale'] : '';
 $quality = ($_GET['t']) ? '&t='.$_GET['t']: '';

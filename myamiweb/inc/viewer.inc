@@ -608,7 +608,7 @@ class view {
 		$this->quality = "80";
 		$this->gradient = "";
 		$this->filter= "default";
-		$this->fftbin= "b";
+		$this->fftbin= "a";
 		$this->binning= "auto";
 		$this->autoscale = "s;3";
 		$this->displayfilename = "0";
