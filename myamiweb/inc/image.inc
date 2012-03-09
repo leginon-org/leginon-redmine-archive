@@ -192,9 +192,7 @@ function getImageFromRequester($pic,$imginfo,$p) {
 	if ($p['scalebar']) 
 		$img = addScaleBarRingToImage($img,$display_pixelsize,$p['fft'],$p['fftbin']);
 	// This is a good place to add debug message as a string on the image
-	$debug_message = $imgheaderinfo->amax.' '.$imgheaderinfo->amin;
-	$debug_message .= ' lpf'.$lpf_sigma.' dimx'.$dimx.' xyDim'.$xyDim[0];
-	$debug_message .= ' :getImageFromRequester ';
+	#$debug_message .= ' :getImageFromRequester ';
 	imagestring($img, 4, 11, 21, $debug_message, imagecolorallocate($img,0,0,255));
 	imagestring($img, 4, 10, 20, $debug_message, imagecolorallocate($img,255,255,255));
 	return $img;
@@ -381,8 +379,7 @@ function addAppionOverlays($leginondata,$img,$childinfo,$imginfo,$p) {
 	if (!$img) 
 		$img = blankimage(512);
 	// This is a good place to add debug message as a string on the image
-	$debug_message = 'trace';
-	$debug_message .= ' :addAppionOverlay';
+	$debug_message = '';
 	imagestring($img, 2, 10, 30, $debug_message, imagecolorallocate($img,0,255,255));
 	return $img;
 }
@@ -690,7 +687,7 @@ class Mosaic {
 			}
 		}
 		// Use this to add debug message
-		$debug_message = $this->size.' '.$squaresize.' '.$src_w;
+		#$debug_message = $this->size.' '.$squaresize.' '.$src_w;
 		imagestring($img, 2, 10, 20, $debug_message, imagecolorallocate($img,0,255,255));
 		if ($this->displayframe) {
 			drawsquare($img, $crossquare, $mosaicframecol);
