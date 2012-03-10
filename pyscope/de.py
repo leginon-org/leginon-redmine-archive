@@ -124,6 +124,7 @@ class DECameraBase(ccdcamera.CCDCamera):
 		return de_setDictProp(self.name, name, xydict)
 
 	def _getImage(self):
+		old_frames_name = self.getPreviousRawFramesName()
 		t0 = time.time()
 		image = de_getImage(self.name)
 		t1 = time.time()
@@ -131,8 +132,12 @@ class DECameraBase(ccdcamera.CCDCamera):
 		if not isinstance(image, numpy.ndarray):
 			raise ValueError('GetImage did not return array')
 		image = self.finalizeGeometry(image)
-		print 'Pausing, otherwise, no frames name when this returns.'
-		time.sleep(0.5)
+		## wait for frames name to be updated before returning
+		if self.getSaveRawFrames():
+			new_frames_name = self.getPreviousRawFramesName()
+			while not new_frames_name or (new_frames_name == old_frames_name):
+				time.sleep(1.0)
+				new_frames_name = self.getPreviousRawFramesName()
 		return image
 
 	def getCameraSize(self):

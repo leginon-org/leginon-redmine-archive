@@ -796,7 +796,7 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib:%s''' % (MpiLibDir))
 	def installReduxServer(self):
 		# Redux prerequisits: python, numpy, scipy, pil, pyfilesystem, fftw3, pyfftw, pyami, numextension
 		#redux yum packages
-		packagelist = [ 'fftw3-devel', 'numpy', 'python-devel', 'python-imaging', 'scipy', ]
+		packagelist = [ 'fftw-devel', 'numpy', 'python-devel', 'python-imaging', 'scipy', ]
 		self.yumInstall(packagelist)
 		# Most are installed as on processingServer
 		packagelist = [
@@ -807,7 +807,7 @@ setenv LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:${XMIPPDIR}/lib:%s''' % (MpiLibDir))
 				'unpackDirName':'PyFFTW3-0.2.2',
 			},
 			{
-				# Pythen fs
+				# Python fs
 				'targzFileName':'fs-0.4.0.tar.gz',
 				'fileLocation':'http://pyfilesystem.googlecode.com/files/',
 				'unpackDirName':'pyfilesystem-0.4.0',
