@@ -21,6 +21,7 @@ from appionlib import apParticle
 from appionlib import apFile
 from appionlib import apMask
 from appionlib import apBoxer
+from appionlib import apSizing
 
 class ParticleExtractLoop(appionLoop2.AppionLoop):
 	############################################################
@@ -222,6 +223,8 @@ class ParticleExtractLoop(appionLoop2.AppionLoop):
 		self.ctfestopts = ('ace2', 'ctffind')
 
 		### values
+		self.parser.add_option("--bin", dest="bin", type="int", default=1,
+			help="Bin the particles after extracting", metavar="#")
 		self.parser.add_option("--ctfcutoff", dest="ctfcutoff", type="float",
 			help="CTF cut off")
 		self.parser.add_option("--mincc", dest="correlationmin", type="float",
@@ -296,6 +299,14 @@ class ParticleExtractLoop(appionLoop2.AppionLoop):
 			apDisplay.printWarning("No images were found to process")
 			self.noimages = True
 			return
+		self.selectiondata = None
+		if self.params['selectionid'] is not None:
+			self.selectiondata = apParticle.getSelectionRunDataFromID(self.params['selectionid'])
+			if self.params['particlelabel'] == 'fromtrace':
+				if (not self.selectiondata['manparams'] or not self.selectiondata['manparams']['trace']):
+					apDisplay.printError("Can not use traced object center to extract boxed area without tracing")
+				else:
+					self.params['particlelabel'] = '_trace'
 		self.checkPixelSize()
 		self.existingParticleNumber=0
 		self.setStartingParticleNumber()
@@ -308,6 +319,9 @@ class ParticleExtractLoop(appionLoop2.AppionLoop):
 	def setStartingParticleNumber(self):
 		self.particleNumber = self.existingParticleNumber
 
+	def convertTraceToParticlePeaks(self,imgdata):
+		apSizing.makeParticleFromContour(imgdata,self.selectiondata,'_trace')
+		
 	#=====================
 	def reprocessImage(self, imgdata):
 		"""
@@ -337,6 +351,11 @@ class ParticleExtractLoop(appionLoop2.AppionLoop):
 		rmfiles = glob.glob(shortfileroot+"*")
 		for rmfile in rmfiles:
 			apFile.removeFile(rmfile)
+
+		### convert contours to particles
+		print self.params['particlelabel']
+		if self.selectiondata and self.params['particlelabel'] == '_trace':
+			self.convertTraceToParticlePeaks(imgdata)
 
 		### get particles
 		partdatas,shiftdata = self.getParticlesInImage(imgdata)
@@ -417,6 +436,9 @@ class Test(ParticleExtractLoop):
 		for partdata in partdatas:
 			print partdata['xcoord'],partdata['ycoord']
 		return None
+
+	def commitToDatabase(self,imgdata):
+		pass
 
 if __name__ == '__main__':
 	makeStack = Test()

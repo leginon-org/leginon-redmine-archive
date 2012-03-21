@@ -644,8 +644,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		runq = appiondata.ApStackRunData()
 		runq['stackRunName'] = self.params['runname']
 		runq['session'] = sessiondata
-		if self.params['selectionid'] is not None:
-			runq['selectionrun'] = appiondata.ApSelectionRunData.direct_query(self.params['selectionid'])
+		runq['selectionrun'] = self.selectiondata
       	### see if stack run already exists in the database (just checking runname & session)
 		uniqrundatas = runq.query(results=1)
 
@@ -735,8 +734,6 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 
 		self.flipoptions = ('emanimage', 'emanpart', 'emantilt', 'spiderimage', 'ace2image','ace2imagephase')
 		### values
-		self.parser.add_option("--bin", dest="bin", type="int", default=1,
-			help="Bin the particles after boxing", metavar="#")
 		self.parser.add_option("--single", dest="single", default="start.hed",
 			help="create a single stack")
 		self.parser.add_option("--filetype", dest="filetype", default='imagic',

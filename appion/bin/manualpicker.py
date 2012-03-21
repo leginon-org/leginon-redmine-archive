@@ -468,6 +468,12 @@ class ManualPicker(particleLoop2.ParticleLoop):
 				self.params['outtypeindex'] = i
 		if self.params['outtypeindex'] is None:
 			apDisplay.printError("outtype must be one of: "+str(self.outtypes)+"; NOT "+str(self.params['outtype']))
+		# reserve 'fromtrace' for particles created from center of the traced results
+		# self.params['labels'] default is None, not []
+		if self.params['labels'] and 'fromtrace' in self.params['labels']:
+			apDisplay.printError('"fromtrace" is a reserved label. Use another name')
+		if self.params['labels'] and '_trace' in self.params['labels']:
+			apDisplay.printError('"_trace" is a reserved label for centers created from traced object. You can cause confusion if you mean other things')
 		return
 
 

@@ -89,6 +89,7 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 		$img = blankimage(512);
 		return $img;
 	}
+
 	$childimginfo = $leginondata->getImageInfo($imageId);
 
 	$shownimginfo = $leginondata->getImageInfo($parentId);
@@ -368,8 +369,8 @@ function addAppionOverlays($leginondata,$img,$childinfo,$imginfo,$p) {
 					$linearpoints = array();
 					$pointcount = count($t);
 					foreach ($t as $point) {
-						$linearpoints[] = $point['x'] * $selectionparams['bin'] / $display_bin ;
-						$linearpoints[] = $point['y'] * $selectionparams['bin'] / $display_bin ;
+						$linearpoints[] = $point['x'] / $display_bin ;
+						$linearpoints[] = $point['y'] / $display_bin ;
 					}
 					drawpolygon($img,$linearpoints,$col,true);
 				}
