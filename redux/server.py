@@ -38,7 +38,7 @@ class RequestHandler(SocketServer.StreamRequestHandler):
 			timestamp = str(time.time())
 			result = 'REDUX ERROR ' + timestamp + ' ' + str(e)
 			sys.stderr.write(timestamp+'\n')
-			raise
+			sys.stderr.write(result+'\n')
 		finally:
 			self.wfile.write(result)
 			self.wfile.flush()
