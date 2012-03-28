@@ -42,9 +42,13 @@ class imageUtil{
 	// Fit the image into the frame size with aspect ratio preserved	
 	function imageFitIn($dimx, $dimy, $frame_size){
 		$ratio = max($dimx,$dimy) / $frame_size;
-		$dimx = (int) ($dimx / $ratio);
-		$dimy = (int) ($dimy / $ratio);
-		
+		if ($ratio > 0) {
+			$dimx = (int) ($dimx / $ratio);
+			$dimy = (int) ($dimy / $ratio);
+		} else {
+			$dimx = $frame_size;
+			$dimy = $frame_size;
+		}
 		return array($dimx, $dimy);
 	}
 

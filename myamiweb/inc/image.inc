@@ -85,9 +85,11 @@ function getImage($sessionId, $imageId, $preset, $params = array()) {
 
 	$parentId = getImageIdFromPreset($leginondata,$imageId,$preset);
 	$pic = __getImageFile($leginondata,$parentId,$p['loadjpg'],$p['fft']);
-	if (!$pic) {
-		$img = blankimage(512);
-		return $img;
+
+	if (!$pic || !is_file($pic)) {
+		$messages = array('File not found: ');
+		$messages[] = $pic;
+		return makeBlankImageWithErrorMessage($messages);
 	}
 
 	$childimginfo = $leginondata->getImageInfo($imageId);
@@ -140,6 +142,18 @@ function getImageXML($xmlfile, $imageId, $preset, $params = array()) {
 	}
 }	
 
+function makeBlankImageWithErrorMessage($error_text) {
+	$img = blankimage(512);
+	$error_text_array = (is_array($error_text)) ? $error_text: array($error_text);
+	$yoffset = 31;
+	foreach ($error_text_array as $text) {
+		imagestring($img, 4, 21, $yoffset, $text, imagecolorallocate($img,0,0,255));
+		$yoffset += 20;
+	}
+	return $img;
+	
+}
+
 function getImageFromRequester($pic,$imginfo,$p) {
 	/* This function get image in the required dimension, 
 			format, and pixel processing. Scale bar and ring
@@ -185,11 +199,14 @@ function getImageFromRequester($pic,$imginfo,$p) {
 		$imgstr = $imagerequest->requestImage($tmpfile,'JPEG',$xyDim,$scaletype,$arg1,$arg2,$lpf_sigma,false,$p['fft']);
 		unlink($tmpfile);
 	}
+	if (!$imgstr) {
+		return makeBlankImageWithErrorMessage('redux failed to return anything');
+	}
+	if (substr($imgstr,0,11) === 'REDUX ERROR') {
+		return makeBlankImageWithErrorMessage($imgstr);
+	}
 	$img = imagecreatefromstring($imgstr);
 	$display_pixelsize = getDisplayPixelSize($img,$imginfo,$p['fft'],$p['fftbin'],$prefftDim);
-	if (!$img) {
-		$img = blankimage(512);
-	}
 	if ($p['scalebar']) 
 		$img = addScaleBarRingToImage($img,$display_pixelsize,$p['fft'],$p['fftbin']);
 	// This is a good place to add debug message as a string on the image

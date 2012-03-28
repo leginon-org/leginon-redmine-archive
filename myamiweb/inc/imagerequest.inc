@@ -37,7 +37,7 @@ class imageRequester {
 	}
 
 	function requestInfo($filepath) {
-		if (empty($filepath)) return false;
+		if (empty($filepath) || !is_file($filepath)) return false;
 		$redux = new redux($filepath, 'JSON');
 		$redux->setInfo(true);
 
