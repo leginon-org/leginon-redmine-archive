@@ -4,6 +4,7 @@ import SocketServer
 import logging
 import time
 import sys
+import traceback
 
 # local
 import redux.utility
@@ -38,7 +39,7 @@ class RequestHandler(SocketServer.StreamRequestHandler):
 			timestamp = str(time.time())
 			result = 'REDUX ERROR ' + timestamp + ' ' + str(e)
 			sys.stderr.write(timestamp+'\n')
-			sys.stderr.write(result+'\n')
+			traceback.print_exc(file=sys.stderr)
 		finally:
 			self.wfile.write(result)
 			self.wfile.flush()
