@@ -2,6 +2,8 @@
 
 import SocketServer
 import logging
+import time
+import sys
 
 # local
 import redux.utility
@@ -32,14 +34,14 @@ class RequestHandler(SocketServer.StreamRequestHandler):
 			else:
 				pipeline = redux.pipeline.pipeline_by_preset('standard')
 			result = pipeline.process(**kwargs)
-		except redux.exceptions.ArgumentError, e:
-			result = e.error_detail()
 		except Exception, e:
+			timestamp = str(time.time())
+			result = 'REDUX ERROR ' + timestamp + ' ' + str(e)
+			sys.stderr.write(timestamp+'\n')
 			raise
-			exc_str = str(e)
-			result = 'Unhandled exception:  %s' % (exc_str,)
-		self.wfile.write(result)
-		self.wfile.flush()
+		finally:
+			self.wfile.write(result)
+			self.wfile.flush()
 
 #class Server(SocketServer.ForkingMixIn, SocketServer.TCPServer):
 class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
