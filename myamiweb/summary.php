@@ -182,7 +182,7 @@ echo "<table border='0'>\n";
 echo "</table>\n";
 echo "</td>";
 echo "</tr>";
-$presets = $leginondata->getDatatypes($expId);
+$presets = $leginondata->getDataTypes($expId);
 	echo "<tr>";
 	echo "<td colspan='2'>";
 	echo divtitle("Image Stats");
@@ -391,14 +391,14 @@ if ($particle->hasCtfData($sessionId)) {
 			foreach($data as $k=>$v) {
 				$preset = $bestctf[$field][$k]['name'];
 				if ($field !='difference') {
-					$cdf='<a href="processing/ctfgraph.php?&hg=1&Id='.$sessionId
+					$cdf='<a href="processing/ctfgraph.php?expId='.$sessionId.'&hg=1'
 							.'&s=1&f='.$field.'&preset='.$preset.''.$urlmconf.'">'
-							.'<img border="0" src="processing/ctfgraph.php?w=150&hg=1&Id='.$sessionId
+							.'<img border="0" src="processing/ctfgraph.php?w=150&hg=1&expId='.$sessionId
 							.'&s=1&f='.$field.'&preset='.$preset.''.$urlmconf.'"></a>';
 				} else {	
-					$cdf='<a href="processing/autofocacegraph.php?&hg=0&Id='.$sessionId
+					$cdf='<a href="processing/autofocacegraph.php?hg=0&expId='.$sessionId
 							.'&s=1&f='.$field.'&preset='.$preset.''.$urlmconf.'">'
-							.'<img border="0" src="processing/autofocacegraph.php?w=150&hg=0&Id='.$sessionId
+							.'<img border="0" src="processing/autofocacegraph.php?w=150&hg=0&expId='.$sessionId
 							.'&s=1&f='.$field.'&preset='.$preset.''.$urlmconf.'"></a>';
 				}
 				$bestctf[$field][$k]['img'] = $cdf;

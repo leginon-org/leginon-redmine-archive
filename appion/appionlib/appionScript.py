@@ -29,7 +29,7 @@ from pyami import version
 #=====================
 class AppionScript(basicScript.BasicScript):
 	#=====================
-	def __init__(self,optargs=sys.argv[1:],quiet=False,useglobalparams=True):
+	def __init__(self,optargs=sys.argv[1:],quiet=False,useglobalparams=True,maxnproc=None):
 		"""
 		Starts a new function and gets all the parameters
 		"""
@@ -38,7 +38,8 @@ class AppionScript(basicScript.BasicScript):
 		self.clusterjobdata = None
 		self.params = {}
 		sys.stdout.write("\n\n")
-		self.quiet = False
+		self.quiet = quiet
+		self.maxnproc = maxnproc
 		self.startmem = mem.active()
 		self.t0 = time.time()
 		self.createDefaultStats()
@@ -316,8 +317,6 @@ class AppionScript(basicScript.BasicScript):
 
 	#=====================
 	def close(self):
-		### run custom closing functions
-		self.onClose()
 		### run basic script closing functions
 		basicScript.BasicScript.close(self)
 		apDisplay.printMsg("Run directory:\n "+self.params['rundir'])
@@ -357,8 +356,14 @@ class AppionScript(basicScript.BasicScript):
 
 		self.parser.add_option("--expid", "--expId", dest="expid", type="int",
 			help="Session id associated with processing run, e.g. --expId=7159", metavar="#")
+		self.parser.add_option("--nproc", dest="nproc", type="int",
+			help="Number of processor to use", metavar="#")
+
+		# jobtype is a dummy option for now so that it is possible to use the same command line that
+		# is fed to runJob.py to direct command line running.  Do not use the resulting param.
 		self.parser.add_option("--jobtype", dest="jobtype",
 			help="Job Type of processing run, e.g., partalign", metavar="X")
+
 
 
 	#=====================
@@ -370,6 +375,10 @@ class AppionScript(basicScript.BasicScript):
 			apDisplay.printError("enter a runname, e.g. --runname=run1")
 		if self.params['projectid'] is None:
 			apDisplay.printError("enter a project id, e.g. --projectid=159")
+		if self.maxnproc is not None and self.params['nproc'] is not None:
+			if self.params['nproc'] > self.maxnproc:
+				apDisplay.printWarning('You have specify --nproc=%d.\n  However,we know from experience larger than %d processors in this script can cause problem.\n  We have therefore changed --nproc to %d for you.' % (self.params['nproc'],self.maxnproc,self.maxnproc))
+				self.params['nproc'] = self.maxnproc
 
 	#######################################################
 	#### ITEMS BELOW CAN BE SPECIFIED IN A NEW PROGRAM ####
@@ -489,6 +498,8 @@ class AppionScript(basicScript.BasicScript):
 			time.wait(60)
 			stdout_value = proc.communicate()[0]
 		try:
+			logdir = os.path.dirname(logfilepath)
+			apParam.createDirectory(logdir)
 			file = open(logfilepath,'w')
 		except:
 			apDisplay.printError('Log file can not be created, process did not run.')

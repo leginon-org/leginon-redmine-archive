@@ -393,7 +393,7 @@ class UploadMaxLikeScript(appionScript.AppionScript):
 
 	#=====================
 	def createAlignedStacks(self, partlist, origstackfile):
-		partperiter = 4096
+		partperiter = min(4096,apImagicFile.getPartSegmentLimit(origstackfile))
 		numpart = len(partlist)
 		if numpart < partperiter:
 			partperiter = numpart
@@ -632,7 +632,7 @@ class UploadMaxLikeScript(appionScript.AppionScript):
 
 #=====================
 if __name__ == "__main__":
-	maxLike = UploadMaxLikeScript(True)
+	maxLike = UploadMaxLikeScript()
 	maxLike.start()
 	maxLike.close()
 

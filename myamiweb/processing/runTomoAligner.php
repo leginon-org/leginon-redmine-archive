@@ -64,17 +64,18 @@ function createTomoAlignerForm($extra=false, $title='tomoaligner.py Launcher', $
 	$tiltseriesId = ($_POST['tiltseriesId']) ? $_POST['tiltseriesId'] : NULL;
 	$tiltseriesId2 = ($_POST['tiltseriesId2']) ? $_POST['tiltseriesId2'] : NULL;
 	// Set alignmethod
-	$defaultmethod = 'protomo2';
+	$defaultmethod = ($lastalignerId)? 'protomo': 'leginon';
 	$alignmethod = ($_POST['alignmethod']) ? $_POST['alignmethod'] : $defaultmethod;
+	$leginoncheck = ($_POST['alignmethod'] == 'leginon' || !($_POST['alignmethod'])) ? "CHECKED" : "";
 	$protomocheck = ($_POST['alignmethod'] == 'protomo') ? "CHECKED" : "";
 	$raptorcheck = ($_POST['alignmethod'] == 'raptor') ? "CHECKED" : "";
-	$protomo2check = ($_POST['alignmethod'] == 'protomo2' || !($_POST['alignmethod'])) ? "CHECKED" : "";
+	$protomo2check = ($_POST['alignmethod'] == 'protomo2') ? "CHECKED" : "";
 	# For Jensen Lab
 	#$raptorcheck = ($_POST['alignmethod'] == 'raptor' || !($_POST['alignmethod'])) ? "CHECKED" : "";
 	#$protomo2check = ($_POST['alignmethod'] == 'protomo2') ? "CHECKED" : "";
 	$imodcheck = ($_POST['alignmethod'] == 'imod-shift') ? "CHECKED" : "";
 
-	$runtypes = array('raptor'=>'raptor','imod-shift'=>'imodxc','protomo'=>'protomo', 'protomo2'=>'protomo');
+	$runtypes = array('leginon'=>'leginon','raptor'=>'raptor','imod-shift'=>'imodxc','protomo'=>'protomo', 'protomo2'=>'protomo');
 	$alignruns = $particle->countTomoAlignmentRuns($tiltseriesId);
 	$autorunname = ($alignruns) ? $runtypes[$alignmethod].($alignruns+1):$runtypes[$alignmethod].'1';
 	$runname = ($_POST && $_POST['lasttiltseries']==$tiltseriesId && $_POST['lastalignmethod']==$alignmethod && $_POST['lastrunname'] && $_POST['lastrunname']!=$_POST['runname']) ? $_POST['runname']:$autorunname;
@@ -223,15 +224,19 @@ function createTomoAlignerForm($extra=false, $title='tomoaligner.py Launcher', $
       <textarea name='description' ROWS='2' COLS='40'>$description</textarea>
 			<p>\n";
 	echo docpop('tomoalignmethod', 'Method');
-	echo "&nbsp;<input type='radio'onClick=submit() name='alignmethod' value='protomo2' $protomo2check>\n";
-	echo "Protomo 2<font size=-2><i>(default)</i></font>\n";
+	echo "&nbsp;<input type='radio'onClick=submit() name='alignmethod' value='leginon' $leginoncheck>\n";
+	echo "Leginon alignment<i>(default)</i>\n";
 	echo "&nbsp;<input type='radio'onClick=submit() name='alignmethod' value='protomo' $protomocheck>\n";
 	echo "Protomo refinement\n";
 	if (!$lastalignerId) {
 		echo "&nbsp;<input type='radio' onClick=submit() name='alignmethod' value='imod-shift' $imodcheck>\n";
 		echo "Imod shift-only alignment\n";
-		echo "&nbsp;<input type='radio'onClick=submit() name='alignmethod' value='raptor' $raptorcheck>\n";
-		echo "Raptor<font size=-2><i></i></font>\n";
+		if (HIDE_FEATURE === false) {
+			echo "&nbsp;<input type='radio'onClick=submit() name='alignmethod' value='raptor' $raptorcheck>\n";
+			echo "Raptor<font size=-2><i></i></font>\n";
+			echo "&nbsp;<input type='radio'onClick=submit() name='alignmethod' value='protomo2' $protomo2check>\n";
+			echo "Protomo 2<font size=-2></font>\n";
+		}
 		echo "<input type='hidden' name='lastalignmethod' value='$alignmethod'>\n";
 	}
   echo "</td>

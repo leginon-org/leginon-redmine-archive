@@ -79,8 +79,6 @@ require_once('../inc/formValidator.php');
 				wizard_form.temp_images_dir.readOnly = false;
 				wizard_form.default_appion_path.style.backgroundColor = "#ffffff";
 				wizard_form.default_appion_path.readOnly = false;
-				wizard_form.defaultcs.style.backgroundColor = "#ffffff";
-				wizard_form.defaultcs.readOnly = false;
 				wizard_form.addHost.disabled = false;
 				wizard_form.removeHost.disabled = false;
 				wizard_form.addCluster.disabled = false;
@@ -102,9 +100,6 @@ require_once('../inc/formValidator.php');
 				wizard_form.default_appion_path.style.backgroundColor = "#eeeeee";
 				wizard_form.default_appion_path.readOnly = true;
 				wizard_form.default_appion_path.value = "";
-				wizard_form.defaultcs.style.backgroundColor = "#eeeeee";
-				wizard_form.defaultcs.readOnly = true;
-				wizard_form.defaultcs.value = "";
 				wizard_form.addHost.disabled = true;
 				wizard_form.removeHost.disabled = true;
 				wizard_form.addCluster.disabled = true;
@@ -129,14 +124,15 @@ require_once('../inc/formValidator.php');
 			}
 		}
 
+		// TODO: there must be a way to improve this so it is easier to add new parameters
 		function addRowToTable(host, nodesdef,nodesmax,ppndef,ppnmax,reconpn,walltimedef,
-				walltimemax,cputimedef,cputimemax,memorymax,appionbin,baseoutdir,
+				walltimemax,cputimedef,cputimemax,memorymax,appionbin,appionlibdir,baseoutdir,
 				localhelperhost,dirsep,wrapperpath,loginmethod,loginusername,passphrase,publickey,privatekey)
 		{
 			var tbl = document.getElementById('hosts');
 			var lastRow = tbl.rows.length;
 
-			var rowsPerIter = 21;
+			var rowsPerIter = 22;
 
 			// if there's no header row in the table, then iteration = lastRow + 1
 			var iteration = lastRow / rowsPerIter;
@@ -319,6 +315,21 @@ require_once('../inc/formValidator.php');
 		  	el.type = 'text';
 		  	el.name = 'processing_hosts['+iteration+'][appionbin]';
 		  	el.value = appionbin;
+		  	el.size = 30;
+		  	cellRight.appendChild(el);
+
+		  	// get the path to the appion lib dir, must end in slash, e.g., /usr/local/appion/appionlib/
+			var rowLib = tbl.insertRow(lastRow);
+			lastRow = lastRow +1;
+			var cellFirst = rowLib.insertCell(0);
+		  	var textNode = document.createTextNode("Path to appionlib directory :");
+		  	cellFirst.appendChild(textNode);
+		  
+		  	var cellRight = rowLib.insertCell(1);
+		  	var el = document.createElement('input');
+		  	el.type = 'text';
+		  	el.name = 'processing_hosts['+iteration+'][appionlibdir]';
+		  	el.value = appionlibdir;
 		  	el.size = 30;
 		  	cellRight.appendChild(el);
 
@@ -528,6 +539,7 @@ require_once('../inc/formValidator.php');
 			'".$processingHost['cputimemax']."', 
 			'".$processingHost['memorymax']."', 
 			'".$processingHost['appionbin']."', 
+			'".$processingHost['appionlibdir']."', 
 			'".$processingHost['baseoutdir']."', 
 			'".$processingHost['localhelperhost']."', 
 			'".$processingHost['dirsep']."', 

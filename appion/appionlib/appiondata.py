@@ -402,6 +402,7 @@ class ApCtfTiltParamsData(Data):
 			('resmin', float),
 			('resmax', float),
 			('defstep', float),
+			('dast', float),
 		)
 	typemap = classmethod(typemap)
 
@@ -1821,7 +1822,6 @@ class ApFullTomogramRunData(Data):
 			('runname', str),
 			('path', ApPathData),
 			('method', str),
-			('excluded', list),
 		)
 	typemap = classmethod(typemap)
 
@@ -1855,6 +1855,8 @@ class ApFullTomogramData(Data):
 			('description', str),
 			('zprojection', leginon.leginondata.AcquisitionImageData),
 			('hidden', bool),
+			('excluded', list),
+			('reconparam', ApTomoReconParamsData),
 		)
 	typemap = classmethod(typemap)
 
@@ -1898,6 +1900,16 @@ class ApTomoAvgParticleData(Data):
 			('subtomo', ApTomogramData),
 			('aligned_particle', ApAlignParticleData),
 			('z_shift', float),
+		)
+	typemap = classmethod(typemap)
+
+class ApTomoReconParamsData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('tilt_angle_offset', float),
+			('z_shift', float),
+			('tilt_axis_tilt_out_xyplane', float),
+			('tilt_axis_rotation_in_xyplane', float),
 		)
 	typemap = classmethod(typemap)
 

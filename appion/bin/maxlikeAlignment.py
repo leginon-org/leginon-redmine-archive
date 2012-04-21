@@ -40,9 +40,6 @@ class MaximumLikelihoodScript(appionScript.AppionScript):
 		self.parser.add_option("-s", "--stack", dest="stackid", type="int",
 			help="Stack database id", metavar="ID#")
 
-		self.parser.add_option("--nproc", dest="nproc", type="int",
-			help="Number of processor to use", metavar="ID#")
-
 		self.parser.add_option("--clip", dest="clipsize", type="int",
 			help="Clip size in pixels (reduced box size)", metavar="#")
 		self.parser.add_option("--lowpass", "--lp", dest="lowpass", type="int",
@@ -319,7 +316,7 @@ class MaximumLikelihoodScript(appionScript.AppionScript):
 		f = open("readyupload.sql", "w")
 		f.write(query)
 		f.close()
-		apDisplay.printMsg("mysql -u usr_object -h cronus4 ap"+str(self.params['projectid'])+" < readyupload.sql")
+		apDisplay.printMsg("mysql -u usr_object -h database_host ap"+str(self.params['projectid'])+" < readyupload.sql")
 		apDisplay.printMsg("tar cf particles.tar partlist.sel partfiles/")
 		apDisplay.printMsg("rsync -vaP "+jobfile+" cluster:"+rundir+"/")
 		apDisplay.printMsg("rsync -vaP particles.tar cluster:"+rundir+"/")
@@ -457,7 +454,7 @@ class MaximumLikelihoodScript(appionScript.AppionScript):
 
 #=====================
 if __name__ == "__main__":
-	maxLike = MaximumLikelihoodScript(True)
+	maxLike = MaximumLikelihoodScript()
 	maxLike.start()
 	maxLike.close()
 

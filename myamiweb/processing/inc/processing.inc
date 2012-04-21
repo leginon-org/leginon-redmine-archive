@@ -15,6 +15,8 @@ require_once "inc/ssh.inc";
 require_once "inc/session.inc";
 require_once "inc/project.inc";
 require_once "inc/cluster.inc";
+require_once "html_elements.inc";
+require_once "publication.inc";
 
 define('DONE_PIC','img/green_circle.gif');
 define('NONE_PIC','img/red_circle.gif');
@@ -83,6 +85,7 @@ function getProcessString()
 	return $_POST['process'];
 }
 
+// consider making this a static function in cluster.inc
 function getHosts(){
 	global $PROCESSING_HOSTS;
 	if (is_array($PROCESSING_HOSTS))
@@ -262,6 +265,12 @@ function processing_header($title,$heading=false,$headerstuff=false,$pleaseWait=
 	$html.= "<li><b>Project:</font></b> ".$proj_link."</li>\n";
 	if ($session_link) $html.= "<li><b>Session:</b> ".$session_link."</li>\n";
 	if ($expinfo) $html.= "<li><b>Image Path:</b> ".$expinfo['Image path']."</li>\n";
+	
+	// To display a notice to users on the processing header, add the following line to the myami/config.php file:
+	// define('STARTUP_MESSAGE', "Your Message here");
+	if (defined('STARTUP_MESSAGE') && STARTUP_MESSAGE != '') {
+		$html.= "<li><b>Important Notice:</b> ".STARTUP_MESSAGE."</li>\n";
+	}
 
 	$html.= "</ul>\n";
 	$html.= "</div>\n"; // close bottomcontent div
@@ -413,16 +422,12 @@ function streamToArray($stream) {
 }
 
 
-function getNumberOfProcsPerNode($processingHost) {
-	global $PROCESSING_HOSTS;
-
-	foreach ($PROCESSING_HOSTS as $host){
-		if ($host['host'] == $processingHost){
-			$numOfNode = $host['nproc'];
-			break;
-		}
-	}
-	return $numOfNode;
+function getNumberOfProcsPerNode( $processingHost ) 
+{
+	$cluster = new Cluster( $processingHost );
+	$ppn = $cluster->getPpnDef();
+	
+	return $ppn;
 }
 
 function getNumberOfRequiredNodes($nproc, $ppn) 
@@ -478,7 +483,7 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc, $testimg=Fal
 		*/
 	$expId=$_GET['expId'];
 	// uploadimage jobtype need to be handled differently since it has none of these
-	if ($jobtype != 'uploadimage') {
+	if ($jobtype != 'uploadimage' && $jobtype != 'etomorecon') {
 		// get required inputs
 		if (!is_numeric($expId) || $expId == 0) 
 			return "<B>ERROR:</B> undefined expId";
@@ -716,15 +721,7 @@ function addJobSubmitParams( $command, $processhost, $nproc, $ppn, $nodes, $wall
 	}
 	
 	// Add processing host parameters to the command
-	// TODO: when is the command ever an array??? should it always be an array that sometimes has len=1??
-	// Commenting this out for now, if no problems it can be removed
-//	if (is_array($command)) {
-//		foreach ($command as $cmd) {
-//			$cmd = addProcessingHostParams($cmd, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime);
-//		}
-//	} else {
-		$command = addProcessingHostParams($command, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime);
-//	}
+	$command = addProcessingHostParams($command, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime);
 	
 	return $command;
 }
@@ -735,7 +732,7 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 	global $DATA_DIRS;
 
 	$allow_processing = checkExptAdminPrivilege($expId,'data');
-	if (!$allow_processing) return "processing not allowed by this user";
+	if (!$allow_processing) return "processing not allowed by this user for experiment id: $expId";
 
 	$processhost = getSelectedProcessingHost();
 	$webserver = $_SERVER['SERVER_ADDR'];
@@ -744,24 +741,6 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 
 	// Add parameters that are only needed if submitting the job from the web server
 	$command = addJobSubmitParams( $command, $processhost, $nproc, $ppn, $nodes, $walltime, $cputime );
-	
-	// check if database is configured on processing host
-//	$cmd = "python -c 'import sinedon; print sinedon.getConfig(\"leginondata\")'";	
-//	$dbcheck = exec_over_ssh($processhost, $user, $pass, $cmd, True);
-//	if ($dbcheck === false){
-//		//Return a more accurate error message		
-//		$errMsg = "Could not connect to $processhost: ";
-//		$errMsg .= pconnError();
-//		return $errMsg;
-//	}	
-//
-//	if (trim($dbcheck)=='') return "sinedon is not configured for leginondata, check your sinedon.cfg file";
-//	
-//	if($expId != 000){
-//		$cmd = "python -c 'import sinedon; print sinedon.getConfig(\"appiondata\")'";
-//		$dbcheck = exec_over_ssh($processhost,$user,$pass,$cmd,True);
-//		if (trim($dbcheck) == '') return "sinedon is not configured for appiondata, check your sinedon.cfg file";
-//	}
 	
 	//Check if filesystem is full
 	$cmd = "df $outdir";
@@ -802,19 +781,26 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 	// create run directory on processing host only.  Do not do anything on
 	// the webserver, doing so requires making poor assumptions. 
 	$cmd = "mkdir -p $rundir;";
-	$rvalue = exec_over_ssh($processhost, $user, $pass, $cmd, True);
+	$rvalue = exec_over_ssh($processhost, $user, $pass, $cmd, false);
 	if ($rvalue === false ){
 		$errMsg = "Could not create run directory on $processhost: ";
 		$errMsg .= pconnError();
 		return $errMsg;
 	}
+	// check that the directory was created successfully
+	$fileExists = file_exists($rundir);
+  	if ($fileExists===false) {
+  		$errMsg = "Warning: The output directory (<font color=black>$rundir</font>) may not have been created on $processhost.  <br>";
+  		// Don't return yet, perhaps we don't have access to the dir from the web server.
+  		// This message will be prepended to a later occuring error.
+  	}
 	
 	if ($testimg) {
 		//submit directly to head node on cluster if testing 1 image
 		$cmd = "cd $rundir; $command; exit;";
 		$jobdata = exec_over_ssh($processhost, $user, $pass, $cmd, True);
 		if ( empty($jobdata) ) {		
-			$errMsg = "Job submission to $processhost failed for command: $command Message: ";
+			$errMsg .= "Job submission to $processhost failed for command:<br> <font color=black size='-1'>$command</font> <br> ";
 			$errMsg .= pconnError();
 			return $errMsg;
 		} else {
@@ -822,14 +808,10 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 		}
 	}
 
-	// set names of cluster job file and output log
-	// Changing this, not sure why appionsub is being added to the name...AH
-	// May need to change back in case of Armageddon
+	// Set names of cluster job file and output log
+	// These should match the names being assigned on the python side where the files are created
 	$jobfile = "$runname.appionsub.job";
 	$logfile = "$runname.appionsub.log";
-	// These should match the names being assigned on the python side where the files are created
-	//$jobfile = "$runname.job";
-	//$logfile = "$runname.log";
 	
 	// insert cluster job data and set job as queued
 	$particle = new particleData();
@@ -856,7 +838,7 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 	// submit job to cluster
 	$jobdata = exec_over_ssh($processhost, $user, $pass, $cmd, True);
 	if ( empty($jobdata) ) {		
-		$errMsg = "Error: Job submission to $processhost failed:  ";
+		$errMsg .= "Error: Job submission to $processhost failed. <br>  ";
 		$errMsg .= pconnError();
 		echo "</table><p>\n";
 		echo "<hr>\n<font color='#CC3333' size='+1'>$errMsg</font>\n";
@@ -906,19 +888,53 @@ $xvfb=False, $xtra=False, $nproc=1, $ppn=0, $nodes=0, $walltime="240", $cputime=
 }
 
 /**************************************/
-function writeTestResults($jpg,$ccclist,$bin,$process_str=''){
-	if (!file_exists($jpg)) {
+function writeTestResults($jpg,$ccclist,$bin,$process_str='')
+{
+	// First, see if we are just showing the command
+	if ($process_str === '') {
+		$process_str = getProcessString();
+	}
+	$fileExists = file_exists($jpg);
+  	if ( ($fileExists===false) && (preg_match('/[Ss]how/',$process_str)) ) {
+		return "<font color='#990000'>The test results are not ready for display. Refresh the page after the command is run successfully. </font><br />\n";
+  	}
+	
+	
+	// refs #1706. Give the test command a chance to complete. For some reason,
+	// the file_exists() function does not seem to detect the existance of the file
+	// in a timely manner. This will often loop for 30 seconds, even if the file 
+	// existed 7 seconds into the loop. Not sure why.
+	$start_time 	= time();
+  	$max_time 		= 60; // constant, max time in seconds that we will wait for processing to complete 
+  	$curr_wait_time = 0; // the number of seconds this function has waited for the processing to complete
+	$mod_time 		= 0; // seconds since an existing file was modified 
+	// $max_mod_time : constant, if the file was modified within this many seconds of the current time, 
+	// assume it is new and not the result of a previous run. In my testing, the actual time got up to 24 seconds.
+	$max_mod_time	= 35;  
+  	
+  	// Make sure we don't show the user a previous test result, and processing has completed.
+	// Wait for 1. the file to exist, 2. an existing file to be modified, or 3. timer to run out
+	do {
+  		clearstatcache(); // filemtime() and file_exists() results are cached, clear it.
+		$fileExists = file_exists($jpg);
+  		if ($fileExists) {
+			$file_time = filemtime($jpg);
+			$mod_time = abs($start_time - $file_time);
+  		}
+
+		$curr_wait_time = time() - $start_time;	
+	
+	} while ( (($fileExists===false) || ($mod_time > 35)) && ($curr_wait_time < $max_time ) );
+  	  	
+  	clearstatcache(); // filetime() and file_exists() results are cached, clear it.
+  	$fileExists = file_exists($jpg);
+  	if ($fileExists===false) {
 		$base = basename($jpg);
 		$dir = dirname($jpg);
-		if ($process_str === '') {
-			$process_str = getProcessString();
-		}
-		if (preg_match('/[Ss]how/',$process_str)) {
-			return "<font color='#990000'>The test results are not ready for display. Refresh the page after the command is run successfully. </font><br />\n";
-		} else {
-			return "<font color='#990000' size='+2'>An Error occurred - the image $base was not found in folder $dir</font><br />\n";
-		}
+		return "<font color='#990000' size='+2'>An Error occurred - the image $base was not found in folder $dir. Try refreshing this page.</font><br />\n";
 	}
+
+	// The results are ready, display them.
 	$html = "<center>\n";
 	$html.= "<a href='loadimg.php?filename=$jpg' target='blank'>\n";
 	$html.= "<img src='loadimg.php?filename=$jpg&h=256'></a>\n";
@@ -1199,116 +1215,32 @@ function getPngList($dir) {
 	return $pngimages;
 }
 
-/**************************************/
-function emanRef() {
-	return referenceBox("EMAN: semiautomated software for high-resolution single-particle reconstructions.", 1999, "Ludtke SJ, Baldwin PR, Chiu W.", "J Struct Biol.", 128, 1, 10600563, false, false, "img/eman_logo.png");
-}
-
-/**************************************/
-function spiderRef() {
-	return referenceBox("SPIDER and WEB: processing and visualization of images in 3D electron microscopy and related fields.", 1996, "Frank J, Radermacher M, Penczek P, Zhu J, Li Y, Ladjadj M, Leith A.", "J Struct Biol.", 116, 1, 8742743, false, false, "img/spider_logo.png");
-}
-
-/**************************************/
-function imagicRef() {
-	return referenceBox("A New Generation of the IMAGIC Image Processing System.", 1996,
-		"van Heel M., Harauz G., Orlova E. V., Schmidt R. & Schatz M", "J Struct Biol", 116, 1, 8742718, false, false, "img/imagic_logo.png");
-}
-
-/**************************************/
-function appionRef() {
-	return referenceBox("Appion: an integrated, database-driven pipeline to facilitate EM image processing.", 2009, "Lander GC, Stagg SM, Voss NR, <i>et&nbsp;al.</i>", "J Struct Biol.", 166, 1, 19263523, 2775544, "10.1016/j.jsb.2009.01.002", "img/topbarbackgrnd.jpg");
-}
-
-/**************************************/
-function frealignRef() {
-	return referenceBox("FREALIGN: high-resolution refinement of single particle structures.", 2007, "Grigorieff, N.", "J Struct Biol.", 157, 1, 16828314, false, "10.1016/j.jsb.2006.05.004", "img/grigorieff_lab.png");
-}
-
-/**************************************/
-function initModelRef() {
-	return referenceBox("A toolbox for ab initio 3-D reconstructions in single-particle electron microscopy.", 2010, "Voss NR, Lyumkis D, Cheng A, <i>et&nbsp;al.</i>", "J Struct Biol.", 169, 3, 20018246, false, false, "img/topbarbackgrnd.jpg");
-}
-
-function imodWeightedBackProjRef() {
-	return referenceBox("Dual-axis tomography: an approach with alignment methods that preserve resolution.", 1997, "D.N. Mastronarde", "J. Struct. Biol.", 120,3, 9441937, false, "doi:10.1006/jsbi.1997.3919", false);
-}
-
-function protomoRef() {
-	return referenceBox("Accurate marker-free alignment with simultaneous geometry determination and reconstruction of tilt series in electron tomography.", 2006, "Winkler H, Taylor KA", "Ultramicroscopy.", 106, 3, 16137829, false, "doi:10.1016/j.ultramic.2005.07.007", false);
-}
-
-function imodRef() {
-	return referenceBox("Computer visualization of three-dimensional image data using IMOD", 1996, "Kremer J.R., D.N. Mastronarde and J.R. McIntosh", "J. Struct. Biol.", 116, 1, 8742726, false, "doi:10.1006/jsbi.1996.0013", false);
-}
-
-function xmippRef() 
-{
-	return referenceBox("XMIPP: a new generation of an open-source image processing package for electron microscopy", 2004, "Sorzano CO, Marabini R, Velázquez-Muriel J, Bilbao-Castro JR, Scheres SH, Carazo JM, Pascual-Montano A.", "J Struct Biol.", 148, 2, 15477099, false, "10.1016/j.jsb.2004.06.006", "img/xmipp_logo.png");
-}
+// These functions return html reference citation boxes
+function emanRef() { return showReference("eman"); }
+function spiderRef() { return showReference("spider"); }
+function imagicRef() { return showReference("imagic"); }
+function appionRef() { return showReference("appion"); }
+function frealignRef() { return showReference("frealign"); }
+function initModelRef() { return showReference("initmodel"); }
+function imodWeightedBackProjRef() { return showReference("imodweightedbackproj"); }
+function protomoRef() { return showReference("protomo"); }
+function imodRef() { return showReference("imod"); }
+function xmippRef() { return showReference("xmipp"); }
 
 // TODO: This should be revisited. 
 function showReference( $method )
 {
-	switch ( $method ){
-		case "eman":
-			return emanRef();
-			break;
-		case "xmipp":
-			return xmippRef();
-			break;
-		case "frealign":
-			return frealignRef();
-			break;
-		case "imagic":
-			return imagicRef();
-			break;
-		case "spider":
-			return spiderRef();
-			break;
-		default:
-			return appionRef();
-	}
+	$pub = new Publication($method);
+	return $pub->getHtmlTable();
 }
 
 /**************************************/
-function referenceBox($title, $year, $authorlist, $journal, $volume=false, $issue=false, $pmid=false, $pmcid=false, $doi=false, $logo=false) {
-	$refbox = "<br/>";
-	$refbox .= "<table class='tablebubble' border='0'><tr><td>\n";
-	if ($logo)
-	$refbox .= "<img height='80' src='$logo'>";
-	$refbox .= "</td><td width='480'>\n";
-	$refbox .= "<h4>If you find this software useful please cite:</h4>\n";
-	$refbox .= "\n";
-	// add period at end of certain fields
-	if (substr($title,-1,1)!='.')
-	$title.='.';
-	if (substr($authorlist,-1,1)!='.')
-	$authorlist.='.';
-	if (substr($journal,-1,1)!='.')
-	$journal.='.';
-
-	$refbox .= "<i>\"$title\"</i>&nbsp;($year)\n";
-	$refbox .= "$authorlist\n";
-	$refbox .= "$journal";
-	if ($volume)
-	$refbox .= " v$volume";
-	if ($issue)
-	$refbox .= "<i>($issue)</i>";
-	$refbox .= ".&nbsp;\n";
-	if ($pmid)
-	$refbox .= "PMID:&nbsp;<a href='http://www.ncbi.nlm.nih.gov/pubmed/$pmid'>$pmid</a>&nbsp;\n";
-	if ($pmcid)
-	$refbox .= "Free text:&nbsp;<a href='http://www.ncbi.nlm.nih.gov/pmc/articles/PMC$pmcid'>PMC$pmcid</a>&nbsp;\n";
-	if ($doi)
-	$refbox .= "DOI:&nbsp;<a href='http://dx.doi.org/$doi'>$doi</a>&nbsp;\n";
-	$refbox .= "\n";
-	$refbox .= "</td></tr></table><br/>\n";
-	return ($refbox);
-	//echo referenceBox(title, year, authorlist, journal, volume, issue, pmid, pmc, doi, logo);
-
+// Moved this function to html_elements class. 
+// TODO: Since this function is called from everywhere, will wait to 
+// remove this wrapper until after 2.2 release.
+function referenceBox($title, $year, $authorlist, $journal, $volume=false, $issue=false, $pmid=false, $pmcid=false, $doi=false, $logo=false) 
+{
+	return html_elements::referenceBox($title, $year, $authorlist, $journal, $volume, $issue, $pmid, $pmcid, $doi, $logo);
 }
-
-
 
 ?>

@@ -116,6 +116,9 @@ if (is_numeric($expId)) {
 	if ($fulltomograms = $particle->getFullTomogramsFromSession($sessionId)) {
 		$fulltomoruns=count($fulltomograms);
 	}
+	if ($etomoruns = $particle->getUnfinishedETomoRunsFromSession($sessionId)) {
+		$etomo_sample=count($etomoruns);
+	};
 	if ($tomograms = $particle->getTomogramsFromSession($sessionId)) {
 		$tomoruns=count($tomograms);
 	}
@@ -635,37 +638,38 @@ if (is_numeric($expId)) {
 //		);
 		$data[] = array(
 			'action' => array($action, $celloption),
-			'result' => array($totresult),
+			'result' => array(),
 			'newrun' => array($nruns, $celloption),
 		);
 	}
 
 	//HELICAL PROCESSSING
-	$action = "Helical Processing";
-	$hipresults=array();
-	$hipdone = count($subclusterjobs['helical']['done']);
-	$hiprun = count($subclusterjobs['helical']['running']);
-	$hipq = count($subclusterjobs['helical']['queued']);
+	if ($stackruns > 0) {
+		$action = "Helical Processing";
+		$hipresults=array();
+		$hipdone = count($subclusterjobs['helical']['done']);
+		$hiprun = count($subclusterjobs['helical']['running']);
+		$hipq = count($subclusterjobs['helical']['queued']);
 
-	$hipresults[] = ($hipdone==0) ? "" : "<a href='hipsummary.php?expId=$sessionId'>$hipdone complete</a>";
-	$hipresults[] = ($hiprun==0) ? "" : "<a href='listAppionJobs.php?expId=$sessionId&jobtype=Helical'>$hiprun running</a>";
-	$hipresults[] = ($hipq==0) ? "" : "<a href='listAppionJobs.php?expId=$sessionId&jobtype=Helical'>$hipq queued</a>";
+		$hipresults[] = ($hipdone==0) ? "" : "<a href='hipsummary.php?expId=$sessionId'>$hipdone complete</a>";
+		$hipresults[] = ($hiprun==0) ? "" : "<a href='listAppionJobs.php?expId=$sessionId&jobtype=Helical'>$hiprun running</a>";
+		$hipresults[] = ($hipq==0) ? "" : "<a href='listAppionJobs.php?expId=$sessionId&jobtype=Helical'>$hipq queued</a>";
 
-	$nrun=array();
-	$nrun[] = array(
-		'name'=>"<a href='runHIP.php?expId=$sessionId'>Helical Image Processing (PHOELIX)</a>",
-		'result'=>$hipresults,
-	);
+		$nrun=array();
+		$nrun[] = array(
+			'name'=>"<a href='runHIP.php?expId=$sessionId'>Helical Image Processing (PHOELIX)</a>",
+			'result'=>$hipresults,
+		);
 
-	$result = ($hipruns==0) ? "" :
-		"<a href='hipsummary.php?expId=$sessionId'>$hipruns</a>\n";
+		$result = ($hipruns==0) ? "" :
+			"<a href='hipsummary.php?expId=$sessionId'>$hipruns</a>\n";
 
-	$data[]=array(
-		'action' => array($action, $celloption),
-		'result' => array($result),
-		'newrun' => array($nrun, $celloption),
-	);
-
+		$data[]=array(
+			'action' => array($action, $celloption),
+			'result' => array($result),
+			'newrun' => array($nrun, $celloption),
+		);
+	}
 
 	// display the tomography menu only if there are tilt serieses
 	if ($tiltruns > 0) {
@@ -701,12 +705,13 @@ if (is_numeric($expId)) {
 		
 		// get full tomogram making stats:
 		$tmresults=array();
-		$tmdone = $fulltomoruns;
+		$tmdone = $fulltomoruns - $etomo_sample;
 		$tmrun = count($subclusterjobs['tomomaker']['running']);
 		$tmq = count($subclusterjobs['tomomaker']['queued']);
 		$tmresults[] = ($tmdone==0) ? "" : "<a href='tomosummary.php?expId=$sessionId'>$tmdone complete</a>";
 		$tmresults[] = ($tmrun==0) ? "" : "<a href='listAppionJobs.php?expId=$sessionId&jobtype=tomomaker'>$tmrun running</a>";
 		$tmresults[] = ($tmq==0) ? "" : "<a href='listAppionJobs.php?expId=$sessionId&jobtype=tomomaker'>$tmq queued</a>";
+		$tmresults[] = ($etomo_sample==0) ? "" : "<a href='runETomoMaker.php?expId=$sessionId'>$etomo_sample ready for eTomo</a>";
 		// get subtomogram making stats:
 		$stresults=array();
 		$stdone = $tomoruns;
@@ -847,13 +852,31 @@ if (is_numeric($expId)) {
 	//Crud Finding is not yet working for 2.0 release
 	if (!HIDE_FEATURE)
 	{
-		$nrun = "<a href='runMaskMaker.php?expId=$sessionId'>Crud Finding</a>";
-		$nruns[]=$nrun;
+		$results=array();
+		$cruddone = count($subclusterjobs['maskmaker']['done']);
+		$crudrun = count($subclusterjobs['maskmaker']['running']);
+		$crudqueued = count($subclusterjobs['maskmaker']['queued']);
+		
+		// We can get an inflated count for done if the same job was run more than once.
+		// Not sure yet if $maskruns is for all methods of mask making or just this one...
+		if ( $maskruns < $cruddone )  {
+			$cruddone = $maskruns;
+		}
+
+		$results[] = ($cruddone==0) ? "" : "<a href='maskreport.php?expId=$sessionId'>$cruddone complete</a>";
+		$results[] = ($crudrun==0) ? "" : "<a href='listAppionJobs.php?expId=$sessionId&jobtype=maskmaker'>$crudrun running</a>";
+		$results[] = ($crudqueued==0) ? "" : "<a href='listAppionJobs.php?expId=$sessionId&jobtype=maskmaker'>$crudqueued queued</a>";		
+		
+		$nruns[] = array(
+			'name'=>"<a href='runMaskMaker.php?expId=$sessionId'>Crud Finding</a>",
+			'result'=>$results,
+		);
 	}
+	
 	$nrun = "<a href='manualMaskMaker.php?expId=$sessionId'>";
 	$nrun .= "Manual Masking";
 	$nrun .= "</a>";
-	$nruns[]=$nrun;
+	$nruns[] = $nrun;
 
 	$data[] = array(
 		'action' => array($action, $celloption),

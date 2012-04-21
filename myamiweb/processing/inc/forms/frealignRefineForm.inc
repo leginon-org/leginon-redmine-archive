@@ -18,6 +18,11 @@ class FrealignRefineForm extends BasicRefineForm
 	// return an instance of this refine forms parameter class which is 
 	// an extension of the FormParameters class.
 	public function createFormParams() { return new FrealignParams(); }
+
+	protected function setPublications()
+	{
+		$this->pubKeyList = array("frealign");
+	}
 	
 	// This is where an html form for this recon method's specific parameters is defined. 
 	// Returns html. 

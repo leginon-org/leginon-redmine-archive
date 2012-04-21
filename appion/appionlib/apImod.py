@@ -242,6 +242,45 @@ def createETomoBoundaryModelEDF(processdir, templatedir, seriesname, sample_thic
 	outfile.writelines(lines)
 	outfile.close()
 
+def getETomoExcludeTiltNumber(processdir):
+	values = getETomoParam(processdir,'tilt.com',['EXCLUDELIST ','EXCLUDELIST2 '])
+	excludenumbers = set([])
+	for value in values:
+		bits = value.split(',')
+		excludenumbers = excludenumbers.union(bits)
+	return ','.join(excludenumbers)
+
+def getETomoThickness(processdir,seriesname):
+	values = getETomoParam(processdir,'tilt.com',['THICKNESS '])
+	if len(values) != 1:
+		apDisplay.printError('Tomogram Thickness not found')
+	return int(values[0])
+
+def getETomoBin(processdir,seriesname):
+	edfname = '%s.edf' % (seriesname) 
+	values = getETomoParam(processdir,edfname,['Setup.TomoGenBinningA=','Setup.FinalStackBinningA='])
+	bin = 1
+	for value in values:
+		bin *= int(value)
+	return bin
+
+def getImodZShift(processdir):
+	shift_str = getETomoParam(processdir,'tilt.com',['SHIFT'])[0]
+	bits = shift_str.split(' ')
+	return float(bits[-1])
+		
+def getETomoParam(processdir, filename, searchkeys):
+	paramfile = open(os.path.join(processdir,filename),'r')
+	lines = paramfile.readlines()
+	paramfile.close()
+	values = []
+	for line in lines:
+		for key in searchkeys:
+			if key in line:
+				bits = line.split(key)
+				values.append(bits[-1][:-1])
+	return values
+
 def writeETomoNewstComTemplate(processdir, seriesname):
 	'''
 	etomo needs this template to continue after sampling.
@@ -260,7 +299,7 @@ def writeETomoNewstComTemplate(processdir, seriesname):
 	]
 	writeCommand(processdir,'newst',commands)
 
-def makeFilesForETomoSampleRecon(processdir, stackdir,aligndir, templatedir, seriesname, thickness, pixelsize,has_rotation=False):
+def makeFilesForETomoSampleRecon(processdir, stackdir,aligndir, templatedir, seriesname, thickness, pixelsize,yspacing,has_rotation=False):
 	'''
 	Make or link local files required by etomo to redo sampling, creating tomopitch model, and reconstruct the volume.
 	'''
@@ -281,7 +320,10 @@ def makeFilesForETomoSampleRecon(processdir, stackdir,aligndir, templatedir, ser
 	# required by tomopitch model making
 	tomopitchname = 'tomopitch.com'
 	imodcomdir = os.path.join(os.environ['IMOD_DIR'],'com')
-	shutil.copy(os.path.join(imodcomdir,tomopitchname),os.path.join(processdir,tomopitchname))
+	tomopitchpath = os.path.join(processdir,tomopitchname)
+	shutil.copy(os.path.join(imodcomdir,tomopitchname),tomopitchpath)
+	apFile.replaceUniqueLinePatternInTxtFile(tomopitchpath,'SpacingInY','SpacingInY\t%.1f\n' % yspacing)
+	
 	# required by "Final Aligned Stack" step
 	stackname = '%s.st' % (seriesname)
 	apFile.safeSymLink(os.path.join(stackdir,stackname),os.path.join(processdir,stackname))
@@ -302,8 +344,7 @@ def sampleRecon(stackdir, processdir, aligndir, seriesname, samplesize=10, sampl
 	files_to_copy = [(alignxf,linkxf),(inputparams['rawtilts'],inputparams['tilts'])]
 	for filepair in files_to_copy:
 		apFile.safeCopy(filepair[0],filepair[1])
-	header = mrc.readHeaderFromFile(inputparams['tiltstack'])
-	st_shape = header['shape']
+	st_shape = apFile.getMrcFileShape(inputparams['tiltstack'])
 	# shape is in (z, y, x) size for imod is in (x,y)
 	inputparams['size']=(st_shape[2],st_shape[1])
 	total_tilts = st_shape[0]
@@ -347,8 +388,7 @@ trimvol -x 390,460 -z 477,537 -rx 08aug14f_008_full.rec test.rec
 			lookup = {'y':0,'z':1}
 		else:
 			lookup = {'y':1,'z':0}
-		fulltomoheader = mrc.readHeaderFromFile(inputparams['recon'])
-		fullshape = fulltomoheader['shape']
+		fullshape = apFile.getMrcFileShape(inputparams['recon'])
 		center = list(center)
 		center.append(fullshape[lookup['z']]/2+offsetz)
 		inputparams['zrange0'] = max(1,center[2] - size[2]/2)
@@ -445,8 +485,7 @@ clip avg -2d -iz 0-199 temp.mrc projection.mrc
 			'temp': os.path.join(processdir, "temp.rec"),
 			'project': os.path.join(processdir, seriesname+"_zproject.mrc"),
 		}
-		fulltomoheader = mrc.readHeaderFromFile(inputparams['recon'])
-		fullshape = fulltomoheader['shape']
+		fullshape = apFile.getMrcFileShape(inputparams['recon'])
 		commands = []
 		if rotx or flipyz:
 			op = ''

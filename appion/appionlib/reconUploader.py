@@ -38,8 +38,7 @@ class generalReconUploader(appionScript.AppionScript):
 			help="upload specified iteration(s), comma delimited. e.g. --uploadIterations=1 or --uploadIterations=1,2,3", metavar="list")
 			
 		### standard refinement parameters: these are optional and should only be specified in the absence of a pickle file
-		self.parser.add_option("--nproc", dest="nproc", type="int", default=1,
-			help="number of processors used in upload", metavar="INT")
+		self.parser.set_defaults(nproc=1)
 		self.parser.add_option("--jobid", dest="jobid", type="int",
 			help="jobid of refinement", metavar="INT")
 		self.parser.add_option("--timestamp", dest="timestamp", type="str",
@@ -584,7 +583,9 @@ class generalReconUploader(appionScript.AppionScript):
 			try:
 				resolution = apRecon.getResolutionFromGenericFSCFile(newfscfile, self.runparams['boxsize'], self.runparams['apix'])
 			except:
+				apDisplay.printWarning("Failed to get resolution from generic FSC file: "+newfscfile)
 				resolution = 30
+		apDisplay.printWarning("Running Chimera Snapshot with resolution: %d " % resolution)
 		apChimera.filterAndChimera(volume, resolution, self.runparams['apix'], 
 			self.runparams['boxsize'], 'snapshot', self.params['contour'], self.params['zoom'],
 			sym='c1', mass=self.params['mass'])	

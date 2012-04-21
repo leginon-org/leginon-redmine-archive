@@ -111,12 +111,8 @@ set_include_path(dirname(__FILE__).PATH_SEPARATOR
 // --- if the login and passphrase are false/null	-- //
 // --- the username and password that the user   	-- //
 // --- logs into appion with will be used.			-- //
-// $PROCESSING_HOSTS[] = array('host' => 'myhost.inst.edu',	'nproc' => 32,'nodesdef' => '4','nodesmax' => '280','ppndef' => '32','ppnmax' => '32','reconpn' => '16','walltimedef' => '48','walltimemax' => '240','cputimedef' => '1536','cputimemax' => '10000','memorymax' => '','appionbin' => 'bin/','baseoutdir' => 'appion','localhelperhost' => '','dirsep' => '/','wrapperpath' => 'appion','loginmethod' => 'SHAREDKEY','loginusername' => '','passphrase' => '','publickey' => 'rsa.pub','privatekey' => 'rsa'	);
+// $PROCESSING_HOSTS[] = array('host' => 'myhost.inst.edu',	'nproc' => 32,'nodesdef' => '4','nodesmax' => '280','ppndef' => '32','ppnmax' => '32','reconpn' => '16','walltimedef' => '48','walltimemax' => '240','cputimedef' => '1536','cputimemax' => '10000','memorymax' => '','appionbin' => 'bin/','appionlibdir' => 'appion/','baseoutdir' => 'appion','localhelperhost' => '','dirsep' => '/','wrapperpath' => 'appion','loginmethod' => 'SHAREDKEY','loginusername' => '','passphrase' => '','publickey' => 'rsa.pub','privatekey' => 'rsa'	);
 
-
-// --- Microscope spherical aberration constant
-// --- Example : 2.0 --- //
-define('DEFAULTCS', "");
 
 // --- Restrict file server if you want --- //
 // --- Add your allowed processing directory as string in the array
@@ -175,6 +171,9 @@ define('EXCLUDED_PROJECTS',"");
 
 // --- hide testing tools related to specific data sets. --- //
 define('HIDE_TEST_TOOLS', true);
+
+// --- A startup message may be shown to the user --- //
+define('STARTUP_MESSAGE', "");
 
 // --- Redux server Host and Port information. --- //
 // --- define('SERVER_HOST', "redux.schools.edu"); --- //

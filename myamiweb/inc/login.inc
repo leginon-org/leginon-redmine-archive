@@ -10,6 +10,7 @@
 require_once "config.php";
 require_once "inc/util.inc";
 require_once "inc/mysql.inc";
+require_once "inc/path.inc";
 
 require_once "inc/dbemauth.inc";
 
@@ -224,7 +225,7 @@ function login_header($title="", $javascript="", $onload="",$athome=false) {
 		$username = $login_check[0];
 	}
 	$url = "ln=".urlencode($_SERVER['REQUEST_URI']);
-	$path = getPathFromString($_SERVER['SCRIPT_NAME']);
+	$path = Path::getPathFromString($_SERVER['SCRIPT_NAME']);
 	$onload = (empty($onload)) ? '' : 'onload="'.$onload.'"';
 	echo '
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"  "http://www.w3.org/TR/html4/strict.dtd">
@@ -246,6 +247,12 @@ function login_header($title="", $javascript="", $onload="",$athome=false) {
 	</head>
 	<body '.$onload.' >
 ';
+	// To display a notice to users on the processing header, add the following line to the myami/config.php file:
+	// define('STARTUP_MESSAGE', "Your Message here");
+	if (defined('STARTUP_MESSAGE') && STARTUP_MESSAGE != '') {
+		echo "<font size=-1><b>Important Notice:</b> ".STARTUP_MESSAGE."</font><br><br>\n";
+	}	
+	
 	if (!$athome)
 		echo '<a class="header" href="'.BASE_URL.'index.php">[Home]</a>';	
 	if (ENABLE_LOGIN) {
@@ -259,6 +266,8 @@ function login_header($title="", $javascript="", $onload="",$athome=false) {
 			echo '<a class="header" href="register.php?'.$url.'">[register]</a>';
 		}
 	}
+
+	
 }
 
 function login_footer() {

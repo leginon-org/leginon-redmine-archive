@@ -18,6 +18,7 @@ if( !file_exists(dirname(__FILE__).'/../../config.php') ){
 
 require_once dirname(__FILE__).'/../../config.php';
 require_once "inc/mysql.inc";
+require_once "inc/path.inc";
 
 class particledata {
 
@@ -439,11 +440,18 @@ class particledata {
 			."WHERE t.`DEF_id` = " .$tomogramId;
 		list($r) = $this->mysql->getSQLResult($q);
 		if ($r['REF|ApFullTomogramRunData|reconrun']) $has_run=True;
+		if ($r['REF|ApTomoReconParamsData|reconparam']) $has_param=True;
 
 		$q =  "SELECT t.`DEF_id` as DEF_id, ";
 		if ($has_run) {
 			$q .= "r.`runname` as runname, "
 				."r.`method` as `recon method`, ";
+		}
+		if ($has_param) {
+			$q .= "pa.`tilt_angle_offset`, "
+				."pa.`z_shift`, "
+				."pa.`tilt_axis_tilt_out_xyplane`, "
+				."pa.`tilt_axis_rotation_in_xyplane`, ";
 		}
 		$q .= "t.name as tomofilename, "
 			."t.description as description, "
@@ -462,8 +470,12 @@ class particledata {
 		} else {
 			$q .= "LEFT JOIN `ApPathData` p ON t.`REF|ApPathData|path` = p.`DEF_id` ";
 		}
+		if ($has_param) {
+			$q .= "LEFT JOIN `ApTomoReconParamsData` pa ON t.`REF|ApTomoReconParamsData|reconparam` = pa.`DEF_id` ";
+		}
 		$q .= "LEFT JOIN ".DB_LEGINON.".`TiltSeriesData` tilt ON t.`REF|leginonData|TiltSeriesData|tiltseries` = tilt.`DEF_id` "
 			."WHERE t.`DEF_id` = " .$tomogramId;
+
 		list($r) = $this->mysql->getSQLResult($q);
 		if (!$r['runname']) {
 			$r['runname'] = array_pop(explode('/',$r['path']));
@@ -527,6 +539,30 @@ class particledata {
 		if (!$showHidden && in_array('hidden',$fields))
 			$q .= " AND ( t.`hidden` = 0 OR t.`hidden` IS NULL ) ";
 		return $this->mysql->getSQLResult($q);
+	}
+
+	function getUnfinishedETomoRunsFromSession($sessionId) {
+		$q =  "SELECT t.* "
+			.", p.path as rundir "
+			."FROM `ApFullTomogramRunData` t "
+			."LEFT JOIN `ApPathData` p "
+			."ON p.`DEF_id` = t.`REF|ApPathData|path` "
+			."WHERE t.`REF|leginondata|SessionData|session` = " .$sessionId." "
+			."AND t.`method` LIKE 'etomo' ";
+		$runs = $this->mysql->getSQLResult($q);
+		if (!is_array($runs) || count($runs)==0) return array();
+
+		$ready_for_etomo = array();
+		// only include ones with no full tomogram record in the database
+		foreach ($runs as $r) {
+			$q = "SELECT `DEF_id` "
+				."FROM `ApFullTomogramData` "
+				."WHERE `REF|ApFullTomogramRunData|reconrun`=".$r['DEF_id'];
+			$tomos = $this->mysql->getSQLResult($q);
+			if ( !is_array($tomos) || count($tomos) == 0)
+				$ready_for_etomo[]= $r;
+		}
+		return $ready_for_etomo;
 	}
 
 	function getTomogramsFromSession($sessionId){
@@ -1074,7 +1110,7 @@ class particledata {
 			."		c.`noise1`, c.`noise2`, c.`noise3`, c.`noise4`, "
 			."		c.`envelope1`, c.`envelope2`, c.`envelope3`, c.`envelope4`, c.`lowercutoff`, c.`uppercutoff`, c.`snr`, "
 			."		c.`confidence`,c.`confidence_d` , c.`cross_correlation`, "
-			."		(c.`defocus1`+c.`defocus2`)/2+s.`defocus` as difference "
+			."		abs(c.`defocus1`+c.`defocus2`)/2-abs(s.`defocus`) as difference "
 			."	from `ApCtfData` c "
 			."	left join ".DB_LEGINON.".`AcquisitionImageData` i on (i.`DEF_id` = c.`REF|leginondata|AcquisitionImageData|image`) "
 			."	left join ".DB_LEGINON.".`PresetData` p on (p.DEF_id = i.`REF|PresetData|preset`) "
@@ -2711,7 +2747,7 @@ echo $q;
 		return $r2;
 	}
 
-	function getPixelSizeFromImgId ($imgid) {
+	function getPixelSizeFromImgIdPresetQuery($imgid) {
 		$q="SELECT pd.`SUBD|binning|x` as imgbin, "
 			."  pc.`pixelsize` as ccdpixelsize  "
 			."FROM ".DB_LEGINON.".`AcquisitionImageData` AS a "
@@ -2729,9 +2765,43 @@ echo $q;
 			."AND "
 			."  pc.`DEF_timestamp` <= a.`DEF_timestamp` "
 			."ORDER BY pc.`DEF_timestamp` DESC ";
+		return $q;
+	}
+
+	function getPixelSizeFromImgIdEMQuery($imgid) {
+		// This is the more reliable query for pixel size but may take longer?
+		$q="SELECT ce.`SUBD|binning|x` as imgbin, "
+			."  pc.`pixelsize` as ccdpixelsize  "
+			."FROM ".DB_LEGINON.".`AcquisitionImageData` AS a "
+			."LEFT JOIN ".DB_LEGINON.".`CameraEMData` AS ce "
+			."  ON (a.`REF|CameraEMData|camera` = ce.`DEF_id`) "
+			."LEFT JOIN ".DB_LEGINON.".`ScopeEMData` AS se "
+			."  ON (a.`REF|ScopeEMData|scope` = se.`DEF_id`) "
+			.", ".DB_LEGINON.".PixelSizeCalibrationData pc "
+			."WHERE "
+			."  a.`DEF_id`='$imgid' "
+			."AND "
+			."  pc.`REF|InstrumentData|tem` = se.`REF|InstrumentData|tem` "
+			."AND "
+			."  pc.`magnification` = se.`magnification` "
+			."AND "
+			."  pc.`REF|InstrumentData|ccdcamera` = ce.`REF|InstrumentData|ccdcamera` "
+			."AND "
+			."  pc.`DEF_timestamp` <= a.`DEF_timestamp` "
+			."ORDER BY pc.`DEF_timestamp` DESC ";
+		return $q;
+	}
+
+	function getPixelSizeFromImgId ($imgid) {
+		$q = $this->getPixelSizeFromImgIdPresetQuery($imgid);
 		//echo $q."<br/>\n";
 		list($r2)=$this->mysql->getSQLResult($q);
 		//echo print_r($r2)."<br/>\n";
+		if ($r2 === null) {
+			// If the session has only manual images, there is no preset.
+			$q = $this->getPixelSizeFromImgIdEMQuery($imgid);
+			list($r2)=$this->mysql->getSQLResult($q);
+		}
 		if ($r2['imgbin']) {
 			$pixelsize = $r2['ccdpixelsize']*$r2['imgbin'];
 		} else {
@@ -5057,6 +5127,16 @@ echo $q;
 		return $r;
 	}
 
+	function getProgramRunFromJob ($jobid) {
+		$q = "SELECT "
+			."  progrun.`DEF_id` AS id "
+			."FROM ScriptProgramRun as progrun "
+			."WHERE `REF|ApAppionJobData|job` = ".$jobid." "
+			."ORDER BY progrun.`DEF_timestamp` DESC "
+			."LIMIT 1 ";
+		list($r) = $this->mysql->getSQLResult($q);
+		return $r;
+	}
 	function getProgramRunParams ($progrunid) {
 		$q = "SELECT "
 			."  progrun.`DEF_id` AS id,  "
@@ -5107,6 +5187,14 @@ echo $q;
 		return $r;
 	}
 
+	function getJobCommandParams($jobid) {
+		$progrun = $this-> getProgramRunFromJob ($jobid);
+		$samplecommand = $this->getProgramCommands ($progrun['id']);
+		$s = array();
+		if (is_array($samplecommand) && count($samplecommand) > 0)
+			foreach ($samplecommand as $c) $s[$c['name']] = $c['value'];
+		return $s;
+	}
 }
 
 // For euler angles, takes alpha beta gamma and returns a,b,c, maybe?
@@ -5195,7 +5283,7 @@ function getBaseAppionPath($sessioninfo,$new_base='appion') {
 	}
 
 	if (defined('DEFAULT_APPION_PATH') && DEFAULT_APPION_PATH !='') {
-		return formatEndPath(DEFAULT_APPION_PATH).$sessioninfo['Name'];
+		return Path::formatEndPath(DEFAULT_APPION_PATH).$sessioninfo['Name'];
 	} else {
 		// get from leginon session image path
 		$leginon_imagepath = $sessioninfo['Image path'];
@@ -5213,13 +5301,6 @@ function getBaseAppionPath($sessioninfo,$new_base='appion') {
 		}
 	}
 	return $appion_basepath;
-}
-
-function formatEndPath($path) {
-	$path = preg_match('%'.DIRECTORY_SEPARATOR."$%", $path) ? $path : $path.DIRECTORY_SEPARATOR;
-	//if (substr($path,-1,1)!='/')
-	//	$path.='/';
-	return $path;
 }
 
 ?>

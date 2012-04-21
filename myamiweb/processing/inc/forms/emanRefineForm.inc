@@ -17,6 +17,11 @@ class EmanRefineForm extends BasicRefineForm
 {
 	public function createFormParams() { return new EmanParams(); }
 	
+	protected function setPublications()
+	{
+		$this->pubKeyList = array("eman");
+	}
+	
 	public function advancedParamForm()
 	{
 		// classes extended from BasicRefineForm should get the selected default values

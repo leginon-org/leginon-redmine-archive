@@ -1082,7 +1082,6 @@ class Panel(leginon.gui.wx.Node.Panel):
 					self.tempanel.clearParameters()
 				self.ccdcamerapanel.setParameters(self.ccdcameras[string])
 				self.szmain.Add(self.ccdcamerapanel, (1, 0), (1, 1), wx.ALIGN_CENTER)
-				self.szmain.AddGrowableRow(1)
 				self.ccdcamerapanel.Show(True)
 		self.szmain.Layout()
 
@@ -1166,7 +1165,7 @@ class SelectionPanel(wx.Panel):
 		label = wx.StaticText(self, -1, 'TEM')
 		sz.Add(label, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL)
 		sz.Add(self.ctem, (0, 1), (1, 1), wx.ALIGN_CENTER|wx.EXPAND)
-		label = wx.StaticText(self, -1, 'CCD Camera')
+		label = wx.StaticText(self, -1, 'Digital Camera')
 		sz.Add(label, (1, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL)
 		sz.Add(self.cccdcamera, (1, 1), (1, 1), wx.ALIGN_CENTER|wx.EXPAND)
 

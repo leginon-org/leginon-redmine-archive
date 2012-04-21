@@ -16,7 +16,12 @@ require_once "basicRefineForm.inc";
 class XmippML3DRefineForm extends BasicRefineForm 
 {
 	public function createFormParams() { return new XmippML3DParams(); }
-	
+
+	protected function setPublications()
+	{
+		$this->pubKeyList = array("xmipp", "scheres07", "scheres10");
+	}
+		
 	public function advancedParamForm()
 	{
 		// classes extended from BasicRefineForm should get the selected default values

@@ -32,7 +32,7 @@ $newimage = $leginondata->findImage($imgId, $preset);
 $imgId = $newimage['id'];
 
 $imageinfo = $leginondata->getImageInfo($imgId);
-
+if ($imageinfo === false) $imageinfo = $leginondata->getMinimalImageInfo($imgId);
 $sessionId = $imageinfo[sessionId];
 $_GET['expId'] = $sessionId;
 require "inc/project.inc";
@@ -162,9 +162,9 @@ $mrcmode = array (
 		0=>'MRC_MODE_BYTE',
 		1=>'MRC_MODE_SHORT',
 		2=>'MRC_MODE_FLOAT',
-		3=>'MRC_MODE_UNSIGNED_SHORT',
 		// 3=>'MRC_MODE_SHORT_COMPLEX',
-		4=>'MRC_MODE_FLOAT_COMPLEX'
+		4=>'MRC_MODE_FLOAT_COMPLEX',
+		6=>'MRC_MODE_UNSIGNED_SHORT'
 		);
 ?>
 <table border=0>
@@ -201,19 +201,21 @@ if (is_array($imageinfo)) {
 			echo formatHtmlRow($k,$v);
 		}
 
-	foreach($presets as $k=>$v) {
-		if ($k=='defocus')
-			echo formatHtmlRow($k, $leginondata->formatDefocus($v));
-		else if ($k=='pixelsize') {
-			$v *= $imageinfo['binning'];
-			echo formatHtmlRow($k, $leginondata->formatPixelsize($v));
+	if (is_array($presets) && count($presets) > 0) {
+		foreach($presets as $k=>$v) {
+			if ($k=='defocus')
+				echo formatHtmlRow($k, $leginondata->formatDefocus($v));
+			else if ($k=='pixelsize') {
+				$v *= $imageinfo['binning'];
+				echo formatHtmlRow($k, $leginondata->formatPixelsize($v));
+			}
+			else if ($k=='dose') {
+				if (!empty($v))
+					echo formatHtmlRow($k, $leginondata->formatDose($v));
+			}
+			else
+				echo formatHtmlRow($k, $v);
 		}
-		else if ($k=='dose') {
-			if (!empty($v))
-				echo formatHtmlRow($k, $leginondata->formatDose($v));
-		}
-		else
-			echo formatHtmlRow($k, $v);
 	}
 	echo "</table>";
 }
@@ -257,7 +259,7 @@ if (is_array($imageinfo) && $id=$imageinfo[parentId]) {
 	<td>
 <?php
 echo divtitle("Image Relations");
-$datatypes = $leginondata->getDatatypes($sessionId);
+$datatypes = $leginondata->getDataTypes($sessionId);
 echo "<table border='0'>";
 if (is_array($datatypes))
 	foreach ($datatypes as $datatype) {

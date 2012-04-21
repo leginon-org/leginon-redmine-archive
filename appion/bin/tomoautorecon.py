@@ -21,9 +21,9 @@ from appionlib import apDisplay
 #=====================
 class TomoAlignReconLooper(appionTiltSeriesLoop.AppionTiltSeriesLoop):
 	def setupParserOptions(self):
-		self.alignmethods = ( "imod-shift", "protomo","raptor" )
+		self.alignmethods = ( "leginon","imod-shift", "protomo","raptor" )
 		self.parser.add_option("--alignmethod", dest="alignmethod",
-			type="choice", choices=self.alignmethods, default="protomo" )
+			type="choice", choices=self.alignmethods, default="leginon" )
 		# general parameters
 		self.parser.add_option("--reconthickness", dest="reconthickness", default=100, type="int",
 			help="Full tomo reconstruction thickness before binning, e.g. --thickness=200", metavar="int")
@@ -101,7 +101,7 @@ class TomoAlignReconLooper(appionTiltSeriesLoop.AppionTiltSeriesLoop):
 			reconrunname = self.params['runname']+'_a%d'% alignerdata.dbid
 			reconrundir = os.path.join(tiltseriespath,reconrunname)
 			reconlogpath = os.path.join(reconrundir,reconrunname+'.appionsub.log')
-			command = 'tomomaker.py' + ' ' + '--projectid=%d' % (self.params['projectid']) + ' ' + '--session=' + self.params['sessionname'] + ' ' + '--runname=' + reconrunname + ' ' + '--rundir=' + reconrundir + ' ' + '--alignerid=%d' % alignerdata.dbid + ' ' + '--bin=%d' % self.params['reconbin'] + ' ' + '--thickness=%d' % self.params['reconthickness'] + ' ' + '--description="%s using aligner %d"' % (self.params['description'],alignerdata.dbid) + ' ' + commitstr
+			command = 'imod_wbprecon.py' + ' ' + '--projectid=%d' % (self.params['projectid']) + ' ' + '--session=' + self.params['sessionname'] + ' ' + '--runname=' + reconrunname + ' ' + '--rundir=' + reconrundir + ' ' + '--alignerid=%d' % alignerdata.dbid + ' ' + '--bin=%d' % self.params['reconbin'] + ' ' + '--thickness=%d' % self.params['reconthickness'] + ' ' + '--description="%s using aligner %d"' % (self.params['description'],alignerdata.dbid) + ' ' + commitstr
 			return_code = self.runAppionScriptInSubprocess(command,reconlogpath)
 
 #=====================

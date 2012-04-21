@@ -27,6 +27,7 @@ require_once "inc/login.inc";
 require_once "inc/util.inc";
 require_once "inc/xmlapplicationimport.inc";
 require_once "inc/mysql.inc";
+require_once "inc/path.inc";
 
 class leginondata {
 
@@ -196,7 +197,7 @@ class leginondata {
 		return true;
 	}
 		
-	function getSessionInfo($name) {
+	function getSessionInfo($name,$reject_projection=false) {
 
 		if (!is_array($name)) {
 			$name = array($name);
@@ -208,7 +209,13 @@ class leginondata {
 				$ids[] = "s.`Name` like '$n'";
 		}
 		$sqlwhere = "where (".join(" OR ", $ids).")";
-		$sqlwhere .= " and a.`label`!='projection'";
+		if ($reject_projection === true)
+			// z projection images from tomography is not part of Leginon run.
+			// This part of the query is needed to ensure settings is only considered within
+			// data collection time frame for reverting settings per session.
+			// However, it slows down this general function too much.
+			// Therefore, it is only included in the query if asked specifically
+			$sqlwhere .= " and a.`label`!='projection'";
 
 		$q="select "
 		."s.`DEF_id` as SessionId, "
@@ -487,13 +494,13 @@ class leginondata {
 	}
 
 	function getTruePresets($sessionId) {
-		return $this->getDatatypes($sessionId, false); 
+		return $this->getDataTypes($sessionId, false); 
 	}
 
 	function getAllDatatypes($sessionId) {
 		$defaulttypes = $this->defaulttypes;
 		if (privilege('data') < 2) $defaulttypes = array_diff($defaulttypes,array('hidden'));
-		$types = $this->getDatatypes($sessionId);
+		$types = $this->getDataTypes($sessionId);
 		return array_merge($defaulttypes, $types);
 	}
 
@@ -699,7 +706,7 @@ class leginondata {
 				." where `DEF_id`='$sessionId' ";
 		$Rpath=$this->mysql->SQLQuery($q);
 		$path = mysql_fetch_array($Rpath);
-		return formatPath($path['path']);
+		return Path::formatPath($path['path']);
 	}
 
 	function getImagePathFromImageId($imageId) {
@@ -1233,6 +1240,18 @@ class leginondata {
 		list($r) = $this->mysql->getSQLResult($q);
 		return $r;
 	}
+
+	function getMinimalImageInfo($imgId) {
+		//getImageInfo can fail easily.  Add to this one
+		//to get minimal Image Info
+		//sessionId is needed to get image path and to pass privillage test.
+		$q = "select `REF|SessionData|session` as sessionId "
+				."from `AcquisitionImageData` "
+				."where `DEF_id` = ".$imgId;
+		list($r) = $this->mysql->getSQLResult($q);
+		return $r;
+	}
+
 	function getImageInfo($imgId) {
 		// --- grid query
 		$gridtable = $this->mysql->isTable('GridData');
@@ -2665,7 +2684,7 @@ class leginondata {
 	}
 
 	function getTiming($sessionId, $preset="", $getquery=false) {
-		$datatype=($preset) ? array($preset):$this->getDatatypes($sessionId);
+		$datatype=($preset) ? array($preset):$this->getDataTypes($sessionId);
 		foreach ($datatype as $preset) {
 			$siblings=$this->getSiblingsfrompreset($sessionId, $preset);
 			$presetorder=array();
@@ -2825,7 +2844,7 @@ class leginondata {
 	}
 
 	function formatDose(&$dose) {
-		$dose = ($dose) ? number_format(($dose/1e20), 1,'.','').' e<SUP>&ndash;</SUP>/&Aring;<SUP>2</SUP>' : 'none' ;
+		$dose = ($dose) ? number_format(($dose/1e20), 2,'.','').' e<SUP>&ndash;</SUP>/&Aring;<SUP>2</SUP>' : 'none' ;
 		return $dose;
 	}
 
