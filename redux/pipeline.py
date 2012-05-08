@@ -5,13 +5,13 @@ import cStringIO
 import sys
 
 # local
-import redux.cache
 import redux.pipes
 import redux.pipelines
 
 CACHE_ON = True
 
 if CACHE_ON:
+	import redux.cache
 	disk_cache_path = '/tmp/redux'
 	disk_cache_size = 200*1024*1024  # 100 MB
 	mem_cache_size = 400*1024*1024  # 400 MB
