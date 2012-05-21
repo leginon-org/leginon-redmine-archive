@@ -14,19 +14,17 @@
 . /etc/rc.d/init.d/functions
 prog=reduxd
 
-start() {
-
-        # Start daemons.
-        echo -n $"Starting $prog: "
-        daemon $prog > /var/log/reduxd & 
+start() {        
+	echo -n $"Starting $prog: "
+	nohup $prog >/var/log/reduxd&
 	RETVAL=$?
-        echo
-	[ $RETVAL -eq 0 ]
+	sleep 1;
+	echo $"Started $prog: using /var/log/reduxd for log"
 	return $RETVAL
 }
 
 stop() {
-        echo -n $"Shutting down $prog: "
+    echo -n $"Shutting down $prog: "
 	killproc $prog
 	RETVAL=$?
         echo
