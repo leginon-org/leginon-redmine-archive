@@ -947,7 +947,8 @@ class particledata {
 
 	function getLastCtfTiltRun($sessionId) {
 		$q = "select max(DEF_id) as runId "
-			."from `ApCtfTiltRunData` where `REF|leginondata|SessionData|session`='$sessionId'";
+			."from `ApAceRunData` where (`REF|leginondata|SessionData|session`='$sessionId' "
+			."AND `REF|ApCtfTiltParamsData|ctftilt_params` IS NOT NULL) ";
 		list($r) = $this->mysql->getSQLResult($q);
 		return $r['runId'];
 	}
@@ -1054,7 +1055,7 @@ class particledata {
 		
 	}
 
-	function getCtfInfoFromImageId($imageId, $order=false, $method='') {
+	function getCtfInfoFromImageId($imageId, $order=false, $method='', $acerunId='') {
 		$q =	"select "
 			."c.`DEF_id`, "
 			."c.`REF|leginondata|AcquisitionImageData|image`, "
@@ -1083,16 +1084,22 @@ class particledata {
 			."where c.`REF|leginondata|AcquisitionImageData|image`='$imageId' ";
 		$q .= " AND c.`graph1` IS NOT NULL ";
 
-		if ($method === 'ace1') $q .= "AND r.`REF|ApAceParamsData|aceparams` IS NOT NULL ";
-		elseif ($method === 'ace2') $q .= "AND r.`REF|ApAce2ParamsData|ace2_params` IS NOT NULL ";
-		elseif ($method === 'ctffind') $q .= "AND r.`REF|ApCtfTiltParamsData|ctftilt_params` IS NOT NULL ";
+		if (is_numeric($acerunId) && $acerunId > 0) {
+			$q .= "AND r.`DEF_id`=".$acerunId." ";
+		} else {
+			if ($method === 'ace1') $q .= "AND r.`REF|ApAceParamsData|aceparams` IS NOT NULL ";
+			elseif ($method === 'ace2') $q .= "AND r.`REF|ApAce2ParamsData|ace2_params` IS NOT NULL ";
+			elseif ($method === 'ctffind') $q .= "AND r.`REF|ApCtfTiltParamsData|ctftilt_params` IS NOT NULL ";
 
-		if ($method === 'ctffind') $q .="ORDER BY (c.`cross_correlation`) DESC";
-		else $q .= "ORDER BY (c.`confidence`*c.`confidence_d`) DESC";
+			if ($method === 'ctffind') $q .="ORDER BY (c.`cross_correlation`) DESC";
+			else $q .= "ORDER BY (c.`confidence`*c.`confidence_d`) DESC";
+		}
+
 		if ($order) {
 			$fields = $order['fields'];
 			$q .= " order by ".join(", ",$fields);
 		}
+
 		return $this->mysql->getSQLResult($q);
 	}
 
@@ -1777,7 +1784,6 @@ class particledata {
 			."on p.`REF|leginondata|AcquisitionImageData|image` = a.`DEF_id` "
 			."where p.`REF|ApSelectionRunData|selectionrun` = '$runId' ";
 		$r=$this->mysql->getSQLResult($q);
-echo $q;
 		return $r;
 	}
 	
@@ -2068,24 +2074,53 @@ echo $q;
 		return $r['num'];
 	}
 
-	function getLastParticleRun ($sessionId) {
+	// return the last Def_id value in the provided table
+	function getLastDefId($sessionId, $table) 
+	{
 		$q = "select DEF_id as runId "
-			."from `ApSelectionRunData` "
+			."from `".$table."` "
 			."where `REF|leginondata|SessionData|session` = '$sessionId' "
 			."order by DEF_id desc limit 1";
 		list($r) = $this->mysql->getSQLResult($q);
 		return $r['runId'];
 	}
+	
+	function getLastParticleRun($sessionId) 
+	{
+		return $this->getLastDefId($sessionId, "ApSelectionRunData");
+	}
 
-	function getParticleRunData ($partRunId) {
+	function getLastDDStackRun($sessionId) 
+	{
+		return $this->getLastDefId($sessionId, "ApDDStackRunData");
+	}
+	
+	function hasDDstackData($sessionId) 
+	{
+		$r= ($this->getLastDDStackRun($sessionId)) ? true : false;
+		return $r;
+	}
+		
+	function getParticleRunData($partRunId) 
+	{
+		return getRunData($partRunId, "ApSelectionRunData" );
+	}
+	
+	function getDDStackRunData($partRunId) 
+	{
+		return getRunData($partRunId, "ApSelectionRunData" );
+	}
+	
+	function getRunData($runId, $table) 
+	{
 		$q = "SELECT r.*, p.path "
-			."FROM `ApSelectionRunData` AS r "
+			."FROM `".$table."` AS r "
 			."LEFT JOIN ApPathData AS p ON (r.`REF|ApPathData|path` = p.`DEF_id`) "
-			."WHERE r.`DEF_id` = '$partRunId'";
+			."WHERE r.`DEF_id` = '$runId'";
 		list($r) = $this->mysql->getSQLResult($q);
 		return $r;
 	}
-
+	
 	// Warning: this counts the number of runs, it does not return the 
 	// last run id number used. Since a user can modify the runname,
 	// this is not a safe number to use for a defualt run name. Try
@@ -2103,9 +2138,10 @@ echo $q;
 		return 0;
 	}
 
-	function getParticleRunIds ($sessionId,$showHidden=False) {
+	function getRunIds($sessionId, $table, $showHidden=False) 
+	{
 		$q = "SELECT r.*, p.path "
-			."FROM `ApSelectionRunData` AS r "
+			."FROM `".$table."` AS r "
 			."LEFT JOIN ApPathData AS p "
 			."ON (r.`REF|ApPathData|path` = p.`DEF_id`) "
 			."WHERE r.`REF|leginondata|SessionData|session` = '$sessionId' ";
@@ -2116,7 +2152,17 @@ echo $q;
 		//echo print_r($r)."<br/>\n";
 		return $r;
 	}
-
+	
+	function getParticleRunIds($sessionId,$showHidden=False) 
+	{
+		return $this->getRunIds($sessionId, "ApSelectionRunData", $showHidden);
+	}
+	
+	function getDDStackRunIds($sessionId,$showHidden=False) 
+	{
+		return $this->getRunIds($sessionId, "ApDDStackRunData", $showHidden);
+	}
+	
 	#--------- MAKE STACK FUNCTIONS---------------#
 
 	function getParticleRunsFromStack($stackid) {
@@ -3772,18 +3818,20 @@ echo $q;
 		$this->mysql->SQLUpdate('ApAppionJobData',$data,$where);
 	}
 
-	function updateClusterJobStatus($jobid, $status) {
+	function updateClusterJobStatus($jobid, $status, $user=false) {
 		$data = array('status'=>$status);
 		$where = array('DEF_id'=>$jobid);
+		if ($user)
+			$where['user'] = $user;
 		$this->mysql->SQLUpdate('ApAppionJobData',$data, $where);
 	}
 
 	function abortClusterJob($jobid, $user=false) {
-		$data = array('status'=>'A');
-		$where = array('DEF_id'=>$jobid);
-		if ($user)
-			$where['user'] = $user;
-		$this->mysql->SQLUpdate('ApAppionJobData', $data, $where);
+		$this->updateClusterJobStatus($jobid,'A',$user);
+	}
+
+	function markDoneAppionJob($jobid, $user=false) {
+		$this->updateClusterJobStatus($jobid,'D',$user);
 	}
 
 	function getSubmittedJobs($expId) {
@@ -4693,6 +4741,66 @@ echo $q;
 		return $r;
 	}
 
+	function hasHelicalInfo($alignid) {
+		$q="SELECT p.helixnum FROM ApAlignParticleData AS a "
+			."LEFT JOIN ApStackParticleData as s "
+			."ON (a.`REF|ApStackParticleData|stackpart`=s.`DEF_id`) "
+			."LEFT JOIN ApParticleData AS p "
+			."ON (s.`REF|ApParticleData|particle`=p.`DEF_id`) "
+			."WHERE "
+			."  a.`REF|ApAlignStackData|alignstack` = '$alignid' "
+			."limit 1";
+		//echo $q;
+		$r = $this->mysql->getSQLResult($q);
+		if ($r[0]['helixnum']) return True;
+		return False;
+	}
+
+	function getNumImagesInAlignment($alignid) {
+		$q="SELECT count(*) as img "
+			." FROM ApAlignParticleData AS a "
+			."LEFT JOIN ApStackParticleData as s "
+			."ON (a.`REF|ApStackParticleData|stackpart`=s.`DEF_id`) "
+			."LEFT JOIN ApParticleData AS p "
+			."ON (s.`REF|ApParticleData|particle`=p.`DEF_id`) "
+			."WHERE "
+			."  a.`REF|ApAlignStackData|alignstack` = '$alignid' "
+			."GROUP BY p.`REF|leginondata|AcquisitionImageData|image` ";
+		$r = $this->mysql->getSQLResult($q);
+		return count($r);
+	}
+
+	function getHelicalInfoForClasses($alignid,$classnums,$onlyNumImgs=False){
+		if ($onlyNumImgs) $q = "SELECT count(*) as img ";
+		else $q="SELECT a.partnum, "
+			." a.xshift, "
+			." a.yshift, "
+			." a.rotation, "
+			." p.`REF|leginondata|AcquisitionImageData|image` as image, "
+			." p.angle, "
+			." p.helixnum ";
+		$q.= " FROM ApAlignParticleData AS a "
+			."LEFT JOIN ApStackParticleData as s "
+			."ON (a.`REF|ApStackParticleData|stackpart`=s.`DEF_id`) "
+			."LEFT JOIN ApParticleData AS p "
+			."ON (s.`REF|ApParticleData|particle`=p.`DEF_id`) "
+			."LEFT JOIN ApAlignReferenceData as ar "
+			."ON (a.`REF|ApAlignReferenceData|ref` = ar.`DEF_id`) "
+			."WHERE "
+			."  a.`REF|ApAlignStackData|alignstack` = '$alignid' "
+			."  AND (";
+		foreach ($classnums as $cnum) {
+			$refnum = strval(intval($cnum)+1);
+			$q .= " ar.`refnum` = '$refnum' OR ";
+		}
+		$q = substr($q, 0, -3);
+		$q .= ")";
+		if ($onlyNumImgs) $q.= "GROUP BY p.`REF|leginondata|AcquisitionImageData|image`";
+		$r = $this->mysql->getSQLResult($q);
+		if ($onlyNumImgs) return count($r);
+		return $r;
+	}
+
 	function getClusteringParticleNumber($clusterId) {
 		$q="SELECT part.`refnum` AS classNumber, "
 			."  COUNT(part.`DEF_id`) AS number, "
@@ -5294,7 +5402,7 @@ function getBaseAppionPath($sessioninfo,$new_base='appion') {
 			$pieces_count = count($path_pieces);
 			$appion_basepath = implode('leginon',array_slice($path_pieces,0,$pieces_count-1)).$new_base.$path_pieces[$pieces_count-1]; 
 			$appion_basepath=preg_replace("%/rawdata%","",$appion_basepath);		
-			$appion_basepath=preg_replace("%/appion2/%","/appion/",$appion_basepath);		
+			$appion_basepath=preg_replace("%/appion\d/%","/appion/",$appion_basepath);		
 		} else {
 			$extra="ERROR: could not determine Appion Path directory automatically. Please enter manually";
 			echo $extra;

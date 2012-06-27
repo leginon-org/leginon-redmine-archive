@@ -98,6 +98,7 @@ class DECameraBase(ccdcamera.CCDCamera):
 	Subclasses should define an attribute "de_name"
 	to inform this base class how to set the active camera.
 	'''
+	logged_methods_on = True
 	def __init__(self):
 		ccdcamera.CCDCamera.__init__(self)
 
@@ -181,8 +182,20 @@ class DECameraBase(ccdcamera.CCDCamera):
 		nobin_image = image[row_start:row_end, col_start:col_end]
 		assert self.binning['x'] == self.binning['y']
 		binning = self.binning['x']
+		## NOTE:  non-standard binning: mean, not sum
+		## See method getBinnedMultiplier below.
 		bin_image = pyami.imagefun.bin(nobin_image, binning)
 		return bin_image
+
+	def getBinnedMultiplier(self):
+		'''
+		Our software binning calculates a binned pixel
+		as the average of the component pixels, which is
+		different that typical hardware binning.  This will
+		return a multiplier that can be used to calculate
+		a "standard" binned pixel.
+		'''
+		return self.binning['x'] * self.binning['y']
 
 	def getPixelSize(self):
 		psize = 6e-6
@@ -192,6 +205,9 @@ class DECameraBase(ccdcamera.CCDCamera):
 		return True
 		
 	def setInserted(self, value):
+		# return if already at this insertion state
+		if not (value ^ self.getInserted()):
+			return
 		if value:
 			de12value = 'Extended'
 			sleeptime = 20
@@ -288,15 +304,15 @@ class DECameraBase(ccdcamera.CCDCamera):
 	def getTemperatureStatus(self):
 		return self.getProperty('Temperature Control')
 
-	def setTemperatureStatus(self, state):
+	## method name altered to prevent Leginon from setting temperature
+	def set_TemperatureStatus(self, state):
 		return self.setProperty('Temperature Control', state)
-		
+
 	def getTemperature(self):
 		return self.getProperty('Temperature - Detector (Celsius)')
 
-	def setTemperature(self, degrees):
+	def set_Temperature(self, degrees):
 		return self.setProperty('Temperature Control - Setpoint (Celsius)', degrees)
-
 
 #### Classes for specific cameras
 

@@ -17,15 +17,15 @@ require "inc/appionloop.inc";
 
 // IF VALUES SUBMITTED, EVALUATE DATA
 if ($_POST['process']) {
-	runCtfEstimate();
+	runCtfFind();
 }
 // CREATE FORM PAGE
 else {
-	createCtfEstimateForm();
+	createCtfFindForm();
 }
 
 // --- parse data and process on submit
-function runCtfEstimate() {
+function runCtfFind() {
 
 	/* *******************
 	PART 1: Get variables
@@ -36,6 +36,7 @@ function runCtfEstimate() {
 
 	// ctffind or ctftilt
 	$ctftilt = $_GET['ctftilt'];
+	if (!$ctftilt) $ctftilt = ($_POST['runctftilt']=='on') ? True : '';
 	
 	// parse params
 	$ampcarbon=$_POST['ampcarbon'];
@@ -46,6 +47,7 @@ function runCtfEstimate() {
 	$resmin=$_POST['resmin'];
 	$resmax=$_POST['resmax'];
 	$defstep=$_POST['defstep'];
+	$numstep=$_POST['numstep'];
 	$dast=$_POST['dast'];
 	//$nominal=$_POST['nominal'];
 	//$reprocess=$_POST['reprocess'];
@@ -55,14 +57,21 @@ function runCtfEstimate() {
 	******************** */
 	$leginondata = new leginondata();
 	if ($leginondata->getCsValueFromSession($expId) === false) {
-		createCtfEstimateForm("Cs value of the images in this session is not unique or known, can't process");
+		createCtfFindForm("Cs value of the images in this session is not unique or known, can't process");
 		exit;
 	}
 	// Error checking:
-	if (!$fieldsize) createCtfEstimateForm("Enter a fieldsize");
-	if (!$defstep) createCtfEstimateForm("Enter a search step");
-	if ($resmin<50) createCtfEstimateForm("Minimum resolution is too high");
-	if (($resmax>50)||(!$resmax)) createCtfEstimateForm("Maximum resolution is too low");
+	if (!$fieldsize) createCtfFindForm("Enter a fieldsize");
+	if (!$defstep) createCtfFindForm("Enter a search step");
+	if (!$numstep) createCtfFindForm("Enter a number of steps");
+	if ($numstep > 250) createCtfFindForm("Too many steps in search, maximum of 250 ");
+	if (!$resmin) createCtfFindForm("Enter a minimum resolution");
+	//minimum resolution for 4k image with 1.5 Apix is: 1.5*4096 = 6144, go with 5000
+	if ($resmin>5000) createCtfFindForm("Minimum resolution is too high, maximum of 5000&Aring;");
+	if ($resmin<20) createCtfFindForm("Minimum resolution is too low, minimum of 20&Aring;");
+	if (!$resmax) createCtfFindForm("Enter a maxmimum resolution");
+	if ($resmax>15) createCtfFindForm("Maximum resolution is too high, maximum of 15&Aring;");
+	if ($resmax<3) createCtfFindForm("Maximum resolution is too low, minimum of 3&Aring;");
 	
 	
 	/* *******************
@@ -72,7 +81,7 @@ function runCtfEstimate() {
 
 	$apcommand = parseAppionLoopParams($_POST);
 	if ($apcommand[0] == "<") {
-		createCtfEstimateForm($apcommand);
+		createCtfFindForm($apcommand);
 		exit;
 	}
 	$command .= $apcommand;
@@ -85,6 +94,7 @@ function runCtfEstimate() {
 	$command.="--resmin=$resmin ";
 	$command.="--resmax=$resmax ";
 	$command.="--defstep=$defstep ";
+	$command.="--numstep=$numstep ";
 	$command.="--dast=$dast ";
 
 	$progname = "CtfFind";
@@ -108,20 +118,20 @@ function runCtfEstimate() {
 
 	// if error display them
 	if ($errors)
-		createCtfEstimateForm("<b>ERROR:</b> $errors");
+		createCtfFindForm("<b>ERROR:</b> $errors");
 }
 
 
 /*
 **
 **
-** CtfEstimate FORM
+** CtfFind FORM
 **
 **
 */
 
 // CREATE FORM PAGE
-function createCtfEstimateForm($extra=false) {
+function createCtfFindForm($extra=false) {
 	// check if coming directly from a session
 	$expId = $_GET['expId'];
 	if ($expId) {
@@ -147,6 +157,31 @@ function createCtfEstimateForm($extra=false) {
 	$presetval = ($_POST['preset']) ? $_POST['preset'] : 'en';
 	$javafunctions = "";
 	$javafunctions .= writeJavaPopupFunctions('appion');
+	$javafunctions .= "<script>
+		function carbon_preset(obj) {
+		  obj.resmin.value = '40';
+		  obj.resmax.value = '8';
+		  obj.medium[0].checked = true;
+		  obj.medium[1].checked = false;
+		  obj.defstep.value = 5000;
+		  return;
+		}
+		function ice_preset(obj) {
+		  obj.resmin.value = '100';
+		  obj.resmax.value = '15';
+		  obj.medium[0].checked = false;
+		  obj.medium[1].checked = true;
+		  obj.defstep.value = 5000;
+		  return;
+		}
+		function finetune_preset(obj) {
+		  obj.resmin.value = '100';
+		  obj.resmax.value = '10';
+		  obj.defstep.value = 500;
+		  return;
+		}
+		</script>";
+
 	processing_header("$progname Launcher", "CTF Estimation by $progname", $javafunctions);
 
 	if ($extra) {
@@ -162,22 +197,26 @@ function createCtfEstimateForm($extra=false) {
 	$sessioninfo=$sessiondata['info'];
 	$presets=$sessiondata['presets'];
 	if (!empty($sessioninfo)) {
-		$sessionpath=getBaseAppionPath($sessioninfo).'/ctf';
+		$sessionpath=getBaseAppionPath($sessioninfo).'/ctf/';
 	}
 	$ctf = new particledata();
-	$lastrunnumber = $ctf->getLastRunNumberForType($sessionId,'ApAceRunData','name'); 
+	$lastrunnumber = $ctf->getLastRunNumberForType($sessionId,'ApAceRunData','name');
 	while (file_exists($sessionpath.$runbase.'run'.($lastrunnumber+1)))
 		$lastrunnumber += 1;
 	$defrunname = ($_POST['runname']) ? $_POST['runname'] : $runbase.'run'.($lastrunnumber+1);
 
 	// set defaults and check posted values
-	$form_fieldsz = ($_POST['fieldsize']) ? $_POST['fieldsize'] : 256;
+	$form_fieldsz = ($_POST['fieldsize']) ? $_POST['fieldsize'] : 512;
 	$form_bin = ($_POST['binval']) ? $_POST['binval'] : 2;
 	$form_ampc = ($_POST['ampcarbon']) ? $_POST['ampcarbon'] : '0.15';
 	$form_ampi = ($_POST['ampice']) ? $_POST['ampice'] : '0.07';
-	$form_resmin = ($_POST['resmin']) ? $_POST['resmin'] : '400.0';
-	$form_resmax = ($_POST['resmax']) ? $_POST['resmax'] : '8.0';
-	$form_defstep = ($_POST['defstep']) ? $_POST['defstep'] : '5000.0';
+	$form_resmin = ($_POST['resmin']) ? $_POST['resmin'] : '100';
+	$form_resmax = ($_POST['resmax']) ? $_POST['resmax'] : '10';
+
+	$form_defstep = ($_POST['defstep']) ? $_POST['defstep'] : '5000';
+	$form_numstep = ($_POST['numstep']) ? $_POST['numstep'] : '50';
+	// check if ctftilt is set
+	$ctftiltcheck = ($_POST['runctftilt']=='on') ? 'CHECKED' : '';
 	$form_dast = ($_POST['dast']) ? $_POST['dast'] : '100';
 
 	echo"
@@ -186,10 +225,17 @@ function createCtfEstimateForm($extra=false) {
 	  <TD VALIGN='TOP'>";
 
 	createAppionLoopTable($sessiondata, $defrunname, "ctf");
-	echo"
-	  </TD>
-	  <TD CLASS='tablebg'>
+	// give user option to run ctftilt (useful for film data)
 
+
+	echo"</TD>\n<TD CLASS='tablebg'>\n";
+
+	if (!$ctftilt) { 
+		echo "<input type='checkbox' name='runctftilt' $ctftiltcheck>\n";
+		echo docpop('ctftilt','Run CtfTilt');
+		echo ", instead of CtfFind<br/><br/>\n";
+	}
+	echo"
 	    <B>Medium:</B><br/>
 	    <INPUT TYPE='radio' NAME='medium' VALUE='carbon'>&nbsp;carbon&nbsp;&nbsp;
 	    <INPUT TYPE='radio' NAME='medium' VALUE='ice' checked>&nbsp;ice<br/>
@@ -210,20 +256,38 @@ function createCtfEstimateForm($extra=false) {
 	echo "<b>$progname Values</b><br/>\n";
 	echo "<INPUT TYPE='text' NAME='fieldsize' VALUE='$form_fieldsz' size='6'>\n";
 	echo docpop('field','Field Size');
-	echo "<br />\n";
+	echo "(pixels)<br />\n";
 	echo "<input type='text' name='resmin' value='$form_resmin' size='6'>\n";
 	echo docpop('resmin','Minimum Resolution');
-	echo "<br />\n";
+	echo " (&Aring;ngstroms)<br />\n";
 	echo "<input type='text' name='resmax' value='$form_resmax' size='6'>\n";
 	echo docpop('resmax','Maximum Resolution');
+	echo " (&Aring;ngstroms)<br />\n";
 	echo "<br />\n";
 	echo "<input type='text' name='defstep' value='$form_defstep' size='6'>\n";
-	echo docpop('defstep','Search step (Ang)');
+	echo docpop('defstep','Defocus search step size');
+	echo " (&Aring;ngstroms)<br />\n";
+	echo "<input type='text' name='numstep' value='$form_numstep' size='6'>\n";
+	echo docpop('numstep','Number of steps to search');
 	echo "<br />\n";
 	echo "<input type='text' name='dast' value='$form_dast' size='6'>\n";
-	echo docpop('dast','Expected astigmatism (Ang)');
+	echo docpop('dast','Expected astigmatism');
+	echo " (&Aring;ngstroms)<br />\n";
+
 	echo "<br />\n";
-	echo "<br />\n";
+
+	echo "<b>PRESET VALUES:</b>";
+	echo "<table border='0'><tr><td>\n";
+	echo "<input type='button' onClick='carbon_preset(this.form)' 
+		value='Carbon Initial Search'>";
+	echo "</td></tr><tr><td>\n";
+	echo "<input type='button' onClick='ice_preset(this.form)' 
+		value='Ice Initial Search'>";
+	echo "</td></tr><tr><td>\n";
+	echo "<input type='button' onClick='finetune_preset(this.form)' 
+		value='Fine Tune Previous Run'>";
+	echo "</td></tr></table>\n";
+
 	//echo "<INPUT TYPE='checkbox' NAME='confcheck' onclick='enableconf(this)'>\n";
 	//echo "Reprocess Below Confidence Value<br />\n";
 	//echo "Set Value:<INPUT TYPE='text' NAME='reprocess' DISABLED VALUE='0.8' SIZE='4'>\n";

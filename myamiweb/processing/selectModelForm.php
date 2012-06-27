@@ -51,6 +51,7 @@ if (is_array($models) && count($models)>0) {
 		} else {
 			$controlType = "radio";
 			// ensure that only a single model is selected for single model methods
+			// The radio control needs the name to be the same for all models
 			$name = "model_";
 		}
 				
@@ -75,7 +76,7 @@ $javafunc="<script src='../js/viewer.js'></script>\n";
 <?php processing_header("Appion: Recon Refinement","Select Initial Model for Refinement",$javafunc); ?>
 
 <form name='select_model_form' method='POST' action='prepRefineForm.php?expId=<?php echo $expId; ?>' >
-	<P><B>Model:</B><br><A HREF='uploadmodel.php?expId=<?php $expId; ?> '>[Upload a new initial model]</A><br /><br />
+	<P><B>Model:</B><br><A HREF='uploadmodel.php?expId=<?php echo $expId; ?> '>[Upload a new initial model]</A><br /><br />
 	
 	<input type='SUBMIT' NAME='submitstackmodel' VALUE='Use selected model(s)'><br>
 	<?php echo $modelTable; ?>

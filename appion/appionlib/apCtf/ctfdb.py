@@ -148,8 +148,9 @@ def insertCtfValue(imgdata, params, matfile, ctfvalue, opimfile1, opimfile2):
 	ctfq['graph2']=opimfile2
 	ctfq['mat_file']=matfile
 	ctfq['cs']=params['cs']
-	ctfvaluelist = ('defocus1','defocus2','defocusinit','amplitude_contrast','angle_astigmatism',\
-		'noise1','noise2','noise3','noise4','envelope1','envelope2','envelope3','envelope4',\
+	ctfq['angle_astigmatism'] = math.degrees(ctfvalue['angle_astigmatism'])
+	ctfvaluelist = ('defocus1','defocus2','defocusinit','amplitude_contrast',
+		'noise1','noise2','noise3','noise4','envelope1','envelope2','envelope3','envelope4',
 		'lowercutoff','uppercutoff','snr','confidence','confidence_d')
 
 	# test for failed ACE estimation
@@ -237,11 +238,14 @@ def getBestDefocusAndAmpConstForImage(imgdata, msg=False, method=None):
 	return getDefocusAndAmpConstForImage(imgdata, msg=msg, method=method)
 
 #=====================
-def getCtfValueForImage(imgdata, ctf_estimation_runid, ctfavg=True, msg=True, method=False):
+def getCtfValueForImage(imgdata, ctf_estimation_runid=None, ctfavg=True, msg=True, method=None):
 	"""
 	takes an image and get the ctf value for that image for the specified ctf estimation run
 	specified methods can be: ace2 or ctffind
 	"""
+	if ctf_estimation_runid is None:
+		apDisplay.printError("This function requires a ctf_estimation_runid")
+
 	### get all ctf values
 	ctfq = appiondata.ApCtfData()
 	ctfq['image'] = imgdata
@@ -250,8 +254,8 @@ def getCtfValueForImage(imgdata, ctf_estimation_runid, ctfavg=True, msg=True, me
 	### check if it has values
 	if ctfvalues is None:
 		return None, None
-
 	### find the value
+	ctfdata = None
 	for ctfvalue in ctfvalues:
 		### limit to specific method if requested:
 		if method=='ctffind' and ctfvalue['acerun']['ctftilt_params'] is None:
@@ -261,23 +265,18 @@ def getCtfValueForImage(imgdata, ctf_estimation_runid, ctfavg=True, msg=True, me
 
 		### specify ID for CTF run
 		if ctfvalue['acerun'].dbid == ctf_estimation_runid:
-
 			### make sure that CTF values were estimated		
 			if ctfvalue['defocus1'] is None and ctfvalue['defocus2'] is None:
 				apDisplay.printWarning("CTF estimation using the specified parameters did not work")
 				return None, None
 			else:
-				# get ctf value
-				conf1 = max(ctfvalue['confidence'],ctfvalue['cross_correlation'])
-				conf2 = ctfvalue['confidence_d']
-
-				conf = max(conf1,conf2)
-				if ctfavg is True:
-					conf = math.sqrt(conf1*conf2)
+				ctfdata = ctfvalue
 			break
-
-	if ctfvalue == None:
+	# no data found with the criteria
+	if ctfdata is None:
 		return None, None
+
+	conf = calculateConfidenceScore(ctfvalue,ctfavg)
 
 	if msg is True:
 		apDisplay.printMsg("CTF run info for runname='%s': confidence=%.3f, defocus=%.3f um"
@@ -285,8 +284,24 @@ def getCtfValueForImage(imgdata, ctf_estimation_runid, ctfavg=True, msg=True, me
 
 	return ctfvalue, conf
 
+def calculateConfidenceScore(ctfdata,ctfavg=True):
+	# get ctf confidence values
+	# accepts negative cross_correlation as well
+	conf1 = ctfdata['confidence']
+	if ctfdata['cross_correlation'] is not None:
+		conf1 = max(ctfdata['confidence'],abs(ctfdata['cross_correlation']))
+	conf2 = ctfdata['confidence_d']
+
+	if conf1 >= 0 and conf2 >= 0:
+		conf = max(conf1,conf2)
+		if ctfavg is True:
+			conf = math.sqrt(conf1*conf2)
+	else:
+		conf = 0
+	return conf
+
 #=====================
-def getBestCtfValueForImage(imgdata, ctfavg=True, msg=True, method=False):
+def getBestCtfValueForImage(imgdata, ctfavg=True, msg=True, method=None):
 	"""
 	takes an image and get the best ctfvalues for that image
 	specified methods can be: ace2 or ctffind
@@ -308,17 +323,10 @@ def getBestCtfValueForImage(imgdata, ctfavg=True, msg=True, method=False):
 		if method=='ctffind' and ctfvalue['acerun']['ctftilt_params'] is None:
 			continue
 
-		# get ctf values
-		conf1 = max(ctfvalue['confidence'],ctfvalue['cross_correlation'])
-		conf2 = ctfvalue['confidence_d']
-
-		if conf1 > 0 and conf2 > 0:
-			conf = max(conf1,conf2)
-			if ctfavg is True:
-				conf = math.sqrt(conf1*conf2)
-			if conf > bestconf:
-				bestconf = conf
-				bestctfvalue = ctfvalue
+		conf = calculateConfidenceScore(ctfvalue,ctfavg)
+		if conf > bestconf:
+			bestconf = conf
+			bestctfvalue = ctfvalue
 
 	if bestctfvalue == None:
 		return None, None
@@ -342,7 +350,7 @@ def getBestTiltCtfValueForImage(imgdata):
 	bestctftiltvalue = None
 	cross_correlation = 0.0
 	for ctfvalue in ctfvalues:
-		if ctfvalue['ctftiltrun'] is not None:
+		if ctfvalue['acerun'] is not None:
 			if bestctftiltvalue is None:
 				cross_correlation = ctfvalue['cross_correlation']
 				bestctftiltvalue = ctfvalue
@@ -353,6 +361,41 @@ def getBestTiltCtfValueForImage(imgdata):
 
 	return bestctftiltvalue
 
+#=====================
+def getParticleTiltDefocus(ctfdata,imgdata,NX,NY):
+	### calculate defocus at given position
+	dimx = imgdata['camera']['dimension']['x']
+	dimy = imgdata['camera']['dimension']['y']
+	CX = dimx/2
+	CY = dimy/2
+
+	if ctfdata['tilt_axis_angle'] is not None:
+		N1 = -1.0 * math.sin( math.radians(ctfdata['tilt_axis_angle']) )
+		N2 = math.cos( math.radians(ctfdata['tilt_axis_angle']) )
+	else:
+		N1 = 0.0
+		N2 = 1.0
+
+	PSIZE = apDatabase.getPixelSize(imgdata)	
+	### High tension on CM is given in kv instead of v so do not divide by 1000 in that case
+	if imgdata['scope']['tem']['name'] == "CM":
+		voltage = imgdata['scope']['high tension']
+	else:
+		voltage = (imgdata['scope']['high tension'])/1000
+
+	# flip Y axis due to reversal of y coordinates
+	NY = dimy-NY
+
+	DX = CX - NX
+	DY = CY - NY
+	DF = (N1*DX + N2*DY) * PSIZE * math.tan( math.radians(ctfdata['tilt_angle']) )
+	#print "using tilt axis: %.02f, angle: %.02f"%(ctfdata['tilt_axis_angle'],ctfdata['tilt_angle'])
+	#print "df1: %.2f, df2: %.2f, offset is %.2f"%(ctfdata['defocus1']*-1e10,ctfdata['defocus2']*-1e10,DF)
+	DFL1 = abs(ctfdata['defocus1'])*1.0e10 + DF
+	DFL2 = abs(ctfdata['defocus2'])*1.0e10 + DF
+
+	return DFL1,DFL2
+	
 #=====================
 def ctfValuesToParams(ctfvalue, params, msg=True):
 	if ctfvalue['acerun'] is not None:
@@ -407,15 +450,10 @@ def printCtfSummary(params, imgtree):
 		bestconf = 0.0
 		bestctfvalue = None
 		for ctfvalue in ctfvalues:
-			conf1 = ctfvalue['confidence']
-			conf2 = ctfvalue['confidence_d']
-			confcc = ctfvalue['cross_correlation']
-			conf1 = max(conf1,confcc)
-			if conf1 > 0 and conf2 > 0:
-				conf = math.sqrt(conf1*conf2)
-				if conf > bestconf:
-					bestconf = conf
-					bestctfvalue = ctfvalue
+			conf = calculateConfidenceScore(ctfvalue,False)
+			if conf > bestconf:
+				bestconf = conf
+				bestctfvalue = ctfvalue
 		ctfhistconf.append(bestconf)
 		ctfhistval.append(bestctfvalue)
 

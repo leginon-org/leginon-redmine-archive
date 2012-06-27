@@ -20,8 +20,19 @@ function readACENormFile($filename) {
 	return $acedata;
 }
 
-function getAceViewerForm($name) {
+function getAceViewerForm($name,$aceruns) {
 	global $ACE;
+
+	if (is_array($aceruns) && count($aceruns) > 1) {
+		$runselect = 'or choose run: <select id="'.$name.'acerun">';
+		$runselect.="<option value='-1'>all</option>";
+		foreach ($aceruns as $run) {
+			$runselect.="<option value='".$run['DEF_id']."'>".$run['name']."</option>";
+		}
+		$runselect.='</select>';
+		$runselect.='<br/>';
+	}
+
 	$aceform='Best CTF estimation of ';
 	$aceform.='<ul style="margin:0; list-style-type:none">';
 	$aceform.='<select id="'.$name.'acemethod">';
@@ -32,11 +43,13 @@ function getAceViewerForm($name) {
 	$aceform.='</select>';
 	$aceform.=' method(s)';
 	$aceform.='</ul>';
+	$aceform.=$runselect;
 	$aceform.='<br/>';
 	$aceform.='Show ';
 	$aceform.='<select id="'.$name.'aceparam">';
-	$aceform.="<option value='1'>2D fft fit</option>";
-	$aceform.="<option value='2'>1D graph</option>";
+	$aceform.="<option value='3'>package diagnosis</option>";
+	$aceform.="<option value='1'>2D power spec overlay</option>";
+	$aceform.="<option value='2'>1D component fit graph</option>";
 	$aceform.='</select>';
 	$aceform.='<hr>';
 	$aceform.='For ACE2 1D graph only ';

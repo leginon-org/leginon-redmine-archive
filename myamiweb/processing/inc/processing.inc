@@ -469,7 +469,7 @@ function addAppionWrapper($command, $processhost=false)
 
 
 /**************************************/
-function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc, $testimg=False) 
+function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc, $testimg=False, $nodes=0, $ppn=0) 
 {
 	/*
 		If user clicked run button it launches job on appion cluster
@@ -480,7 +480,7 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc, $testimg=Fal
 		$_POST['runname']
 		$_POST['outdir']
 		need to be defined and correct
-		*/
+	*/
 	$expId=$_GET['expId'];
 	// uploadimage jobtype need to be handled differently since it has none of these
 	if ($jobtype != 'uploadimage' && $jobtype != 'etomorecon') {
@@ -491,6 +491,9 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc, $testimg=Fal
 		$runname=$_POST['runname'];
 		if (empty($runname))
 			return "<B>ERROR:</B> undefined runname";
+		//Only allow alphanumeric _- characters in runname
+		if ($runname != preg_replace("/[^A-Za-z0-9_-]/", "", $runname))
+			return "<b>ERROR:</b> Only alphanumeric characters in runname";
 		$outdir=$_POST['outdir'];
 		if (empty($outdir))
 			return "<B>ERROR:</B> undefined outdir";
@@ -533,7 +536,7 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc, $testimg=Fal
 	if (!preg_match("/--projectid=/", $command))
 	$command .= "--projectid=$projectid ";
 	if (!preg_match("/--expid=/", $command) && !empty($expId))
-	$command .= "--expId=$expId ";
+	$command .= "--expid=$expId ";
 	if (!preg_match("/--jobtype=/", $command))
 	$command .= "--jobtype=$jobtype ";
 	
@@ -549,7 +552,7 @@ function showOrSubmitCommand($command, $headinfo, $jobtype, $nproc, $testimg=Fal
 			return "<B>ERROR:</B> Enter a user name and password";
 		}
 
-		$errors = submitAppionJob($command, $outdir, $runname, $expId, $jobtype, $testimg, False, False, $nproc);
+		$errors = submitAppionJob($command, $outdir, $runname, $expId, $jobtype, $testimg, False, False, $nproc, $ppn, $nodes);
 		
 		// if errors:
 		if ($errors) {
@@ -894,6 +897,7 @@ function writeTestResults($jpg,$ccclist,$bin,$process_str='')
 	if ($process_str === '') {
 		$process_str = getProcessString();
 	}
+	clearstatcache(); // clear cache
 	$fileExists = file_exists($jpg);
   	if ( ($fileExists===false) && (preg_match('/[Ss]how/',$process_str)) ) {
 		return "<font color='#990000'>The test results are not ready for display. Refresh the page after the command is run successfully. </font><br />\n";

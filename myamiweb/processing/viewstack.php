@@ -66,6 +66,7 @@ if ($reconId) {
 }
 if ($alignId) {
 	$classnumber=$particle->getAlignParticleNumber($alignId);
+	$helical = $particle->hasHelicalInfo($alignId);
 } elseif ($clusterId) {
 	$classnumber=$particle->getClusteringParticleNumber($clusterId);
 }
@@ -187,7 +188,9 @@ if ($alignId || $clusterId) {
 	while ($classindex < $numclass && $i < $n_images) {
 		if ($classnumber[$classindex]['classNumber'] == $i+1) {
 			if (array_key_exists('resolution', $classnumber[$classindex]))
-				$c[]= sprintf("'%d, %.1fA'", $classnumber[$classindex]['number'], $classnumber[$classindex]['resolution']);
+				if ($classnumber[$classindex]['resolution'])
+					$c[]= sprintf("'%d, %.1fA'", $classnumber[$classindex]['number'], $classnumber[$classindex]['resolution']);
+				else $c[]= sprintf("'%d'", $classnumber[$classindex]['number']);
 			else
 				$c[]= sprintf("'%d'", $classnumber[$classindex]['number']);
 			$classindex++;
@@ -352,6 +355,13 @@ function viewAlignedSubstack() {
 	}
 }
 
+function showHelicalInfo() {
+	var index = $('selectedIndex').value
+	if (alignId!="") {
+		window.open("showHelicalInfo.php?expId="+expId+"&alignId="+alignId+"&include="+index,'height=250,width=400');
+	}
+}
+
 </script>
 </head>
 <body onload='load()'>
@@ -403,6 +413,8 @@ if ($stackId || $clusterId || $alignId)
 if ($clusterId || $alignId) {
 	$includebuttons .= "<input type='button' value='Create Template Stack' onClick='createTemplateStackIncluded()'>\n";
 	$includebuttons .= "<input type='button' value='Run Common Lines' onClick='runCommonLines()'>\n";
+if ($helical && $alignId)
+	$includebuttons .= "<input type='button' value='Helical Info' onClick='showHelicalInfo()'>\n";
 }
 //if ($clusterId || $templateStackId)
 //	$includebuttons .= "<input type='button' value='Run Imagic 3d0' onClick='create3d0();' id='3d0button'>\n";
@@ -437,7 +449,6 @@ echo "</td></tr><tr><td>\n";
 if ($stackId)
 	echo "<input id='uploadavg' type='button' value='Average images as template' onClick='uploadavg();'>\n";
 echo "</td></tr></table>\n";
-
 ?>
 
 

@@ -278,7 +278,10 @@ function createUploadReconForm( $extra=false, $title='UploadRecon.py Launcher', 
 	echo "</form>\n";
 	echo "</center>\n";
 
-	echo showReference( $method );
+	// Our methods have been postpended with the word "recon"
+	// remove it so our references show up correctly.
+	$refType = str_replace("recon", "", $method);
+	echo showReference( $refType );
 
 	processing_footer();
 	exit;
@@ -417,7 +420,9 @@ function runUploadRecon() {
 	//$command.="--package=EMAN ";
 	//if (!$jobId) $command.="--rundir=$runpath ";
 	//if ($jobId) $command.="--rundir=$runpath ";
-	if ($jobId) $command.="--jobid=$jobId ";
+	// The parameter --jobid is normally used for current job and will be stripped off by apAgent
+	// Therefore, --refinejobid is used to keep it unique
+	if ($jobId) $command.="--refinejobid=$jobId ";
 	if ($contour) $command.="--contour=$contour ";
 	if ($mass) $command.="--mass=$mass ";
 	if ($zoom) $command.="--zoom=$zoom ";
@@ -446,7 +451,10 @@ function runUploadRecon() {
 	******************** */
 
 	// Add reference to top of the page
-	$headinfo .= showReference( $method );
+	// Our methods have been postpended with the word "recon"
+	// remove it so our references show up correctly.
+	$refType = str_replace("recon", "", $method);
+	$headinfo .= showReference( $refType );
 	
 	/* *******************
 	PART 5: Show or Run Command

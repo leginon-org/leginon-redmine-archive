@@ -110,7 +110,7 @@ class ContourPickerPanel(TargetPanel.TraceTargetImagePanel):
 
 	def _onLeftClick(self, evt):
 		if self.selectedtype is not None:
-			x, y = self.view2image((evt.X, evt.Y))
+			x, y = self.view2image((evt.GetX(), evt.GetY()))
 			has_tracetooltarget = False
 			old = self.getTargets(self.selectedtype.name)
 			self.setTargets(self.selectedtype.name, old + self.tracetool.xypath)
@@ -120,6 +120,8 @@ class ContourPickerPanel(TargetPanel.TraceTargetImagePanel):
 		self.picker.onEdgeFinding(evt)
 		#if self.selectedtype.name == self.picker.s:
 		#	self.picker.addManualPoint()
+		if self.picker.autoadd.GetValue():
+			self.picker.onSelected(evt)
 
 	def Draw(self, dc):
 	#	now = time.time()
@@ -637,6 +639,9 @@ class PickerApp(wx.App):
 		self.Bind(wx.EVT_BUTTON, self.onSelected, self.add)
 		self.buttonrow.Add(self.add, 0, wx.ALIGN_CENTER_HORIZONTAL|wx.ALL, 3)
 
+		self.autoadd = wx.CheckBox(self.frame, -1, 'Auto Add')
+		#self.add.SetMinSize((200,40))
+		self.buttonrow.Add(self.autoadd, 0, wx.ALIGN_CENTER_HORIZONTAL|wx.ALL, 3)
 
 		self.removeLast = wx.Button(self.frame, wx.ID_REMOVE, 'Remove &Last Object')
 		self.add.SetMinSize((200,40))
@@ -713,7 +718,7 @@ class PickerApp(wx.App):
 		'''
 		vertices = []
 		vertices = self.panel.getTargetPositions('Manually Create Contours');
-		if len(vertices)>0:
+		if len(vertices)>2:   # ignore and erase contours of 2 or less points
 			# Minimization is not done to object of small number of vertices because it may be distorted
 			if len(vertices)>10:
 				# reduce the number of vertices before saving
@@ -834,6 +839,11 @@ class ContourPicker(manualpicker.ManualPicker):
 		c = None
 		counter = 0
 		for i in range(len(targetsList)):
+			# safe-guard from 1 or 2 point target
+			if len(targetsList[i]) < 3:
+				apDisplay.printWarning('contour %d has only %d points....IGNORED' % (i,len(targetsList[i])))
+				counter += 1
+				continue
 			c=appiondata.ApContourData(name="contour"+str(int(self.startPoint)+i), image=imgdata, x=contourTargets[counter].x, y=contourTargets[counter].y,version=self.maxVersion+1, method='auto', particleType=self.app.particleTypeList[counter], selectionrun=rundata)
 			c.insert()
 			counter += 1

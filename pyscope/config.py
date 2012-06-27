@@ -4,16 +4,19 @@ import sys
 import ConfigParser
 import imp
 import os
+import inspect
 import pyscope
 import pyscope.tem
 import pyscope.ccdcamera
+import pyami.fileutil
 
 configured = None
 temclasses = None
 cameraclasses = None
+configfiles = None
 
 def parse():
-	global configured, temclasses, cameraclasses
+	global configured, temclasses, cameraclasses, configfiles
 
 	configparser = ConfigParser.SafeConfigParser()
 
@@ -21,14 +24,19 @@ def parse():
 	modpath = pyscope.__path__
 
 	# read instruments.cfg
-	filename = os.path.join(modpath[0], 'instruments.cfg')
-	if not os.path.exists(filename):
-		print 'please configure %s' % (filename,)
+	confdirs = pyami.fileutil.get_config_dirs()
+	filenames = [os.path.join(confdir, 'instruments.cfg') for confdir in confdirs]
+	one_exists = False
+	for filename in filenames:
+		if os.path.exists(filename):
+			one_exists = True
+	if not one_exists:
+		print 'please configure at least one of these:  %s' % (filenames,)
 		sys.exit()
 	try:
-		configparser.read([filename])
+		configfiles = configparser.read(filenames)
 	except:
-		print 'error reading %s' % (filename,)
+		print 'error reading %s' % (filenames,)
 		sys.exit()
 
 	# parse
@@ -93,6 +101,7 @@ def getCameraClasses():
 	
 def getNameByClass(cls):
 	conf = getConfigured()
-	for name,value in conf.items():
-		if issubclass(cls, value['class']):
-			return name
+	for bcls in inspect.getmro(cls):
+		for name,value in conf.items():
+			if bcls is value['class']:
+				return name

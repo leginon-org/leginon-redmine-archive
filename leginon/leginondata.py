@@ -162,6 +162,7 @@ scope_params = (
 camera_params = (
 	('dimension', dict),
 	('binning', dict),
+	('binned multiplier', float),
 	('offset', dict),
 	('exposure time', float),
 	('exposure type', str),
@@ -484,6 +485,7 @@ class PresetData(InSessionData):
 			('skip', bool),
 			('save frames', bool),
 			('use frames', tuple),
+			('readout delay', int),
 		)
 	typemap = classmethod(typemap)
 
@@ -679,6 +681,13 @@ class AcquisitionImageData(CameraImageData):
 			('tilt series', TiltSeriesData),
 			('version', int),
 			('tiltnumber', int),
+		)
+	typemap = classmethod(typemap)
+
+class DoseImageData(CameraImageData):
+	def typemap(cls):
+		return CameraImageData.typemap() + (
+			('preset', PresetData),
 		)
 	typemap = classmethod(typemap)
 
@@ -1092,6 +1101,7 @@ class CameraSettingsData(Data):
 			('exposure time', float),
 			('save frames', bool),
 			('use frames', tuple),
+			('readout delay', int),
 		)
 	typemap = classmethod(typemap)
 
@@ -1647,6 +1657,7 @@ class FocuserSettingsData(AcquisitionSettingsData):
 			('melt preset', str),
 			('melt time', float),
 			('acquire final', bool),
+			('manual focus preset', str),
 		)
 	typemap = classmethod(typemap)
 
@@ -2241,4 +2252,20 @@ class AlignmentManagerSettingsData(TargetRepeaterSettingsData):
 
 class FixAlignmentData(ReferenceRequestData):
 	pass
+
+class DDinfoKeyData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('name', str),
+		)
+	typemap = classmethod(typemap)
+
+class DDinfoValueData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('camera', CameraEMData),
+			('infokey', DDinfoKeyData),
+			('infovalue', str),
+		)
+	typemap = classmethod(typemap)
 

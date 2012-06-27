@@ -24,13 +24,15 @@ import subprocess
 import re
 import os
 
+hide_incomplete = False
+
 class BeamTiltImager(manualfocuschecker.ManualFocusChecker):
 	panelclass = gui.wx.BeamTiltImager.Panel
 	settingsclass = leginondata.BeamTiltImagerSettingsData
 	defaultsettings = manualfocuschecker.ManualFocusChecker.defaultsettings
 	defaultsettings.update({
 		'process target type': 'focus',
-		'beam tilt': 0.01,
+		'beam tilt': 0.005,
 		'beam tilt count': 1,
 		'sites': 0,
 		'startangle': 0,
@@ -47,7 +49,9 @@ class BeamTiltImager(manualfocuschecker.ManualFocusChecker):
 
 		self.correlator = correlator.Correlator()
 		self.correlation_types = ['cross', 'phase']
-		self.tableau_types = ['beam tilt series-power', 'beam tilt series-image','split image-power']
+		self.tableau_types = ['beam tilt series-power','split image-power']
+		if not hide_incomplete:
+			self.tableau_types.append('beam tilt series-image')
 		self.tiltdelta = 5e-3
 		self.tabscale = None
 		manualfocuschecker.ManualFocusChecker.__init__(self, id, session, managerlocation, **kwargs)

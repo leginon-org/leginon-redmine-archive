@@ -10,6 +10,7 @@ from appionlib import apDDprocess
 from appionlib import apDisplay
 from appionlib import apFile
 from appionlib import apStack
+from appionlib import appiondata
 
 class MakeRawFrameStackLoop(appionLoop2.AppionLoop):
 	#=======================
@@ -60,6 +61,21 @@ class MakeRawFrameStackLoop(appionLoop2.AppionLoop):
 
 	def commitToDatabase(self, imgdata):
 		pass
+
+	def insertFunctionRun(self):
+		qparams = appiondata.ApDDStackParamsData(preset=self.params['preset'])
+		qpath = appiondata.ApPathData(path=os.path.abspath(self.params['rundir']))
+		sessiondata = self.getSessionData()
+		q = appiondata.ApDDStackRunData(runname=self.params['runname'],params=qparams,session=sessiondata,path=qpath)
+		results = q.query()
+		if results:
+			self.rundata = results[0]
+		else:
+			if self.params['commit'] is True:
+				q.insert()
+				self.rundata = q
+			else:
+				self.rundata = {}
 
 if __name__ == '__main__':
 	makeStack = MakeRawFrameStackLoop()

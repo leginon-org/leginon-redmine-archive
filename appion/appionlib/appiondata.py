@@ -116,6 +116,7 @@ class ApParticleData(Data):
 			('peakarea', int),
 			('diameter', float),
 			('label', str),
+			('helixnum', int),
 		)
 	typemap = classmethod(typemap)
 
@@ -126,6 +127,7 @@ class ApSelectionRunData(Data):
 			('hidden', bool),
 			('path', ApPathData),
 			('session', leginon.leginondata.SessionData),
+			('description', str),
 			('params', ApSelectionParamsData),
 			('dogparams', ApDogParamsData),
 			('manparams', ApManualParamsData),
@@ -345,6 +347,7 @@ class ApAceRunData(Data):
 		return Data.typemap() + (
 			('aceparams', ApAceParamsData),
 			('ctftilt_params', ApCtfTiltParamsData),
+			('xmipp_ctf_params', ApXmippCtfParamsData),
 			('ace2_params', ApAce2ParamsData),
 			('session', leginon.leginondata.SessionData),
 			('path', ApPathData),
@@ -390,6 +393,14 @@ class ApAce2ParamsData(Data):
 		)
 	typemap = classmethod(typemap)
 
+class ApXmippCtfParamsData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('fieldsize', int),
+		)
+	typemap = classmethod(typemap)
+
+
 class ApCtfTiltParamsData(Data):
 	def typemap(cls):
 		return Data.typemap() + (
@@ -411,22 +422,23 @@ class ApCtfData(Data):
 		return Data.typemap() + (
 			('acerun', ApAceRunData),
 			('image', leginon.leginondata.AcquisitionImageData),
-			('defocus1', float),
-			('defocus2', float),
-			('defocusinit', float),
-			('amplitude_contrast', float),
-			('angle_astigmatism', float),
-			('tilt_angle', float),
-			('tilt_axis_angle', float),
-			('snr', float),
+			('cs', float), # in millimeters
+			('defocusinit', float), #initial defocus
+			('amplitude_contrast', float), #sqrt(1-A^2)sin + A*cos format
+			('defocus1', float), #in negative meters for underfocus |def1| < |def2|
+			('defocus2', float), #in negative meters for underfocus
+			('angle_astigmatism', float), # in counter-clockwise degrees from x-axis
 			('confidence', float),
 			('confidence_d', float),
-			('graph1', str),
-			('graph2', str),
-			('mat_file', str),
-			('cross_correlation', float),
-			('ctfvalues_file', str),
-			('cs', float),
+			('graph1', str), #2d powerspectra
+			('graph2', str), #1d plot showing fit
+			('graph3', str), #raw native plot from software 
+			('cross_correlation', float), #direct from ctffind
+			('ctfvalues_file', str), #used for ace2correct
+			('mat_file', str), #from ACE1
+			('tilt_angle', float), #from ctftilt
+			('tilt_axis_angle', float), #from ctftilt
+			('snr', float),
 			('noise1', float),
 			('noise2', float),
 			('noise3', float),
@@ -653,6 +665,24 @@ class ApParticleMovieData(Data):
 			('format', str),
 		)
 	typemap = classmethod(typemap)
+
+class ApDDStackRunData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('runname', str),
+			('params', ApDDStackParamsData),
+			('session', leginon.leginondata.SessionData),
+			('path', ApPathData),
+		)
+	typemap = classmethod(typemap)
+
+class ApDDStackParamsData(Data):
+	def typemap(cls):
+		return Data.typemap() + (
+			('preset', str),
+		)
+	typemap = classmethod(typemap)
+
 
 ### END Stack tables ###
 ### START alignment tables  ###

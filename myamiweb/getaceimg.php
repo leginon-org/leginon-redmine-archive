@@ -6,6 +6,7 @@ require "inc/particledata.inc";
 require "inc/ace.inc";
 
 $imgId=$_GET['id'];
+$runId=$_GET['r'];
 $preset=$_GET['preset'];
 $imgsize=$_GET['s'];
 $graphsc_x=$_GET['scx'];
@@ -16,6 +17,7 @@ if (!is_numeric($graphsc_y)) $graphsc_y=1;
 switch($_GET['g']){
 	case 1: $graph="graph1"; break;
 	case 2: $graph="graph2"; break;
+	case 3: $graph="packagedefault_graph"; break;
 }
 
 switch($_GET['m']){
@@ -24,7 +26,6 @@ switch($_GET['m']){
 	case 3: $ctfmethod="ace2"; break;
 	case 4:
 		$ctfmethod="ctffind"; 
-		$graph="graph1";
 		break;
 }
 
@@ -56,7 +57,7 @@ $sessionId = $imageinfo['sessionId'];
 $filename = $leginondata->getFilenameFromId($imgId);
 $normfile = trim($filename).'.norm.txt';
 $ctf = new particledata();
-list($ctfdata)  = $ctf->getCtfInfoFromImageId($imgId, $order=False, $ctfmethod);
+list($ctfdata)  = $ctf->getCtfInfoFromImageId($imgId, $order=False, $ctfmethod,$runId);
 $aceparams = $ctf->getAceParams($ctfdata['acerunId']);
 
 if ($ctfmethod==='') {
@@ -64,17 +65,21 @@ if ($ctfmethod==='') {
 	// we need to set ctfmethod to ctffind in order to get the image path
 	if ($aceparams['REF|ApCtfTiltParamsData|ctftilt_params'] !== null) {
 		$ctfmethod='ctffind';
-		$graph="graph1";
 	}
 }
 if ($ctfmethod==='ctffind') {
 	$path=$ctfdata['path'].'/';
+	# show the original ctffind diagnosis jpeg image
+	$ctfdata['packagedefault_graph'] = str_replace('powerspec.jpg','pow.jpg',$ctfdata['graph1']);
 }
 else {
 	$path=$ctfdata['path'].'/opimages/';
+	# show 1D graph as default diagnosis
+	$ctfdata['packagedefault_graph'] = $ctfdata['graph1'];
 }
 
 $filename=$path.$ctfdata[$graph];
+
 (array)$ctfimageinfo = @getimagesize($filename);
 $imagecreate = 'imagecreatefrompng';
 $imagemime = 'image/png';
@@ -84,6 +89,7 @@ switch ($ctfimageinfo['mime']) {
 		$imagemime = $ctfimageinfo['mime'];
 	break;
 }
+
 if ($img=@$imagecreate($filename)) {
 	resample($img, $imgsize);
 } else {
@@ -153,6 +159,7 @@ if ($img=@$imagecreate($filename)) {
 		imagedestroy($blkimg);
 	}
 }
+
 function rescaleArray($vals,$scx,$scy) {
 	// need to add a selection for scaling
 	$maxval = max($vals)*$scy;

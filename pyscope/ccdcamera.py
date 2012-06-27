@@ -92,6 +92,10 @@ class CCDCamera(baseinstrument.BaseInstrument):
 			settings['use frames'] = self.getUseFrames()
 		except:
 			settings['use frames'] = ()
+		try:
+			settings['readout delay'] = self.getReadoutDelay()
+		except:
+			settings['readout delay'] = 0
 		return settings
 
 	def setSettings(self, settings):
@@ -105,6 +109,26 @@ class CCDCamera(baseinstrument.BaseInstrument):
 			self.setUseFrames(settings['use frames'])
 		except:
 			pass
+		try:
+			self.setReadoutDelay(settings['readout delay'])
+		except:
+			pass
+
+	def getBinnedMultiplier(self):
+		'''
+Standard hardware binning causes a binned pixel to have
+following:
+	binned value = binning^2 * unbinned value
+	OR
+	unbinned value = binned value / binning^2
+Sometime binning is done in software or modified in software, so there
+could be a non-standard factor:
+	binned value = binning^2 * unbinnned value / M
+	OR
+	unbinned value = M * binned value / binning^2
+This method returns that multiplier, M.  In the standard case, returns 1.0.
+		'''
+		return 1.0
 
 	def getBinning(self):
 		raise NotImplementedError

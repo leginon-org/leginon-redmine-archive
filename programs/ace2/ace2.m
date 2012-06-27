@@ -281,15 +281,22 @@ int main (int argc, char **argv) {
 	
 	fprintf(stderr,"\t\t\tDONE, Total Time: %2.2f\n",CPUTIME-t0);
 	
+	if ( isnan([ellipse rotation]) || isinf([ellipse rotation]) ) [ellipse setRotation:0.0];
+	f64 astigangle = [ellipse rotation]/DEG;
+	// if astig < 1 Angstrom, set angle to zero
+	if ( fabs(df2 - df1)*1e10 < 1) {
+		astigangle = 0.0;
+	}
+
 	fprintf(stderr,"\tFinal Params:\n");
-	fprintf(stderr,"\tDefocus: %2.5f %2.5f %2.5f\n",df1*1e6,df2*1e6,[ellipse rotation]*DEG);
+	//write out positive underfocus and degrees - per convention
+	fprintf(stderr,"\tDefocus: %2.5f %2.5f %2.5f\n",-df2*1e6,-df1*1e6,astigangle);
 	fprintf(stderr,"\tAmplitude Contrast: %2.2f%%\n",ac1*100);
-	fprintf(stderr,"\tVoltage: %3.0f kv\n",getTEMVoltage(lm1)/1000.0);
+	fprintf(stderr,"\tVoltage: %3.0f kV\n",getTEMVoltage(lm1)/1000.0);
 	fprintf(stderr,"\tSpherical Aberration: %2.2fmm\n",cs1*1000.0);
 	fprintf(stderr,"\tAngstroms per pixel: %2.2f\n",1e10*0.5/([radial_average numberOfElements]*ap1));
 	fprintf(stderr,"\tConfidence Score: %2.2f\n",confidence);
 	
-	if ( isnan([ellipse rotation]) || isinf([ellipse rotation]) ) [ellipse setRotation:0.0];
 	if ( isnan(df1) || isinf(df1) ) df1 = 0.0;
 	if ( isnan(df2) || isinf(df2) ) df2 = 0.0;
 	if ( isnan(ac1) || isinf(ac1) ) ac1 = 0.0;
@@ -298,13 +305,15 @@ int main (int argc, char **argv) {
 	sprintf(name,"%s.ctf.txt",basename([image name]));
 	FILE * fp = fopen(name,"w");
 	
-	fprintf(fp,"\tFinal Params for image: %s\n",[image name]);	
-	fprintf(fp,"\tFinal Defocus: %e %e %e\n",df1,df2,[ellipse rotation]);
-	fprintf(fp,"\tAmplitude Contrast: %e\n",ac1);
-	fprintf(fp,"\tVoltage: %e\n",getTEMVoltage(lm1)/1.0e3);
-	fprintf(fp,"\tSpherical Aberration: %e\n",cs1);
-	fprintf(fp,"\tAngstroms per pixel: %le\n",apix);
-	fprintf(fp,"\tConfidence: %e\n",confidence);
+	fprintf(fp,"\tFinal Params for image: %s\n",[image name]);
+	//write out positive underfocus and degrees - per convention	
+	fprintf(fp,"\tFinal Defocus (m,m,deg): %e %e %f\n",-df2,-df1,astigangle);
+	fprintf(fp,"\tAmplitude Contrast: %f\n",ac1);
+	fprintf(fp,"\tVoltage (kV): %f\n",getTEMVoltage(lm1)/1.0e3);
+	fprintf(fp,"\tSpherical Aberration (mm): %f\n",cs1*1.0e3);
+	fprintf(fp,"\tAngstroms per pixel: %f\n",apix);
+	fprintf(fp,"\tConfidence: %f\n",confidence);
+	//fprintf(fp,"\tProgram: %s\n",COMPILE_INFO);
 	
 
 	fclose(fp);
@@ -627,7 +636,7 @@ void radialGradients( f64 * data, u32 rows, u32 cols, u32 ang_search, f64 ang_sp
 			f64 p3 = interpolate2d(data,y+3,x,rows,cols);
 			f64 p4 = interpolate2d(data,y-3,x,rows,cols);
 			
-			f64 angle = (atan((p1-p2)/(p3-p4))+rot*ang_spacing*RAD)*DEG;
+			f64 angle = (atan2((p1-p2),(p3-p4))+rot*ang_spacing*RAD)*DEG;
 			if ( angle < 0 ) angle = angle + 360.0;
 			if ( angle >= 360.0 ) angle = angle - 360.0;
 			if ( angle >= 180.0 ) angle = 360.0 - angle;

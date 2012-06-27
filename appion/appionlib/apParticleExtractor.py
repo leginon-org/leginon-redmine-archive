@@ -14,7 +14,7 @@ from appionlib import appionLoop2
 from appionlib import apImage
 from appionlib import apDisplay
 from appionlib import apDatabase
-from appionlib import apCtf
+from appionlib.apCtf import ctfdb
 from appionlib import apDefocalPairs
 from appionlib import appiondata
 from appionlib import apParticle
@@ -123,9 +123,25 @@ class ParticleExtractLoop(appionLoop2.AppionLoop):
 	def checkRequireCtf(self):
 			return self.params['ctfcutoff'] or self.params['mindefocus'] or self.params['maxdefocus']
 
+	def getCtfValueConfidenceForImage(self,imgdata,msg=False):
+		method = self.params['ctfmethod']
+		ctfrunid = self.params['ctfrunid']
+		if ctfrunid is None:
+			return ctfdb.getBestCtfValueForImage(imgdata,msg=msg,method=method)
+		else:
+			return ctfdb.getCtfValueForImage(imgdata, ctfrunid, msg=msg, method=method)
+
+	def getDefocusAmpConstForImage(self,imgdata,msg=False):
+		method = self.params['ctfmethod']
+		ctfrunid = self.params['ctfrunid']
+		if ctfrunid is None:
+			return ctfdb.getBestDefocusAndAmpConstForImage(imgdata, msg=msg, method=method)
+		else:
+			return ctfdb.getDefocusAndAmpConstForImage(imgdata, ctf_estimation_runid=ctfrunid, msg=msg, method=method)
+
 	def checkCtfParams(self, imgdata):
 		shortname = apDisplay.short(imgdata['filename'])
-		ctfvalue, conf = apCtf.getBestCtfValueForImage(imgdata,msg=False,method=self.params['ctfmethod'])
+		ctfvalue, conf = self.getCtfValueConfidenceForImage(imgdata,False)
 
 		### check if we have values and if we care
 		if ctfvalue is None:
@@ -239,6 +255,8 @@ class ParticleExtractLoop(appionLoop2.AppionLoop):
 			help="particle picking runid")
 		self.parser.add_option("--fromstackid", dest="fromstackid", type="int",
 			help="redo a stack from a previous stack")
+		self.parser.add_option("--ctfrunid", dest="ctfrunid", type="int",
+			help="consider only specific ctfrun")
 		self.parser.add_option("--partlimit", dest="partlimit", type="int",
 			help="particle limit")
 		self.parser.add_option("--mag", dest="mag", type="int",
@@ -370,7 +388,6 @@ class ParticleExtractLoop(appionLoop2.AppionLoop):
 			apFile.removeFile(rmfile)
 
 		### convert contours to particles
-		print self.params['particlelabel']
 		if self.selectiondata and self.params['particlelabel'] == '_trace':
 			self.convertTraceToParticlePeaks(imgdata)
 
@@ -440,13 +457,16 @@ class ParticleBoxLoop(ParticleExtractLoop):
 
 	def getParticlesInImage(self,imgdata):
 		partdatas,shiftdata = super(ParticleBoxLoop,self).getParticlesInImage(imgdata)
+		return self.removeBoxOutOfImage(imgdata,partdatas,shiftdata),shiftdata
+
+	def removeBoxOutOfImage(self,imgdata,partdatas,shiftdata):
 		imgdims = imgdata['camera']['dimension']
 		newpartdatas = []
 		for partdata in partdatas:
 			start_x,start_y = apBoxer.getBoxStartPosition(imgdata,self.half_box,partdata, shiftdata)
 			if apBoxer.checkBoxInImage(imgdims,start_x,start_y,self.boxsize):
 				newpartdatas.append(partdata)
-		return newpartdatas,shiftdata
+		return newpartdatas
 
 class Test(ParticleExtractLoop):
 	def processParticles(self,imgdata,partdatas,shiftdata):

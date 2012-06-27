@@ -10,6 +10,7 @@ import glob
 import socket
 import numpy
 import subprocess
+import copy
 from scipy import stats
 from scipy import ndimage
 #appion
@@ -18,7 +19,7 @@ from appionlib import apParticleExtractor
 from appionlib import apImage
 from appionlib import apDisplay
 from appionlib import apDatabase
-from appionlib import apCtf
+from appionlib.apCtf import ctfdb
 from appionlib import apStack
 from appionlib import apDefocalPairs
 from appionlib import appiondata
@@ -64,6 +65,13 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 	#=======================
 	def processParticles(self,imgdata,partdatas,shiftdata):
 		shortname = apDisplay.short(imgdata['filename'])
+
+		### if only selected points along helix,
+		### fill in points with helical step
+		if self.params['helicalstep']:
+			apix = apDatabase.getPixelSize(imgdata)
+			partdatas=self.fillWithHelicalStep(partdatas,apix)
+
 		### run batchboxer
 		self.boxedpartdatas, self.imgstackfile, self.partmeantree = self.boxParticlesFromImage(imgdata,partdatas,shiftdata)
 		if self.boxedpartdatas is None:
@@ -90,10 +98,81 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 				apStack.averageStack(stack=stackpath)
 		return totalpart
 
+	def removeBoxOutOfImage(self,imgdata,partdatas,shiftdata):
+		# if using a helical step, particles will be filled between picks,
+		# so don't want to throw picks out right now
+		if self.params['helicalstep'] is not None:
+			return partdatas
+		else:
+			return super(Makestack2Loop,self).removeBoxOutOfImage(imgdata,partdatas,shiftdata)
+
+	#=======================
+	def fillWithHelicalStep(self,partdatas,apix):
+		"""
+		each helix should be distinguished by a different angle number,
+		fill in particles along the helices using the specified step size
+		return a new copy of the partdatas
+		"""
+		newpartdatas=[]
+		## convert helicalstep to pixels
+		steppix=self.params['helicalstep']/apix
+		try:
+			lasthelix=partdatas[0]['helixnum']
+			lastx=partdatas[0]['xcoord']
+			lasty=partdatas[0]['ycoord']
+			leftover=0
+		except:
+			return
+		numhelices=1
+		for part in partdatas:
+			currenthelix=part['helixnum']
+			currentx=part['xcoord']
+			currenty=part['ycoord']
+			if currentx==lastx and currenty==lasty:
+				continue
+			### only fill in within the same helix
+			if currenthelix==lasthelix:
+				angle = math.atan2((currentx-lastx),(currenty-lasty))
+				### in order for helix to be continuous, we can't simply
+				### start exactly from the current point
+				### we have to figure out what was leftover from the last
+				### portion of the helix, and redefine the starting point
+				if leftover > 0:
+					d=steppix-leftover
+					lastx=(d*math.sin(angle))+lastx
+					lasty=(d*math.cos(angle))+lasty
+				pixdistance = math.hypot(lastx-currentx, lasty-currenty)
+				# get number of particles between the two points
+				numsteps=int(math.floor(pixdistance/steppix))
+				# keep remainder to continue the helix
+				leftover = pixdistance-(numsteps*steppix)
+				#print "should take %i steps at %i pixels per step, (leftover:%i)"%(numsteps,steppix,leftover)
+				for step in range(numsteps+1):
+					pointx=lastx+(step*(steppix*math.sin(angle)))
+					pointy=lasty+(step*(steppix*math.cos(angle)))
+					newpartinfo=copy.copy(part)	
+					newpartinfo['xcoord']=int(pointx)
+					newpartinfo['ycoord']=int(pointy)
+					# convert angle for appion database
+					newpartinfo['angle']=math.degrees(-angle)-90
+					newpartinfo['label']='helical'
+					newpartinfo['selectionrun']=self.newselectiondata
+					newpartdatas.append(newpartinfo)
+			else:
+				numhelices+=1
+				leftover=0
+			lastx=currentx
+			lasty=currenty
+			lasthelix=currenthelix
+		apDisplay.printMsg("Filled %i helices with %i helical segments"%(numhelices,len(newpartdatas)))
+		return newpartdatas
+
+	#=======================
 	def getDDImageArray(self,imgdata):
 		self.dd.setImageData(imgdata)
 		return self.dd.correctFrameImage(self.params['startframe'],self.params['nframe'])
 
+	#=======================
 	def getOriginalImagePath(self, imgdata):
 		imgname = imgdata['filename']
 		shortname = apDisplay.short(imgdata['filename'])
@@ -150,6 +229,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		#emancmd = ("batchboxer input=%s dbbox=%s output=%s newsize=%i" 
 		#	%(imgpath, emanboxfile, imgstackfile, self.params['boxsize']))
 		apDisplay.printMsg("boxing "+str(len(parttree))+" particles into temp file: "+imgstackfile)
+
 		t0 = time.time()
 		if self.params['rotate'] is True:
 			apBoxer.boxerRotate(imgpath, parttree, imgstackfile, self.boxsize)
@@ -177,6 +257,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		partmeantree = []
 		t0 = time.time()
 		imagicdata = apImagicFile.readImagic(imgstackfile)
+		apDisplay.printMsg("gathering mean and stdev data")
 		### loop over the particles and read data
 		for i in range(len(boxedpartdatas)):
 			partdata = boxedpartdatas[i]
@@ -226,6 +307,10 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			partmeantree.append(partmeandict)
 		self.meanreadtimes.append(time.time()-t0)
 
+		### if xmipp-norm before phaseflip:
+		if self.params['xmipp-norm'] is not None and self.params['xmipp-norm-before'] is True:
+			self.xmippNormStack(imgstackfile)
+
 		### phase flipping
 		t0 = time.time()
 		if self.params['phaseflipped'] is True:
@@ -272,15 +357,18 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 
 	#=======================
 	def tiltPhaseFlipParticles(self, imgdata, imgstackfile, partdatas):
-		ctfvalue = apCtf.getBestTiltCtfValueForImage(imgdata)
+		ctfvalue = ctfdb.getBestTiltCtfValueForImage(imgdata)
 		if ctfvalue is None:
 			apDisplay.printError("Failed to get ctf parameters")
 		apix = apDatabase.getPixelSize(imgdata)
 		ctfimgstackfile = os.path.join(self.params['rundir'], apDisplay.short(imgdata['filename'])+"-ctf.hed")
+		ampconst = ctfvalue['amplitude_contrast']
 
 		### calculate defocus at given position
-		CX = imgdata['camera']['dimension']['x']
-		CY = imgdata['camera']['dimension']['y']
+		dimx = imgdata['camera']['dimension']['x']
+		dimy = imgdata['camera']['dimension']['y']
+		CX = dimx/2
+		CY = dimy/2
 
 		if ctfvalue['tilt_axis_angle'] is not None:
 			N1 = -1.0 * math.sin( math.radians(ctfvalue['tilt_axis_angle']) )
@@ -306,29 +394,36 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			prepartarray = imagicdata['images'][i]
 			prepartmrc = "rawpart.dwn.mrc"
 			postpartmrc = "ctfpart.dwn.mrc"
-			apImage.arrayToMrc(partarray, prepartmrc, msg=False)
+			apImage.arrayToMrc(prepartarray, prepartmrc, msg=False)
 
 			### calculate ctf based on position
-			DX = CX - partdata['xcoord']
-			DY = CY - partdata['ycoord']
+			NX = partdata['xcoord']
+			NY = dimy-partdata['ycoord'] # reverse due to boxer flip
+
+			DX = CX - NX
+			DY = CY - NY
 			DF = (N1*DX + N2*DY) * PSIZE * math.tan( math.radians(ctfvalue['tilt_angle']) )
-			DFL1 = ctfvalue['defocus1']*-1.0e4 + DF
-			DFL2 = ctfvalue['defocus2']*-1.0e4 + DF
+			### defocus is in Angstroms
+			DFL1 = abs(ctfvalue['defocus1'])*1.0e10 + DF
+			DFL2 = abs(ctfvalue['defocus2'])*1.0e10 + DF
 			DF_final = (DFL1+DFL2)/2.0
 
-			### convert defocus to meters
+			### convert defocus to microns
 			defocus = DF_final*-1.0e-4
 
-			self.checkDefocus(defocus, shortname)
+			### check to make sure defocus is a reasonable value for applyctf
+			self.checkDefocus(defocus, apDisplay.short(imgdata['filename']))
 
-			parmstr = ("parm=%f,200,1,%.3f,0,17.4,9,1.53,%i,%.1f,%f" %(defocus, ampconst, voltage, cs, apix))
+			parmstr = ("parm=%f,200,1,%.3f,0,17.4,9,1.53,%i,%.1f,%f" 
+				%(defocus, ampconst, voltage, cs, apix))
 			emancmd = ("applyctf %s %s %s setparm flipphase" % (prepartmrc, postpartmrc, parmstr))
-			apEMAN.executeEmanCmd(emancmd, showcmd=True)
+			apEMAN.executeEmanCmd(emancmd, showcmd=False)
 
-			ctfpartarray = apImage.mrcToArray(postpartmrc)
+			ctfpartarray = apImage.mrcToArray(postpartmrc, msg=False)
 			ctfpartstack.append(ctfpartarray)
 
 		apImagicFile.writeImagic(ctfpartstack, ctfimgstackfile)
+		return ctfimgstackfile
 
 	#=======================
 	def phaseFlipParticles(self, imgdata, imgstackfile):
@@ -344,19 +439,42 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 
 		apix = apDatabase.getPixelSize(imgdata)
 		### get the adjusted defocus value for no astigmatism
-		defocus, ampconst = apCtf.getBestDefocusAndAmpConstForImage(imgdata, msg=True, method=self.params['ctfmethod'])
+		defocus, ampconst = self.getDefocusAmpConstForImage(imgdata,True)
 		defocus *= 1.0e6
 		### check to make sure defocus is a reasonable value for applyctf
 		self.checkDefocus(defocus, shortname)
 		### get all CTF parameters, we also need to get the CS value from the database
-		ctfdata, score = apCtf.getBestCtfValueForImage(imgdata, msg=False, method=self.params['ctfmethod'])
+		ctfdata, score = self.getCtfValueConfidenceForImage(imgdata, False)
 		#ampconst = ctfdata['amplitude_contrast'] ### we could use this too
 
 		# find cs
 		cs = self.getCS(ctfdata)
 
-		parmstr = ("parm=%f,200,1,%.3f,0,17.4,9,1.53,%i,%.1f,%f" %(defocus, ampconst, voltage, cs, apix))
-		emancmd = ("applyctf %s %s %s setparm flipphase" % (imgstackfile, ctfimgstackfile, parmstr))
+		"""
+		// from EMAN1 source code: EMAN/src/eman/libEM/EMTypes.h 
+			and EMAN/src/eman/libEM/EMDataA.C
+		struct CTFParam {
+			 float defocus;	// in microns, negative underfocus
+			 float bfactor;	// not needed for phaseflip, envelope function width (Pi/2 * Wg)^2
+			 float amplitude; // not needed for phaseflip, 
+										ctf amplitude, mutliplied times the entire equation
+			 float ampcont;	// number from 0 to 1, sqrt(1 - a^2) format
+			 float noise1/exps4;	// not needed for phaseflip, noise exponential decay amplitude
+			 float noise2;		// not needed for phaseflip, width
+			 float noise3;		// not needed for phaseflip, noise gaussian amplitude
+			 float noise4;		// not needed for phaseflip, noide gaussian width
+			 float voltage;	// in kilovolts
+			 float cs;			// in millimeters
+			 float apix;		// in Angstroms per pixel
+		};
+
+		noise follows noise3*exp[ -1*(pi/2*noise4*x0)^2 - x0*noise2 - sqrt(fabs(x0))*noise1]
+		"""
+		parmstr = ("parm=%f,200,1,%.3f,0,17.4,9,1.53,%i,%.1f,%f" 
+			%(defocus, ampconst, voltage, cs, apix))
+
+		emancmd = ("applyctf %s %s %s setparm flipphase" 
+			%(imgstackfile, ctfimgstackfile, parmstr))
 
 		apDisplay.printMsg("phaseflipping particles with defocus "+str(round(defocus,3))+" microns")
 		apEMAN.executeEmanCmd(emancmd, showcmd=True)
@@ -375,11 +493,11 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			voltage = (imgdata['scope']['high tension'])/1000
 
 		apix = apDatabase.getPixelSize(imgdata)
-		defocus, ampconst = apCtf.getBestDefocusAndAmpConstForImage(imgdata, msg=True, method=self.params['ctfmethod'])
+		defocus, ampconst = self.getDefocusAmpConstForImage(imgdata, True)
 		defocus *= 1.0e6
 		self.checkDefocus(defocus, shortname)
 		### get all CTF parameters, we also need to get the CS value from the database
-		ctfdata, score = apCtf.getBestCtfValueForImage(imgdata, msg=False, method=self.params['ctfmethod'])
+		ctfdata, score = self.getCtfValueConfidenceForImage(imgdata,False)
 		#ampconst = ctfdata['amplitude_contrast'] ### we could use this too
 
 		# find cs
@@ -406,7 +524,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 	def phaseFlipAceTwo(self, inimgpath, imgdata):
 
 		apix = apDatabase.getPixelSize(imgdata)
-		bestctfvalue, bestconf = apCtf.getBestCtfValueForImage(imgdata, msg=True, method=self.params['ctfmethod'])
+		bestctfvalue, bestconf = self.getCtfValueConfidenceForImage(imgdata, True)
 
 		if bestctfvalue is None:
 			apDisplay.printWarning("No ctf estimation for current image")
@@ -435,7 +553,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			df2 = bestctfvalue['defocus2']
 			angast = bestctfvalue['angle_astigmatism']*math.pi/180.0
 			amp = bestctfvalue['amplitude_contrast']
-			kev = imgdata['scope']['high tension']/1000
+			kv = imgdata['scope']['high tension']/1000
 			cs = bestctfvalue['cs']/1000
 			conf = bestctfvalue['confidence_d']
 
@@ -443,10 +561,10 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 				os.remove(ctfvaluesfile)
 			f = open(ctfvaluesfile,'w')
 			f.write("\tFinal Params for image: %s.mrc\n"%imgdata['filename'])
-			f.write("\tFinal Defocus: %.6e %.6e %.6e\n"%(df1,df2,angast))
-			f.write("\tAmplitude Contrast: %.6e\n"%amp)
-			f.write("\tVoltage: %.6e\n"%kev)
-			f.write("\tSpherical Aberration: %.6e\n"%cs)
+			f.write("\tFinal Defocus (m,m,deg): %.6e %.6e %.6f\n"%(df1,df2,math.degrees(angast)))
+			f.write("\tAmplitude Contrast: %.6f\n"%amp)
+			f.write("\tVoltage (kV): %.6f\n"%kv)
+			f.write("\tSpherical Aberration (mm): %.6e\n"%cs)
 			f.write("\tAngstroms per pixel: %.6e\n"%apix)
 			f.write("\tConfidence: %.6e\n"%conf)
 			f.close()
@@ -513,7 +631,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		phaseflip whole image using spider
 		"""
 
-		bestctfvalue, bestconf = apCtf.getBestCtfValueForImage(imgdata,msg=True,method=self.params['ctfmethod'])
+		bestctfvalue, bestconf = self.getCtfValueConfidenceForImage(imgdata, True)
 
 		if bestctfvalue is None:
 			apDisplay.printWarning("No ctf estimation for current image")
@@ -626,7 +744,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			elif p=='aceCutoff' and self.params['ctfcutoff']:
 				stparamq[p] = self.params['ctfcutoff']	
 			else:
-				print "missing", p.lower()
+				apDisplay.printMsg("missing "+p.lower())
 		if self.params['phaseflipped'] is True:
 			stparamq['phaseFlipped'] = True
 			stparamq['fliptype'] = self.params['fliptype']
@@ -648,7 +766,12 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		runq = appiondata.ApStackRunData()
 		runq['stackRunName'] = self.params['runname']
 		runq['session'] = sessiondata
-		runq['selectionrun'] = self.selectiondata
+
+		if self.params['helicalstep']:
+			runq['selectionrun'] = self.newselectiondata
+		else:
+			runq['selectionrun'] = self.selectiondata
+
       	### see if stack run already exists in the database (just checking runname & session)
 		uniqrundatas = runq.query(results=1)
 
@@ -748,6 +871,8 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			help="high pass filter")
 		self.parser.add_option("--xmipp-normalize", dest="xmipp-norm", type="float",
 			help="normalize the entire stack using xmipp")
+		self.parser.add_option("--helicalstep", dest="helicalstep", type="float",
+			help="helical step, in Angstroms")
 
 		### true/false
 		self.parser.add_option("--phaseflip", dest="phaseflipped", default=False,
@@ -760,6 +885,8 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			action="store_true", help="create a spider stack")
 		self.parser.add_option("--normalized", dest="normalized", default=False,
 			action="store_true", help="normalize the entire stack")
+		self.parser.add_option("--xmipp-norm-before", dest="xmipp-norm-before", default=False,
+			action="store_true", help="xmipp normalize before phaseflipping")
 
 		self.parser.add_option("--no-meanplot", dest="meanplot", default=True,
 			action="store_false", help="do not make stack mean plot")
@@ -805,7 +932,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		if self.params['fliptype'] == 'ace2image' and self.params['ctfmethod'] is None:
 			apDisplay.printMsg("setting ctf method to ace2")
 			self.params['ctfmethod'] = 'ace2'
-		if self.params['xmipp-norm'] is not None:
+		if self.params['xmipp-norm'] is not None or self.params['xmipp-norm-before'] is not None:
 			self.xmippexe = apParam.getExecPath("xmipp_normalize", die=True)
 		if self.params['particlelabel'] == 'user' and self.params['rotate'] is True:
 			apDisplay.printError("User selected targets do not have rotation angles")
@@ -814,6 +941,15 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			
 
 	def resetStack(self):
+		if self.params['helicalstep'] is not None:
+			### a new set of ApParticleData are stored, in case
+			### the inserted particles will be used to create future stacks
+			### So new selection run name has the helical step size
+			oldsrn = self.selectiondata['name']
+			newsrn = "%s_%i"%(oldsrn,self.params['helicalstep'])
+			self.newselectiondata = copy.copy(self.selectiondata)
+			self.newselectiondata['name'] = newsrn
+
 		if self.params['commit'] is True:
 			self.insertStackRun()
 		else:
@@ -865,8 +1001,20 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			stackid = apStack.getStackIdFromPath(stackpath)
 			if stackid is not None:
 				apStackMeanPlot.makeStackMeanPlot(stackid)
+
 		### apply xmipp normalization
-		if self.params['xmipp-norm'] is not None:
+		if self.params['xmipp-norm'] is not None and self.params['xmipp-norm-before'] is False:
+			self.xmippNormStack(stackpath)
+
+		apDisplay.printColor("Timing stats", "blue")
+		self.printTimeStats("Batch Boxer", self.batchboxertimes)
+		self.printTimeStats("Ctf Correction", self.ctftimes)
+		self.printTimeStats("Stack Merging", self.mergestacktimes)
+		self.printTimeStats("Mean/Std Read", self.meanreadtimes)
+		self.printTimeStats("DB Insertion", self.insertdbtimes)
+
+	#=======================
+	def xmippNormStack(self, stackpath):
 			### convert stack into single spider files
 			selfile = apXmipp.breakupStackIntoSingleFiles(stackpath)	
 
@@ -896,13 +1044,6 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			apFile.removeFile(selfile)
 			apFile.removeDir("partfiles")
 			
-		apDisplay.printColor("Timing stats", "blue")
-		self.printTimeStats("Batch Boxer", self.batchboxertimes)
-		self.printTimeStats("Ctf Correction", self.ctftimes)
-		self.printTimeStats("Stack Merging", self.mergestacktimes)
-		self.printTimeStats("Mean/Std Read", self.meanreadtimes)
-		self.printTimeStats("DB Insertion", self.insertdbtimes)
-
 	#=======================
 	def printTimeStats(self, name, timelist):
 		if len(timelist) < 2:
