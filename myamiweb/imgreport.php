@@ -341,7 +341,7 @@ if (!empty($ctfdata)) {
 				$display=$graph1name=$v;
 			else
 				$display = $v;
-			if (!preg+match('%^graph%',$k))
+			if (!preg_match('%^graph%',$k))
 				echo formatHtmlRow($k,$display);
 		}
 		$graph1=$graphpath."/".$graph1name;
