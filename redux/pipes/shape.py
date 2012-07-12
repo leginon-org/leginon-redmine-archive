@@ -35,7 +35,7 @@ class Shape(Pipe):
 		if is_rgb:
 			zoomfactors.append(1.0)
 			binfactor=None
-		if binfactor[0] and binfactor[1]:
+		if binfactor and binfactor[0] and binfactor[1]:
 			output = pyami.imagefun.bin(input, binfactor[0], binfactor[1])
 		else:
 			output = scipy.ndimage.zoom(input, zoomfactors)
