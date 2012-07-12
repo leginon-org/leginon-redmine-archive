@@ -77,6 +77,7 @@ class CtfDisplay(object):
 			firstpeak, full=False)
 		pixelrdatae, zdatae = ctftools.ellipticalAverage(zdata2d, self.ratio, self.angle,
 			self.ringwidth, firstpeak, full=False, filename=self.powerspecfile)
+	
 		if self.debug is True:
 			print "  Pixel MIN/MAX:", pixelrdata.min(), pixelrdata.max()
 			print "  Pixel # points", len(pixelrdata)
@@ -621,6 +622,11 @@ class CtfDisplay(object):
 			outerbound*1e10, self.binapix)
 		self.trimfreq = 1./(self.trimapix * powerspec.shape[0])
 		print "Median filter image..."
+		## preform a rotational average and remove peaks
+		rotfftarray = ctftools.rotationalAverage2D(powerspec)
+		stdev = rotfftarray.std()
+		rotplus = rotfftarray + stdev*5
+		powerspec = numpy.where(powerspec > rotplus, rotfftarray, powerspec)
 		powerspec = ndimage.median_filter(powerspec, 2)
 
 		### get peaks of CTF

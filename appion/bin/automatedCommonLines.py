@@ -14,21 +14,28 @@ import sys
 import re
 import time
 import math
+import glob
 import shutil
 import subprocess
+import operator
 
 #appion
 from appionlib import appionScript
 from appionlib import appiondata
+from appionlib import apChimera
 from appionlib import apEulerCalc
 from appionlib import apImagicFile
 from appionlib import apDisplay
 from appionlib import apFile
 from appionlib import apFourier
+from appionlib import apRecon
 from appionlib import apIMAGIC
 from appionlib import apSymmetry
 from appionlib import apParam
 from appionlib import apThread
+from appionlib import apXmipp
+from appionlib import apXmippProtocolsProjMatchBasic as xp
+from appionlib import apCommonLines
 
 #scipy
 from scipy import stats
@@ -66,6 +73,21 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			help="scale the class averages to a boxsize of 64x64 prior to iterative model creation")
 			
 		### Angular Reconstitution
+		self.parser.add_option("--non_weighted_sequence", dest="non_weighted_sequence", default=False, action="store_true",
+			help="if this is specified, then the sequence of addition into angular reconstitution will \
+				be completely randomized, rather than weighted and randomized")
+		self.parser.add_option("--asqfilter", dest="asqfilt", default=False, action="store_true",
+				help="ASQ filtering means Amplitude-Square-Root and is described \
+				in papers, like: Marin van Heel, Michael Schatz, and Elena Orlova, 'Correlation \
+				Functions Revisited', Ultramicroscopy 46 (1992) 304-316. This filtering is important \
+				if one does not want the sinogram (and a sine-correlation-function derived from it) \
+				to be largely dominated by low-frequency information. The ASQ filter functions largely \
+				as a high-pass filter but is based on a rather different philosophy (see paper).", metavar="BOOL")		
+		self.parser.add_option("--linear_mask", dest="linmask", type="float", default=0,
+			help="Radius of the linear mask (in Angstroms) to be imposed on the sinogram and within which the statistics will be calculated \
+				for the normalization of the sinograms. For best results, this value should be exactly 1/2 * the diameter of your \
+				particle. For example, for a particle of diameter 200 Angstroms, this value should be 100. For NO masking answer '0'", \
+				metavar="FLOAT")
 		self.parser.add_option("--first_image", dest="firstimage", type="int", default=None,
 			help="specify the first image (numbering starts with 0) to be used during C1 startup, rather than randomizing", metavar="INT")
 		self.parser.add_option("--symmetry", dest="symid", type="int", default=1,
@@ -78,6 +100,20 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			help="percentage of the best class averages to keep for the actual 3D reconstruction. \
 				This value is determined by the error in angular reconstitution for each input class average", metavar="INT")
 			
+		### 3D refinement
+		self.parser.add_option("--mask_radius", dest="mask_radius", type="int",
+			help="Radius of the mask for the refinement of the initial volume calculated by angular reconstitution (Angstroms). \
+				For best results, this value should be slightly larger than the diameter of your particle (e.g. for a 200 \
+				Angstrom particle, this value can be ~240/2 ~= 120 Angstroms). The default value is 'linear_mask' parameter * 1.2", \
+				metavar="INT")
+		self.parser.add_option("--inner_radius", dest="inner_radius", type="int", default=0,
+			help="inner radius for the alignment search of volume refinement (Angstroms)", metavar="INT")
+		self.parser.add_option("--outer_radius", dest="outer_radius", type="int",
+			help="outer radius for the alignment search during volume refinement (Angstroms). \
+				The default value is 'mask_radius'*0.8", metavar="INT")		
+		self.parser.add_option("--mass", dest="mass", type="int", 
+			help="mass of particle (in kDa). this is ONLY necessary for the chimera snapshots", metavar="INT")	
+	
 		### 3D reconstruction
 		self.parser.add_option("--ham_win", dest="ham_win", type="float", default=0.8,
 			help="similar to lp-filtering parameter, smooths out the filter used in 3d reconstruction", metavar="float")
@@ -103,14 +139,20 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			help="preference value for affinity propation which influences the resulting number of 3D class averages. \
 				choose from 'median', 'minimum', or 'minlessrange'. 'median' will result in the greatest amount of classes, \
 				followed by 'minimum', while 'minlessrange' results in the fewest", metavar="STR")
-				
+
+		### Final model evaluation
+		self.parser.add_option("--presumed_symid", dest="presumed_sym", type="str", default=1,
+			help="presumed symmetry id of the particles. This is ONLY used in the calculation of Euler jumpers during \
+				the evaluation of the final model and does not affect the volumes in any way. It's defaulted to c1, but \
+				if your particles have high symmetry, then the Euler jumper angles will come out higher than what they should \
+				be and may affect the selection of optimal models. IDs refer to database entries.", metavar="INT")
+		
 		### Miscellaneous
-		self.parser.add_option("--non_weighted_sequence", dest="non_weighted_sequence", default=False, action="store_true",
-			help="if this is specified, then the sequence of addition into angular reconstitution will \
-				be completely randomized, rather than weighted and randomized")
 		self.parser.add_option("--do_not_remove", dest="do_not_remove", default=False, action="store_true",
 			help="specify if you want to keep miscellaneous files associated with angular reconstitution (e.g. sinograms) \
 				NOTE: keeping these files takes up huge amounts of diskspace")
+		self.parser.add_option("--memory", dest="memory", default='2gb',
+			help="This is only for the storage of the references, which is usually not necessary to modify for small stacks")
 							
 		return
 		
@@ -127,6 +169,30 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 		else:
 			apDisplay.printError("$IMAGIC_ROOT directory is not specified, please specify this in your .cshrc / .bashrc")
 
+		### class average parameters
+		if self.params['templatestackid'] is not None:
+			self.stackdata = appiondata.ApTemplateStackData.direct_query(self.params['templatestackid'])
+			self.clsname = self.stackdata['templatename']
+			self.params['apix'] = self.stackdata['apix']
+			self.params['boxsize'] = self.stackdata['boxsize']
+		elif self.params['clusterid'] is not None:
+			self.stackdata = appiondata.ApClusteringStackData.direct_query(self.params['clusterid'])
+			self.clsname = self.stackdata['avg_imagicfile']
+			self.params['apix'] = self.stackdata['clusterrun']['pixelsize']
+			self.params['boxsize'] = self.stackdata['clusterrun']['boxsize']
+		self.params['avgs'] = os.path.join(self.params['rundir'], os.path.basename(self.clsname))
+		self.params['numpart'] = apFile.numImagesInStack(os.path.join(self.stackdata['path']['path'], self.clsname))
+			
+		### check for scaling
+		self.params['refineapix'] = self.params['apix']
+		self.params['refineboxsize'] = self.params['boxsize']		
+		if self.params['scale'] is True:
+			self.scalefactor = float(64.0 / self.params['boxsize'])
+			self.params['apix'] = self.params['apix'] / self.scalefactor
+			self.params['boxsize'] = 64	
+		else:
+			self.scalefactor = 1
+
 		### check for basic input parameters
 		if self.params['templatestackid'] is None and self.params['clusterid'] is None:
 			apDisplay.printError("enter either a template stack ID or a cluster ID for the run")
@@ -135,10 +201,25 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 		if self.params['num_volumes'] is None:
 			apDisplay.printError("please specify the number of volumes that you wish to produce from the class averages")
 			
-		### check potential inappropriate specifications
+		### angular reconstitution checks
 		if self.params['keep_ordered'] < 1.0: 											### probably specified as a fraction
 			self.params['keep_ordered'] = self.params['keep_ordered'] * 100	### convert to percentage
-		
+		self.params['keep_ordered_num'] = self.params['numpart'] * self.params['keep_ordered'] / 100
+			
+		### number of processors for threading ONLY works on a single node
+		threadnproc = apParam.getNumProcessors()
+		if self.params['nproc'] > threadnproc:
+			self.params['threadnproc'] = threadnproc
+		else:
+			self.params['threadnproc'] = self.params['nproc']
+			
+		### refinement parameters
+		if self.params['mask_radius'] is None and self.params['linmask'] != 0:
+			self.params['mask_radius'] = self.params['linmask'] * 1.2
+		elif self.params['mask_radius'] is None and self.params['linmask'] == 0:
+			self.params['mask_radius'] = self.params['boxsize'] * self.params['refineapix']
+		if self.params['outer_radius'] is None:
+			self.params['outer_radius'] = self.params['mask_radius'] * 0.8
 
 		return
 
@@ -201,7 +282,7 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 	#=====================
 	#=====================
 
-	def calculate_ccc_matrix_3d(self):
+	def calculate_ccc_matrix_3d(self, volumedict):
 		'''
 		for each volume calculates a cross-correlation coefficient to each successive volume, then 
 		returns a file corresponding to cross-correlation coefficients between the images. 
@@ -214,10 +295,10 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 		cc_matrix = numpy.ones((self.params['num_volumes'], self.params['num_volumes']))
 
 		### create cross-correlation similarity matrix
-		for i in range(self.params['num_volumes']):
-			for j in range(i+1, self.params['num_volumes']):				
-				model1 = mrc.read(os.path.join(self.params['rundir'], "volumes", "3d%d_ordered%d_filt.mrc" % (i+1,i+1)))
-				model2 = mrc.read(os.path.join(self.params['rundir'], "volumes", "3d%d_ordered%d_filt.mrc" % (j+1,j+1)))
+		for i in range(len(volumedict)):
+			for j in range(i+1, len(volumedict)):		
+				model1 = mrc.read(volumedict[i+1])
+				model2 = mrc.read(volumedict[j+1])
 				ccs = self.calculate_ccs(model1, model2)
 				cc_matrix[i,j] = ccs[0]
 				cc_matrix[j,i] = ccs[0]
@@ -491,8 +572,11 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 		f.write(proj_init+"\n")
 		f.write("ordered"+str(iteration)+"\n")
 		f.write("sino_ordered"+str(iteration)+"\n")
-		f.write("yes\n")
-		f.write(".9\n")
+		if self.params['asqfilt'] is True:
+			f.write("yes\n")
+		else:
+			f.write("no\n")
+		f.write("%.3f\n" % (self.params['linmask'] / self.params['apix'] / self.params['boxsize'] * 2))
 		f.write("my_sine"+str(iteration)+"\n")
 		f.write("%i\n" % (self.params['ang_inc']))	
 		if lowercase == "c1":
@@ -513,8 +597,11 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 				f.write(str(seq)+"\n")
 				f.write("ordered"+str(iteration)+"\n")
 				f.write("sino_ordered"+str(iteration)+"\n")
-				f.write("yes\n")
-				f.write("0.9\n")
+				if self.params['asqfilt'] is True:
+					f.write("yes\n")
+				else:
+					f.write("no\n")
+				f.write("%.3f\n" % (self.params['linmask'] / self.params['apix'] / self.params['boxsize'] * 2))
 				f.write("my_sine"+str(iteration)+"\n")
 				f.write("%i\n" % (self.params['ang_inc']))
 				f.write("yes\n")
@@ -530,8 +617,11 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			f.write(proj_rest+"\n")
 			f.write("ordered"+str(iteration)+"\n")
 			f.write("sino_ordered"+str(iteration)+"\n")
-			f.write("yes\n")
-			f.write("0.9\n")
+			if self.params['asqfilt'] is True:
+				f.write("yes\n")
+			else:
+				f.write("no\n")
+			f.write("%.3f\n" % (self.params['linmask'] / self.params['apix'] / self.params['boxsize'] * 2))
 			f.write("my_sine"+str(iteration)+"\n")
 			f.write("%i\n" % (self.params['ang_inc']))
 			f.write("yes\n")
@@ -640,54 +730,270 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 	#=====================
 	#=====================
 	
-	def xmipp_max_like_3d_align(self):
+	def refine_volume(self, volnum):
+		''' Xmipp projection-matching based refinement of volume generated by common lines '''
+		
+		basedir = os.path.abspath(os.getcwd())
+		rundir = os.path.join(basedir, "refine_%d" % volnum)
+		if not os.path.isdir(rundir):
+			os.mkdir(rundir)
+	
+		### set projection-matching parameters
+		SelFileName = "partlist.sel"
+		ReferenceFileName = os.path.join(self.params['rundir'], "refinement", "%d.vol" % volnum)
+		WorkingDir = os.path.basename(rundir)
+		ProjectDir = os.getcwd()
+		MaskRadius = self.params['mask_radius'] / self.params['refineapix']   # in pixels
+		InnerRadius = self.params['inner_radius'] / self.params['refineapix'] # in pixels
+		OuterRadius = self.params['outer_radius'] / self.params['refineapix'] # in pixels
+		AvailableMemory = self.params['memory']
+		ResolSam = self.params['refineapix']
+		NumberOfMpiProcesses = self.params['nproc']
+
+		### optional parameters
+		NumberofIterations = 12
+		AngSamplingRateDeg = '4x10 4x5 4x3 2x2 2x1'
+		MaxChangeInAngles = '4x1000 4x20 4x9 2x6 2x3'
+		MaxChangeOffset = '4x1000 4x10'
+		Search5DShift = '4x5 1'
+		Search5DStep = '4x2 1'
+		FourierMaxFrequencyOfInterest = '0.35'
+		ConstantToAddToFiltration = '0.35'
+
+		### do projection-matching
+		apDisplay.printColor("refining volume %d by projection-matching" % volnum, "cyan")
+		
+		xp.projection_matching_protocol_basic(
+					SelFileName,
+					ReferenceFileName,
+					WorkingDir,
+					ProjectDir,
+					MaskRadius,
+					InnerRadius,
+					OuterRadius,
+					AvailableMemory,
+					ResolSam,
+					NumberOfMpiProcesses,
+					_NumberofIterations=NumberofIterations,
+					_AngSamplingRateDeg=AngSamplingRateDeg,
+					_MaxChangeInAngles=MaxChangeInAngles,
+					_MaxChangeOffset=MaxChangeOffset,
+					_Search5DShift=Search5DShift,
+					_Search5DStep=Search5DStep,
+					_FourierMaxFrequencyOfInterest=FourierMaxFrequencyOfInterest,
+					_ConstantToAddToFiltration=ConstantToAddToFiltration
+					)
+		
+#		### do projection-matching
+#		apDisplay.printColor("refining volume %d by projection-matching" % volnum, "cyan")
+#		xp.projection_matching_protocol_basic(
+#					SelFileName,
+#					ReferenceFileName,
+#					WorkingDir,
+#					ProjectDir,
+#					MaskRadius,
+#					InnerRadius,
+#					OuterRadius,
+#					AvailableMemory,
+#					ResolSam,
+#					NumberOfMpiProcesses
+#					)
+		
+		### remove unecessary files
+		os.chdir(rundir)
+		count = 0
+		for root, dirs, files in os.walk(rundir):
+			for file in files:
+				m = re.search("reference_volume", file)
+				if m is not None:
+					count += 1
+					apFile.removeFile(os.path.join(root, file), warn=False)
+					
+		### create files for model assessment
+		if count == 0:
+			count = NumberofIterations
+		self.refinement_quality_criteria(count)
+
+		### link / summarize final files
+		os.symlink(os.path.join("Iter_%d" % count, "Iter_%d_reconstruction.vol" % count), \
+			os.path.join(rundir, "3d%d_refined.vol" % volnum))
+		os.symlink(os.path.join("Iter_%d" % count, "reconstruction_2.vol.frc"), \
+			os.path.join(rundir, "3d%d_refined.frc" % volnum))
+		os.symlink(os.path.join("Iter_%d" % count, "Iter_%d_projections_noflip.hed" % count), \
+			os.path.join(rundir, "3d%d_refined_projections.hed" % volnum))
+		os.symlink(os.path.join("Iter_%d" % count, "Iter_%d_projections_noflip.img" % count), \
+			os.path.join(rundir, "3d%d_refined_projections.img" % volnum))
+#		os.symlink(os.path.join("Iter_%d" % count, "Iter_%d_projections_noflip.doc" % count), \
+#			os.path.join(rundir, "3d%d_refined_angles.doc" % volnum))
+		apXmipp.removeMirrorFromDocfile(os.path.join(rundir, "Iter_%d" % count, "Iter_%d_current_angles.doc" % count), \
+			os.path.join(rundir, "3d%d_refined_angles.doc" % volnum))
+		os.chdir(basedir)
+		
+		return
+	
+	#=====================
+	#=====================
+	#=====================
+	
+	def refinement_quality_criteria(self, iteration):
+		''' this function constructs the necessary files for CCPR and FSC calculations of each refined volume'''
+		
+		basedir = os.getcwd()
+		workingdir = os.path.join(basedir, "Iter_%d" % iteration)
+		os.chdir(workingdir)
+
+		### Xmipp files for CCPR calculation - projection doc / sel file
+		docdict = apXmipp.readDocfile("Iter_%d_current_angles.doc" % iteration)
+		tempdoc = open("temp.doc", "w")
+		projectdoc = open("Iter_%d_projections_noflip.doc" % iteration, "w")
+		tempsel = open("temp.sel", "w")
+		projectsel = open("Iter_%d_projections_noflip.sel" % iteration, "w")
+		reconfile = open("reconstruction.sel", "w")
+		tempdoc.write(" ; Headerinfo columns: rot (1), tilt (2), psi (3), Xoff (4), Yoff (5)\n")
+		projectdoc.write(" ; Headerinfo columns: rot (1), tilt (2), psi (3), Xoff (4), Yoff (5)\n")
+		for k in sorted(docdict.iterkeys()):
+			vals = docdict[k]['values']
+			rot = float(vals[2])
+			tilt = float(vals[3])
+			psi = float(vals[4])
+			flip = bool(float(vals[8]))
+			if flip == 1:
+				rot, tilt, psi = apXmipp.calculate_equivalent_Eulers_without_flip(rot, tilt, psi)
+			tempdoc.write(" ; %s\n" % os.path.join(workingdir, "proj%.6d.xmp" % (k+1)))
+			tempdoc.write("%5d 5 %11.5f%11.5f%11.5f%11.5f%11.5f\n" \
+				% ((k+1), rot, tilt, psi, float(vals[5]), float(vals[6])))
+			projectdoc.write(" ; %s\n" % os.path.join(workingdir, "proj%.6d.appl" % (k+1)))
+			projectdoc.write("%5d 5 %11.5f%11.5f%11.5f%11.5f%11.5f\n" \
+				% ((k+1), rot, tilt, psi, 0, 0))
+			tempsel.write("%s 1\n" % os.path.join(workingdir, "proj%.6d.xmp" % (k+1)))
+			projectsel.write("%s 1\n" % os.path.join(workingdir, "proj%.6d.appl" % (k+1)))
+			reconfile.write("%s 1\n" % docdict[k]['filename'])
+		tempdoc.close()
+		projectdoc.close()
+		tempsel.close()
+		projectsel.close()
+
+		### projection file
+		f = open("project.params", "w")
+		f.write("Iter_%d_reconstruction.vol\n" % iteration)
+		f.write("proj 1 xmp\n")
+		f.write("%d %d\n" % (self.params['refineboxsize'], self.params['refineboxsize']))
+		f.write("%s rot tilt psi\n" % "temp.doc")
+		f.write("NULL\n")
+		f.write("0 0\n")
+		f.write("0 0\n")
+		f.write("0 0\n")
+		f.write("0 0\n")
+		f.write("0 0\n")
+		f.close()
+		apParam.runCmd("xmipp_project -i project.params", "Xmipp")
+
+		### apply transformation parameters calculated by Xmipp
+		resetcmd = "xmipp_header_reset -i temp.sel"
+		apParam.runCmd(resetcmd, "Xmipp")
+		assigncmd = "xmipp_header_assign -i temp.doc -verb -columns 0 0 0 -4 -5"
+		apParam.runCmd(assigncmd, "Xmipp")
+		applycmd = "xmipp_header_apply -i temp.sel -oext appl"
+		apParam.runCmd(applycmd, "Xmipp")
+		apXmipp.gatherSingleFilesIntoStack("Iter_%d_projections_noflip.sel" % iteration, "Iter_%d_projections_noflip.hed" % iteration)
+
+		### remove unnecessary files
+		os.remove("temp.doc")
+		os.remove("temp.sel")
+		os.remove("tempappl.sel")
+		projfiles = glob.glob("*.xmp")
+		for file in projfiles:
+			os.remove(file)
+		appfiles = glob.glob("*.appl")
+		for file in appfiles:
+			os.remove(file)
+
+		### Xmipp files for FSC calculations
+		splitcmd = "xmipp_selfile_split -i reconstruction.sel"
+		apParam.runCmd(splitcmd, "Xmipp")
+		doccmd1 = "xmipp_docfile_select_subset -i Iter_%d_current_angles.doc -sel reconstruction_1.sel -o Iter_%d_current_angles_1.doc" \
+			% (iteration, iteration)
+		apParam.runCmd(doccmd1, "Xmipp")
+		doccmd2 = "xmipp_docfile_select_subset -i Iter_%d_current_angles.doc -sel reconstruction_2.sel -o Iter_%d_current_angles_2.doc" \
+			% (iteration, iteration)
+		apParam.runCmd(doccmd2, "Xmipp")
+		reconcmd1 = "mpirun -np %d xmipp_mpi_reconstruct_fourier -i reconstruction_1.sel -o reconstruction_1.vol -sym c1 -doc Iter_%d_current_angles_1.doc -thr %d" \
+			% (self.params['nproc'], iteration, self.params['nproc'])
+		apParam.runCmd(reconcmd1, "Xmipp")
+		reconcmd2 = "mpirun -np %d xmipp_mpi_reconstruct_fourier -i reconstruction_2.sel -o reconstruction_2.vol -sym c1 -doc Iter_%d_current_angles_2.doc -thr %d" \
+			% (self.params['nproc'], iteration, self.params['nproc'])			
+		apParam.runCmd(reconcmd2, "Xmipp")
+		fsccmd = "xmipp_resolution_fsc -ref reconstruction_1.vol -i reconstruction_2.vol -sam %.3f" % self.params['refineapix']
+		apParam.runCmd(fsccmd, "Xmipp")
+#		fsc = apRecon.getResolutionFromGenericFSCFile("reconstruction_2.vol.frc", self.params['boxsize'], self.params['apix'])
+		
+		os.chdir(basedir)
+		return
+	
+	#=====================
+	#=====================
+	#=====================
+	
+	def xmipp_max_like_3d_align(self, volumedict):
 		''' 3-D maximum likelihood alignment of all models resulting from iterative 3d0 creation '''
 		
 		### create necessary input .sel & .doc files
 		selfile = open(os.path.join(self.params['rundir'], "volumes.sel"), "w")
-		for i in range(self.params['num_volumes']):
-			selfile.write("volumes/3d"+str(i+1)+"_ordered"+str(i+1)+"_filt.vol 1\n")
+		for v in sorted(volumedict):
+			selfile.write("%s 1\n" % volumedict[v])
 		selfile.close()
 		docfile = open(os.path.join(self.params['rundir'], "volumes.doc"), "w")
-		for i in range(self.params['num_volumes']):
-			docfile.write(" ; volumes/3d"+str(i+1)+"_ordered"+str(i+1)+"_filt.vol\n")
-			docfile.write(str(i+1)+" 10 0 0 0 0 0 0 0 0 0 0\n")
+		for v in sorted(volumedict):
+			docfile.write(" ; %s\n" % volumedict[v])
+			docfile.write(str(v)+" 10 0 0 0 0 0 0 0 0 0 0\n")
 		docfile.close()
 		
 		### run 3-D maximum-likelihood alignment
 		rundir = os.path.join(self.params['rundir'], "max_like_alignment")
 		if not os.path.isdir(rundir):
 			os.mkdir(rundir)
-		xmippcmd1 = "xmipp_ml_tomo -i volumes.sel -o max_like_alignment/nref%d_15deg \
-					-nref %d -doc volumes.doc -iter 5 -ang 15 -dim 32 -perturb" \
-					% (self.params['nref'], self.params['nref'])
 		if self.params['nproc'] > 1:
-			xmippcmd1 += " -thr "+str(self.params['nproc'])
+			xmippcmd1 = "mpirun -np %d xmipp_mpi_ml_tomo " % self.params['nproc']
+		else:
+			xmippcmd1 = "xmipp_ml_tomo "
+		xmippcmd1+= "-i volumes.sel -o max_like_alignment/nref%d_15deg " % self.params['nref']
+		xmippcmd1+= "-nref %d -doc volumes.doc -iter 5 -ang 15 -dim 32 -perturb" % self.params['nref']
+		if self.params['threadnproc'] > 1:
+			xmippcmd1 += " -thr "+str(self.params['threadnproc'])
 		apParam.runCmd(xmippcmd1, package="Xmipp")
-		xmippcmd2 = "xmipp_ml_tomo -i volumes.sel -o max_like_alignment/nref%d_10deg \
-					-nref %d -doc max_like_alignment/nref%d_15deg_it000005.doc -keep_angles \
-					-iter 5 -ang 10 -ang_search 50 -maxres 0.35 -perturb" \
-					% (self.params['nref'], self.params['nref'], self.params['nref'])
+		'''
 		if self.params['nproc'] > 1:
-			xmippcmd2 += " -thr "+str(self.params['nproc'])
-#		apParam.runCmd(xmippcmd2, package="Xmipp")
-		xmippcmd3 = "xmipp_ml_tomo -i volumes.sel -o max_like_alignment/nref%d_5deg \
-					-nref %d -doc max_like_alignment/nref%d_10deg_it000005.doc -keep_angles \
-					-iter 5 -ang 5 -ang_search 25 -maxres 0.35 -perturb" \
-					% (self.params['nref'], self.params['nref'], self.params['nref'])
-		if self.params['nproc'] > 1:
-			xmippcmd3 += " -thr "+str(self.params['nproc'])
-#		apParam.runCmd(xmippcmd3, package="Xmipp")
+			xmippcmd2 = "mpirun -np %d xmipp_mpi_ml_tomo " % self.params['nproc']
+		else:
+			xmippcmd2 = "xmipp_ml_tomo "
+		xmippcmd2+= "-i volumes.sel -o max_like_alignment/nref%d_10deg " % self.params['nref']
+		xmippcmd2+= "-nref %d -doc max_like_alignment/nref%d_15deg_it000005.doc -keep_angles " % (self.params['nref'], self.params['nref']) 
+		xmippcmd2+= "-iter 5 -ang 10 -ang_search 50 -maxres 0.35 -perturb"
+		if self.params['threadnproc'] > 1:
+			xmippcmd2 += " -thr "+str(self.params['threadnproc'])			
+		apParam.runCmd(xmippcmd2, package="Xmipp")
 
+		if self.params['nproc'] > 1:
+			xmippcmd3 = "mpirun -np %d xmipp_mpi_ml_tomo " % self.params['nproc']
+		else:
+			xmippcmd3 = "xmipp_ml_tomo "
+		xmippcmd3+= "-i volumes.sel -o max_like_alignment/nref%d_5deg " % self.params['nref']
+		xmippcmd3+= "-nref %d -doc max_like_alignment/nref%d_10deg_it000005.doc -keep_angles " % (self.params['nref'], self.params['nref'])
+		xmippcmd3+= "-iter 5 -ang 5 -ang_search 25 -maxres 0.35 -perturb"
+		if self.params['threadnproc'] > 1:
+			xmippcmd3 += " -thr "+str(self.params['threadnproc'])
+		apParam.runCmd(xmippcmd3, package="Xmipp")
+		'''
 #
-#		ANGULAR INCREMENT 15
+#		ANGULAR INCREMENT SET TO 15
 #
 		### check for all iterations, just in case Xmipp ended early, sometimes it converges before 5th iteration
 		i = 5
 		while i > 0:
 			vol_doc_file = os.path.join(rundir, "nref%d_15deg_it00000%d.doc") % (self.params['nref'], i)
+			alignref = os.path.join(rundir, "nref%d_15deg_it00000%d_ref000001.vol") % (self.params['nref'], i)
 			if os.path.isfile(vol_doc_file):
-				return vol_doc_file
+				return vol_doc_file, alignref
 			else:
 				i -= 1
 		if i == 0:
@@ -723,7 +1029,7 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 	#=====================
 	#=====================
 		
-	def align_volumes(self, alignparams):
+	def align_volumes(self, alignparams, alignref):
 		''' align the volumes to the resulting reference from maximum-likelihood '''
 		
 		transcmds = []
@@ -731,23 +1037,21 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 		emancmds = []
 		for i in range(self.params['num_volumes']):
 			ref = int(float(alignparams[i][7]))
-			xmippcmd_trans = "xmipp_align_volumes -i1 max_like_alignment/nref%d_5deg_ref00000%d.vol -i2 " % (self.params['nref'], ref) \
-				+str(alignparams[i][0])+\
+			xmippcmd_trans = "xmipp_align_volumes -i1 %s -i2 %s" % (alignref, alignparams[i][0]) +\
 				" -x "+str(alignparams[i][1])+" "+str(alignparams[i][1])+" 1"\
 				" -y "+str(alignparams[i][2])+" "+str(alignparams[i][2])+" 1"\
 				" -z "+str(alignparams[i][3])+" "+str(alignparams[i][3])+" 1 -apply"
 			transcmds.append(xmippcmd_trans)
-			xmippcmd_rot = "xmipp_align_volumes -i1 max_like_alignment/nref%d_5deg_ref00000%d.vol -i2 " % (self.params['nref'], ref) \
-				+str(alignparams[i][0])+\
+			xmippcmd_rot = "xmipp_align_volumes -i1 %s -i2 %s " % (alignref, alignparams[i][0]) +\
 				" -rot "+str(alignparams[i][4])+" "+str(alignparams[i][4])+" 1"\
 				" -tilt "+str(alignparams[i][5])+" "+str(alignparams[i][5])+" 1"\
 				" -psi "+str(alignparams[i][6])+" "+str(alignparams[i][6])+" 1 -apply"
 			rotcmds.append(xmippcmd_rot)
 			emancmd = "proc3d "+str(alignparams[i][0])+" "+str(alignparams[i][0])[:-4]+".mrc apix="+str(self.params['apix'])
 			emancmds.append(emancmd)
-		apThread.threadCommands(transcmds, nproc=self.params['nproc'], pausetime=10)
-		apThread.threadCommands(rotcmds, nproc=self.params['nproc'], pausetime=10)
-		apThread.threadCommands(emancmds, nproc=self.params['nproc'], pausetime=10)
+		apThread.threadCommands(transcmds, nproc=self.params['threadnproc'], pausetime=10)
+		apThread.threadCommands(rotcmds, nproc=self.params['threadnproc'], pausetime=10)
+		apThread.threadCommands(emancmds, nproc=self.params['threadnproc'], pausetime=10)
 			
 		return
 		
@@ -755,7 +1059,7 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 	#=====================
 	#=====================
 
-	def runPrincipalComponentAnalysis(self, recalculate=False):
+	def runPrincipalComponentAnalysis(self, volumedict, recalculate=False):
 		''' 
 		runs principal component analysis to reduce dimensionality of dataset and returns the correlation file
 		corresponding to the similarity of each point in factor space
@@ -771,9 +1075,9 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			
 		### create input array from all volumes 	
 		volumes = numpy.empty([self.params['num_volumes'], self.params['boxsize'], self.params['boxsize'], self.params['boxsize']])
-		for i in range(self.params['num_volumes']):
-			vol = mrc.read(os.path.join(self.params['rundir'], "volumes", "3d%d_ordered%d_filt.mrc" % (i+1,i+1)))
-			volumes[i] += vol
+		for v in sorted(volumedict):
+			vol = mrc.read(volumedict[v])
+			volumes[(v-1)] += vol
 		self.params['num_volumes'] = volumes.shape[0]
 		numpixels = volumes.shape[1]*volumes.shape[2]*volumes.shape[3]
 		inputs = volumes.reshape(self.params['num_volumes'], numpixels)
@@ -802,10 +1106,14 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 				dist = self.euclideanDist(model1, model2)
 				diff_matrix[i,j] = dist
 				diff_matrix[j,i] = dist
-		sim_matrix = numpy.where(diff_matrix != 0, 1/diff_matrix, 1)
+#		sim_matrix = numpy.where(diff_matrix != 0, 1/diff_matrix, 1) ### this doesn't work very well
+		max = diff_matrix.max()
+		min = numpy.where(diff_matrix > 0, diff_matrix, max).min()
+		norm_diff_matrix = numpy.where(diff_matrix > 0, (diff_matrix - (min))/(max-min), 0)
+		sim_matrix = numpy.where(norm_diff_matrix >= 0, 1-norm_diff_matrix, 0)
 					
 		### write similarities (CCCs) to file 
-		apDisplay.printMsg("writing similarities to file %s" % ("CCCs_3d.dat"))
+		apDisplay.printMsg("writing similarities to file CCCs_3d.dat")
 		simfile = os.path.join(self.params['rundir'], "CCCs_3d.dat")
 		f = open(simfile, "w")
 		for i in range(self.params['num_volumes']):
@@ -883,7 +1191,7 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 	#=====================
 	#=====================
 	
-	def run_affinity_propagation(self, simfile, preffile):
+	def run_affinity_propagation(self, volumedict, simfile, preffile):
 		''' Use Affinity Propagation to classify and average all aligned 3-D models '''
 		
 		apDisplay.printMsg("running Affinity Propagation on aligned 3-D models")
@@ -927,7 +1235,8 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			num_members = 0
 			for member in classes[classnum]:
 				num_members += 1
-				avgclass += mrc.read(os.path.join(self.params['rundir'], "volumes", "3d"+str(member)+"_ordered"+str(member)+"_filt.mrc"))
+				avgclass += mrc.read(volumedict[member])
+#				avgclass += mrc.read(os.path.join(self.params['rundir'], "volumes", "3d"+str(member)+"_ordered"+str(member)+"_filt.mrc"))
 			avgclass = avgclass / num_members
 			mrc.write(avgclass, os.path.join(self.params['rundir'], (str(classnum)+".mrc")), header)
 					
@@ -936,90 +1245,6 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 	#=============================															===============================
 	#=============================					EULER ANGLE FUNCTIONS					===============================
 	#=============================															===============================
-	
-	def EulersToTransformationMatrix(self, rot, tilt, psi):
-		''' 
-		takes Euler angles as rotation, tilt, and psi (in degrees) and converts to a 3x3 transformation matrix, according to ZYZ convention.
-		This follows the standard 3DEM convention
-		'''
-		
-	#	rotmat = numpy.array(([math.cos(rotation), math.sin(rotation), 0], [-math.sin(rotation), math.cos(rotation), 0], [0, 0, 1]))
-	#	tiltmat = numpy.array(([math.cos(tilt), 0, -math.sin(tilt)], [0, 1, 0], [math.sin(tilt), 0, math.cos(tilt)]))
-	#	psimat = numpy.array(([math.cos(psi), math.sin(psi), 0], [-math.sin(psi), math.cos(psi), 0], [0, 0, 1]))
-	#	m = numpy.dot(psimat, numpy.dot(tiltmat, rotmat))
-
-		rot *= math.pi / 180
-		tilt *= math.pi / 180
-		psi *= math.pi / 180
-
-		m = numpy.zeros((3,3), dtype=numpy.float32)
-		m[0][0] = math.cos(psi)*math.cos(tilt)*math.cos(rot) - math.sin(psi)*math.sin(rot)
-		m[0][1] = math.cos(psi)*math.cos(tilt)*math.sin(rot) + math.sin(psi)*math.cos(rot)
-		m[0][2] = -math.cos(psi)*math.sin(tilt)
-		m[1][0] = -math.sin(psi)*math.cos(tilt)*math.cos(rot) - math.cos(psi)*math.sin(rot)
-		m[1][1] = -math.sin(psi)*math.cos(tilt)*math.sin(rot) + math.cos(psi)*math.cos(rot)
-		m[1][2] = math.sin(psi)*math.sin(tilt)
-		m[2][0] = math.sin(tilt)*math.cos(rot)
-		m[2][1] = math.sin(tilt)*math.sin(rot)
-		m[2][2] = math.cos(tilt)
-		
-		### round off any values close to 0, default set to 0.001
-		default = 0.000001
-		m = numpy.where(abs(m) < default, 0, m)
-		
-		return m
-		
-	#=====================
-	#=====================
-	#=====================
-	
-	def EulersFromTransformationMatrix(self, transform_matrix):
-		''' 
-		recovers Euler angles in degrees from 3x3 transformation matrix or array. Procedure assumes that the tilt Euler angle is < 180, i.e. pi.
-		This follows the ZYZ convention of 3DEM with a standard coordinate system.
-		'''
-		
-		if type(transform_matrix) is not numpy.ndarray:
-			transform_matrix = numpy.asarray(transform_matrix)
-			
-		### round off any values close to 0, default set to 0.001
-		default = 0.000001
-		transform_matrix = numpy.where(abs(transform_matrix) < default, 0, transform_matrix)
-		
-		tilt = math.acos(transform_matrix[2][2])
-		if tilt > 0 and tilt < math.pi: 		
-			rot = math.atan2(transform_matrix[2][1], transform_matrix[2][0])
-			if transform_matrix[0][2] == 0: ### atan2(0.0,-0.0) returns 180, but we need 0
-				psi = math.atan2(transform_matrix[1][2], transform_matrix[0][2])
-			else:
-				psi = math.atan2(transform_matrix[1][2], -transform_matrix[0][2])
-		elif round(tilt,4) == round(0,4):
-			rot = 0
-			if transform_matrix[1][0] == 0: ### atan2(0.0,-0.0) returns 180, but we need 0
-				psi = math.atan2(transform_matrix[1][0], transform_matrix[0][0])
-			else:
-				psi = math.atan2(-transform_matrix[1][0], transform_matrix[0][0])
-		elif round(tilt,4) == round(math.pi,4):
-			rot = 0
-			if transform_matrix[0][0] == 0: ### atan2(0.0,-0.0) returns 180, but we need 0
-				psi = math.atan2(transform_matrix[1][0], transform_matrix[0][0])
-			else:
-				psi = math.atan2(transform_matrix[1][0], -transform_matrix[0][0])
-		else:
-			rot = 0
-			if transform_matrix[1][0] == 0: ### atan2(0.0,-0.0) returns 180, but we need 0
-				psi = math.atan2(transform_matrix[1][0], transform_matrix[0][0])
-			else:
-				psi = math.atan2(-transform_matrix[1][0], transform_matrix[0][0])
-		tilt *= 180 / math.pi
-		rot *= 180 / math.pi
-		psi *= 180 / math.pi
-			
-		return rot, tilt, psi
-		
-	#=====================
-	#=====================
-	#=====================
 			
 	def distanceBetweenEulers(self, t1, t2):
 		R = numpy.dot(numpy.transpose(t1), t2)
@@ -1083,17 +1308,17 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			rot = float(alignparams[i][4])
 			tilt = float(alignparams[i][5])
 			psi = float(alignparams[i][6])
-			transform_matrix = numpy.matrix(self.EulersToTransformationMatrix(rot, tilt, psi))
+			transform_matrix = numpy.matrix(apEulerCalc.EulersToRotationMatrix3DEM(rot, tilt, psi))
 			
 			for key, value in euler_array_mapped[i].items():
 				### old Euler angles and rotation matrix
 				alpha = float(value[0]) 
 				beta = float(value[1])
 				gamma = float(value[2])
-				R1 = numpy.matrix(self.EulersToTransformationMatrix(gamma-90, beta, alpha+90))
+				R1 = numpy.matrix(apEulerCalc.EulersToRotationMatrix3DEM(gamma-90, beta, alpha+90))
 				### get new Euler angles from the multiplied transformation matrices
 				R2 = R1 * transform_matrix.I
-				rot_new, tilt_new, psi_new = self.EulersFromTransformationMatrix(R2)
+				rot_new, tilt_new, psi_new = apEulerCalc.rotationMatrixToEulers3DEM(R2)
 				### save in new dictionary
 				eulerdict_transformed[key] = (rot_new, tilt_new, psi_new)
 			euler_array_transformed[str(i+1)] = (eulerdict_transformed)
@@ -1112,22 +1337,42 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 		'''
 		
 		l = []
+		if apSymmetry.findSymmetry(self.params['presumed_sym'])['symmetry'].lower() == "c1":
+			symmetry = "c1"
+		elif apSymmetry.findSymmetry(self.params['presumed_sym'])['symmetry'].lower() == "oct":
+			symmetry = "oct"
+		else:
+			try:
+				symmetry = apSymmetry.findSymmetry(self.params['presumed_sym'])['symmetry'].lower().split()[0]
+			except:
+				symmetry = "c1"
+
 		for i in range(self.params['numpart']): ### for each class average
 			for j in range(len(classes)):
-				for k in range(j+1, len(classes)):
-					rot1 = euler_array_transformed[str(classes[j])][str(i+1)][0]
-					tilt1 = euler_array_transformed[str(classes[j])][str(i+1)][1]
-					psi1 = euler_array_transformed[str(classes[j])][str(i+1)][2]
-					rot2 = euler_array_transformed[str(classes[k])][str(i+1)][0]
-					tilt2 = euler_array_transformed[str(classes[k])][str(i+1)][1]
-					psi2 = euler_array_transformed[str(classes[k])][str(i+1)][2]
-					t1 = self.EulersToTransformationMatrix(rot1, tilt1, psi1)
-					t2 = self.EulersToTransformationMatrix(rot2, tilt2, psi2)
-#					if apSymmetry.findSymmetry(self.params['presumed_sym'])['symmetry'].lower() == "c1":
-					d = apEulerCalc.computeDistance(t1,t2)
-#					else:
-#					d = apEulerCalc.eulerCalculateDistanceSym(t1,t2,sym="c2")
-					l.append(d)
+				if len(classes) == 1:
+					l.append(0)
+				else:
+					for k in range(j+1, len(classes)):
+						rot1 = euler_array_transformed[str(classes[j])][str(i+1)][0]
+						tilt1 = euler_array_transformed[str(classes[j])][str(i+1)][1]
+						psi1 = euler_array_transformed[str(classes[j])][str(i+1)][2]
+						rot2 = euler_array_transformed[str(classes[k])][str(i+1)][0]
+						tilt2 = euler_array_transformed[str(classes[k])][str(i+1)][1]
+						psi2 = euler_array_transformed[str(classes[k])][str(i+1)][2]
+						
+						### convert to EMAN format
+						alt1, az1, phi1 = apEulerCalc.convertXmippEulersToEman(rot1, tilt1, psi1)
+						alt2, az2, phi2 = apEulerCalc.convertXmippEulersToEman(rot2, tilt2, psi2)
+						e1 = {'euler1':alt1, 'euler2':az1, 'euler3':phi1}
+						e2 = {'euler1':alt2, 'euler2':az2, 'euler3':phi2} 
+	
+						### apply symmetry to Euler angle calculation
+						if symmetry == "c1":
+#							d = apEulerCalc.computeDistance(t1,t2)
+							d = apEulerCalc.eulerCalculateDistance(e1, e2, inplane=True)
+						else:
+							d = apEulerCalc.eulerCalculateDistanceSym(e1, e2, sym=symmetry, inplane=True)
+						l.append(d)
 		meanjump = numpy.asarray(l).mean()
 		
 		return meanjump
@@ -1136,16 +1381,15 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 	#=============================					3D CLASS ASSESSMENT				===============================
 	#=============================															===============================	
 			
-	def avgCCCBetweenProjectionsAndReprojections(self, classes):
+	def avgCCCBetweenProjectionsAndReprojections(self, classes, ordered_file, reproj_file):
 		'''
 		takes in a dictionary key for the model class, which contains all the separate 3D reconstructions going into class, 
-		then calculates the average cross-correlation between the projections and reprojections for each separate 3D
+		then calculates the average cross-correlation between the projections and reprojections for each separate 3D. This 
+		function looks at the initial 3D model calculated by common lines. 
 		'''
 		
 		CCCs = []
 		for m in classes:
-			ordered_file = os.path.join(self.params['rundir'], "angular_reconstitution", "ordered%d_sort.hed" % (m))
-			reproj_file = os.path.join(self.params['rundir'], "angular_reconstitution", "rep%d_ordered%d.hed" % (m, m))
 			of = apImagicFile.readImagic(filename=ordered_file, msg=False)
 			orderedarray = of['images']
 			rf = apImagicFile.readImagic(filename=reproj_file, msg=False)
@@ -1164,13 +1408,10 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 	
 	#=====================
 	#=====================
-	#=====================	
+	#=====================			
 	
-	def assess_3Dclass_quality(self, sim_matrix, classes, euler_array_transformed):
-		''' 
-		parses the similarity matrix, created either using Principal Component Analysis decomposition or 
-		a simple cross-correlation criteria, then returns the best model, based on intra-class variance
-		'''
+	def assess_3Dclass_quality(self, voldict, sim_matrix, classes, euler_array_transformed):
+		''' assesses each model based on multiple criteria '''
 
 		apDisplay.printColor("Parsing through resulting 3D classes to assess the quality of each 3D model", "yellow")
 		
@@ -1183,7 +1424,8 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 		bestavg = 0
 		mf = open(os.path.join(self.params['rundir'], "final_model_members.dat"), "w")
 		vf = open(os.path.join(self.params['rundir'], "final_model_stats.dat"), "w")
-		vf.write("modelname \t\t # members \t\t avg CCC \t\t mean Euler jump \t\t avg similarity (normalized) \t\t stdev (normalized) \t\t ssnr_res\n")
+		vf.write("%9s %5s %8s %8s %8s %8s %8s\n" \
+			% ("MODEL", "NUM", "CCPR", "EJ", "CCC", "STDEV", "SSNR"))		
 		for classnum in classnames:
 			sims = []
 			volarray = numpy.zeros((((len(classes[classnum]),self.params['boxsize'], self.params['boxsize'], self.params['boxsize']))))
@@ -1193,7 +1435,8 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 					sims.append(sim)
 				if len(classes[classnum]) == 1:
 					sims.append(1) ### when a single model is in a class, its self-similarity is 1
-				volarray[i] += mrc.read(os.path.join(self.params['rundir'], "volumes", "3d%d_ordered%d_filt.mrc" % (classes[classnum][i], classes[classnum][i])))
+				volarray[i] += mrc.read(voldict[classes[classnum][i]])
+#				volarray[i] += mrc.read(os.path.join(self.params['rundir'], "volumes", "3d%d_ordered%d_filt.mrc" % (classes[classnum][i], classes[classnum][i])))
 				
 			### get SSNR of volume class
 			if len(classes[classnum]) == 1:
@@ -1203,7 +1446,13 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 				os.rename(os.path.join(self.params['rundir'], "ssnr.dat"), os.path.join(self.params['rundir'], "ssnr_data", "ssnr_model_%d.dat" % (classnum)))
 			
 			### assess quality of class by comparing the summed CCC between projections and reprojections
-			CCC = self.avgCCCBetweenProjectionsAndReprojections(classes[classnum])
+#			ordered_file = os.path.join(self.params['rundir'], "angular_reconstitution", "ordered%d_sort.hed" % (m))
+#			reproj_file = os.path.join(self.params['rundir'], "angular_reconstitution", "rep%d_ordered%d.hed" % (m, m))
+			ordered_file = self.params['avgs']
+			reproj_file = os.path.join(
+				self.params['rundir'], "angular_reconstitution", "refine_%d" % m, "3d%d_refined_projections.hed" % m
+				)
+			CCC = self.avgCCCBetweenProjectionsAndReprojections(classes[classnum], ordered_file, reproj_file)
 				
 			### assess Euler jumpers for class (mean value for ALL class averages)
 			mj = self.calculateMeanEulerJumpForModelClass(classes[classnum], euler_array_transformed)
@@ -1214,13 +1463,77 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			mf.write("%d.mrc: %s \n" % (classnum, classes[classnum]))
 			print "model %d.mrc, %d members with average proj/reproj CCC %f, mean Euler jump %f, similarity %f, standard deviation %f, and resolution %f" \
 				% (classnum, len(classes[classnum]), CCC, mj, numpy.asarray(normsims).mean(), numpy.asarray(normsims).std(), res)
-			vf.write("%d.mrc \t\t %d \t\t %f \t\t %f \t\t %f \t\t %f \t\t %f\n" \
+			vf.write("%5d.mrc %5d %8.3f %8.3f %8.3f %8.3f %8.3f\n" \
 				% (classnum, len(classes[classnum]), CCC, mj, numpy.asarray(normsims).mean(), numpy.asarray(normsims).std(), res))
 		mf.close()
 		vf.close()
 			
 		return
 
+	#=====================
+	#=====================
+	#=====================			
+	
+	def assess_3Dclass_quality2(self, voldict, sim_matrix, classes, euler_array_transformed):
+		''' assesses each model based on multiple criteria, refinement only '''
+
+		apDisplay.printColor("Parsing through resulting 3D classes to assess the quality of each 3D model", "yellow")
+
+		### calculate final model statistics using similarity array
+		classnames = classes.keys()
+		bestavg = 0
+		mf = open(os.path.join(self.params['rundir'], "final_model_members.dat"), "w")
+		vf = open(os.path.join(self.params['rundir'], "final_model_stats.dat"), "w")
+		vf.write("%11s %5s %8s %8s %8s %8s %8s\n" \
+			% ("MODEL", "NUM", "CCPR", "EJ", "CCC", "STDEV", "FSC"))		
+		for classnum in classnames:
+			sims = []
+			volarray = numpy.zeros((((len(classes[classnum]),self.params['boxsize'], self.params['boxsize'], self.params['boxsize']))))
+			for i in range(len(classes[classnum])):
+				for j in range(i+1, len(classes[classnum])):
+					sim = sim_matrix[(classes[classnum][i]-1), (classes[classnum][j]-1)]
+					sims.append(sim)
+				if len(classes[classnum]) == 1:
+					sims.append(1) ### when a single model is in a class, its self-similarity is 1
+				volarray[i] += mrc.read(voldict[classes[classnum][i]])
+				
+			### get FSC of volume class
+			try:
+				res = apRecon.getResolutionFromGenericFSCFile(					
+					os.path.join(self.params['rundir'], "refinement", "refine_%d" % classnum, "3d%d_refined.frc" % classnum),
+					self.params['refineboxsize'], 
+					self.params['refineapix']
+					)
+			except:
+				res = 2 * self.params['refineapix']
+			
+			### assess quality of class by comparing the summed CCC between projections and reprojections
+			ordered_file = self.params['refineavgs']
+			reproj_file = os.path.join(
+				self.params['rundir'], "refinement", "refine_%d" % classnum, "3d%d_refined_projections.hed" % classnum
+				)
+			CCC = self.avgCCCBetweenProjectionsAndReprojections(classes[classnum], ordered_file, reproj_file)
+				
+			### assess Euler jumpers for class (mean value for ALL class averages)
+			mj = self.calculateMeanEulerJumpForModelClass(classes[classnum], euler_array_transformed)
+			
+			### print and write to file
+			normsims = self.normList(sims)
+			print "volumes going into model %d_r.mrc: %s \n" % (classnum, classes[classnum])
+			mf.write("%d_r.mrc: %s \n" % (classnum, classes[classnum]))
+			print "model %d_r.mrc, %d members with average proj/reproj CCC %f, mean Euler jump %f, similarity %f, standard deviation %f, and resolution %f" \
+				% (classnum, len(classes[classnum]), CCC, mj, numpy.asarray(normsims).mean(), numpy.asarray(normsims).std(), res)
+			vf.write("%5d_r.mrc %5d %8.3f %8.3f %8.3f %8.3f %8.3f\n" \
+				% (classnum, len(classes[classnum]), CCC, mj, numpy.asarray(normsims).mean(), numpy.asarray(normsims).std(), res))
+		mf.close()
+		vf.close()
+			
+		return
+					
+	#=====================
+	#=====================
+	#=====================	
+	
 	def upload(self):
 		''' insert into database, if commit is checked '''
 		
@@ -1285,51 +1598,35 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 		''' 
 		automated Angular Reconstitution 
 		'''
-
-		##############################################		Set Initial Parameters		##############################################
-
+		
+		##############################################		copy to working directory	##############################################
+		refine = True
 		### get initial parameters and copy class averages into working directory
-		if self.params['templatestackid'] is not None:
-			stackdata = appiondata.ApTemplateStackData.direct_query(self.params['templatestackid'])
-			clsname = stackdata['templatename']
-			self.params['apix'] = stackdata['apix']
-			self.params['boxsize'] = stackdata['boxsize']
-		elif self.params['clusterid'] is not None:
-			stackdata = appiondata.ApClusteringStackData.direct_query(self.params['clusterid'])
-			clsname = stackdata['avg_imagicfile']
-			self.params['apix'] = stackdata['clusterrun']['pixelsize']
-			self.params['boxsize'] = stackdata['clusterrun']['boxsize']
-		self.params['avgs'] = os.path.join(self.params['rundir'], os.path.basename(clsname))
-		shutil.copyfile(os.path.join(stackdata['path']['path'], clsname[:-4]+".hed"), self.params['avgs'][:-4]+".hed")
-		shutil.copyfile(os.path.join(stackdata['path']['path'], clsname[:-4]+".img"), self.params['avgs'][:-4]+".img")
-		self.params['numpart'] = apFile.numImagesInStack(self.params['avgs'])
-		self.params['keep_ordered_num'] = self.params['numpart'] * self.params['keep_ordered'] / 100
-#		apIMAGIC.copyFile(self.params['rundir'], clsname, headers=True)
-		apIMAGIC.takeoverHeaders(self.params['avgs'], self.params['numpart'], self.params['boxsize'])
-	
-		#######################################		scale class averages, if necessary		##########################################
+		shutil.copyfile(os.path.join(self.stackdata['path']['path'], self.clsname[:-4]+".hed"), self.params['avgs'][:-4]+".hed")
+		shutil.copyfile(os.path.join(self.stackdata['path']['path'], self.clsname[:-4]+".img"), self.params['avgs'][:-4]+".img")
+#		apIMAGIC.copyFile(self.params['rundir'], self.clsname, headers=True)
+		apIMAGIC.takeoverHeaders(self.params['avgs'], self.params['numpart'], self.params['refineboxsize'])
+		
+		###################################		scale & prealign class averages, if specified	 #####################################
 
 		### scale class averages to 64x64, if scaling is specified
+		self.params['refineavgs'] = self.params['avgs']
 		if self.params['scale'] is True:
-			scalefactor = float(64.0 / self.params['boxsize'])
-			self.params['apix'] = self.params['apix'] / scalefactor
-			self.params['boxsize'] = 64
 			emancmd = "proc2d %s %s_scaled.img scale=%.3f clip=%i,%i edgenorm" \
-				% (self.params['avgs'], self.params['avgs'][:-4], scalefactor, 64, 64)
+				% (self.params['avgs'], self.params['avgs'][:-4], self.scalefactor, 64, 64)
 			self.params['avgs'] = self.params['avgs'][:-4]+"_scaled.img"
 			while os.path.isfile(self.params['avgs']):
 				apFile.removeStack(self.params['avgs'])
 			apParam.runCmd(emancmd, "EMAN")
-#			apIMAGIC.copyFile(self.params['rundir'], os.path.basename(self.params['avgs']), headers=True)
+			apIMAGIC.copyFile(self.params['rundir'], os.path.basename(self.params['avgs']), headers=True)
 			apIMAGIC.takeoverHeaders(self.params['avgs'], self.params['numpart'], self.params['boxsize'])
-#		'''	
+			
 		if self.params['prealign'] is True:
 			self.params['avgs'] = self.prealignClassAverages()
-			print self.params['avgs']
 			apIMAGIC.checkLogFileForErrors(os.path.join(self.params['rundir'], "prealignClassAverages.log"))
 		
 		##############################################		create multiple 3d0s		##############################################
-
+#		'''
 		apDisplay.printColor("Calculating similarity matrix", "cyan")
 		ccc_matrix = self.calculate_ccc_matrix_2d(self.params['avgs'])
 		angrecondir = os.path.join(self.params['rundir'], "angular_reconstitution")
@@ -1340,7 +1637,7 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			os.symlink(os.path.join(self.params['rundir'], clsavgs+".hed"), os.path.join(angrecondir, clsavgs+".hed"))
 		if not os.path.islink(os.path.join(angrecondir, clsavgs+".img")):
 			os.symlink(os.path.join(self.params['rundir'], clsavgs+".img"), os.path.join(angrecondir, clsavgs+".img"))
-
+		
 		cmdlist = []
 		seqfile = open(os.path.join(self.params['rundir'], "sequences_for_angular_reconstitution.dat"), "w")
 		apDisplay.printColor("Running multiple IMAGIC 3d0 creations", "cyan")
@@ -1355,58 +1652,117 @@ class automatedAngularReconstitution(appionScript.AppionScript):
 			cmdlist.append(batchfile)
 			os.chdir(self.params['rundir'])
 		seqfile.close()
-		apThread.threadCommands(cmdlist, nproc=self.params['nproc'], pausetime=100)
+		apThread.threadCommands(cmdlist, nproc=self.params['threadnproc'], pausetime=10)
 			
 		### check for errors after execution
 		for i in range(self.params['num_volumes']):
 			apIMAGIC.checkLogFileForErrors(os.path.join(self.params['rundir'], "angular_reconstitution", "3d"+str(i+1)+".log"))
-				
+		
 		#####################################   convert 3-D models to SPIDER format for Xmipp   ######################################
-					
+				
 		### create volume directory
 		volumedir = os.path.join(self.params['rundir'], "volumes")
 		if not os.path.isdir(volumedir):
 			os.mkdir(volumedir)
 
 		### move volumes into volume directory		
-		apDisplay.printColor("Converting IMAGIC volumes to Spider format for Xmipp 3-D Maximum Likelihood", "cyan")	
-		emancmds = []
+		apDisplay.printColor("moving volumes for Xmipp 3-D Maximum Likelihood", "cyan")	
+		volumes = {}
+		cmds = []
 		for i in range(self.params['num_volumes']):
-			volume1 = os.path.join(self.params['rundir'], "angular_reconstitution", "3d"+str(i+1)+"_ordered"+str(i+1)+"_filt.vol")
-			volume2 = os.path.join(volumedir, "3d"+str(i+1)+"_ordered"+str(i+1)+"_filt.vol")
-			shutil.move(volume1, volume2)
-			
+			volume1 = os.path.join(self.params['rundir'], "angular_reconstitution", "3d%d_ordered%d_filt.vol" % (i+1,i+1))
+			volume2 = os.path.join(volumedir, "3d%d.vol" % (i+1))
+			cmds.append("proc3d %s %s spidersingle" % (volume1, volume2))
+			volumes[(i+1)] = volume2
+		apThread.threadCommands(cmds, nproc=self.params['threadnproc'])
+							
 		##############################################			align 3-D models		##############################################
-#									
+								
 		### run Maximum Likelihood 3-D alignment & align resulting volumes
 		apDisplay.printColor("Running Xmipp maximum likelihood 3-D alignment", "cyan")
-		vol_doc_file = self.xmipp_max_like_3d_align()
+		vol_doc_file, alignref = self.xmipp_max_like_3d_align(volumes)
 		alignparams = self.read_vol_doc_file(vol_doc_file)
 		apDisplay.printColor("Aligning volumes based on 3-D ML parameters", "cyan")
-		self.align_volumes(alignparams)
+		self.align_volumes(alignparams, alignref)
 #		'''
+#		vol_doc_file = '/ami/data17/appion/11jan08a/angrecon/acl3/max_like_alignment/nref1_15deg_it000005.doc'
+#		alignparams = self.read_vol_doc_file(vol_doc_file)
 		##############################################    Principal Component Analysis   #############################################
-#		vol_doc_file = "/ami/data00/appion/06dec19rct/angrecon/bar1/max_like_alignment/nref1_15deg_it000005.doc"
-		alignparams = self.read_vol_doc_file(vol_doc_file)
+
 		apDisplay.printColor("Calculating inter-volume similarity", "cyan")
+		aligned_volumes = {}
+		for i in range(self.params['num_volumes']):
+			aligned_volumes[(i+1)] = os.path.join(self.params['rundir'], "volumes", "3d%d.mrc" % (i+1))
 		if self.params['PCA'] is True:
-			simfile, sim_matrix = self.runPrincipalComponentAnalysis(recalculate=self.params['recalculate'])
+			simfile, sim_matrix = self.runPrincipalComponentAnalysis(aligned_volumes, recalculate=self.params['recalculate'])
 		else:
-			simfile, sim_matrix = self.calculate_ccc_matrix_3d()
+			simfile, sim_matrix = self.calculate_ccc_matrix_3d(aligned_volumes)
 				
 		##############################################    3-D affinity propagation		##############################################
 
 		### 3-D Affinity Propagation
 		apDisplay.printColor("Averaging volumes with Affinity Propagation", "cyan")
 		preffile = self.set_preferences(sim_matrix, self.params['preftype'])
-		classes = self.run_affinity_propagation(simfile, preffile)
+		classes = self.run_affinity_propagation(aligned_volumes, simfile, preffile)
+
+		#####################################	refine volumes using Xmipp projection matching	######################################
+			
+		if refine is True:
+			if not os.path.isdir("refinement"):
+				os.mkdir("refinement")
+			os.chdir("refinement")
+			apXmipp.breakupStackIntoSingleFiles(self.params['refineavgs'])
+			xmippcmd = "xmipp_normalize -i partlist.sel -method OldXmipp"
+			apParam.runCmd(xmippcmd, "Xmipp")
+			for i in classes.keys():
+				emancmd = "proc3d %s %s scale=%.3f clip=%d,%d,%d mask=%s spidersingle" \
+					% (os.path.join(self.params['rundir'], "%d.mrc" % i), "%d.vol" % i, (1/self.scalefactor), \
+						self.params['refineboxsize'], self.params['refineboxsize'], self.params['refineboxsize'], \
+						(self.params['mask_radius'] / self.params['refineapix']))
+				apParam.runCmd(emancmd, "EMAN")
+				self.refine_volume((i))
+				emancmd = "proc3d %s %s" \
+					% (os.path.join("refine_%d" % i, "3d%d_refined.vol" % i), os.path.join(self.params['rundir'], "%d_r.mrc" % i))
+				apParam.runCmd(emancmd, "EMAN")
+			os.chdir(self.params['rundir'])
+		
+		##############################################		   model evaluation	    	##############################################
 		
 		### final model assessment
 		euler_array = self.getEulerValuesForModels(alignparams)
-		self.assess_3Dclass_quality(sim_matrix, classes, euler_array)
+		if refine is True:
+			self.assess_3Dclass_quality2(aligned_volumes, sim_matrix, classes, euler_array)
+		else:
+			self.assess_3Dclass_quality(aligned_volumes, sim_matrix, classes, euler_array)
+		apCommonLines.combineMetrics("final_model_stats.dat", "final_model_stats_sorted_by_Rcrit.dat", **{"CCPR":(1,1)})
 
 		### upload to database, if specified
 		self.upload()
+		
+		### make chimera snapshots
+		if refine is True:
+			for i in classes.keys():
+				if self.params['mass'] is not None:
+					apChimera.filterAndChimera(os.path.join(self.params['rundir'], "%d_r.mrc" % i), res=self.params['3d_lpfilt'], \
+						apix=self.params['refineapix'], box=self.params['refineboxsize'], chimtype="snapshot", contour=2, \
+						zoom=1, sym="c1", color="gold", mass=self.params['mass'])
+	
+		### cleanup
+		snapshots = glob.glob("*.png")
+		mtlfiles = glob.glob("*.mtl")
+		objfiles = glob.glob("*.obj")
+		pyfiles = glob.glob("*mrc.py")
+		for file in mtlfiles:
+			os.remove(file)
+		for file in objfiles:
+			os.remove(file)
+		for file in pyfiles:
+			os.remove(file)
+		if not os.path.isdir("snapshots"):
+			os.mkdir("snapshots")
+		for s in snapshots:
+			shutil.move(s, os.path.join("snapshots", s))
+			
 
 if __name__ == "__main__":
 

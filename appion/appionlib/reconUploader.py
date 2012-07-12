@@ -14,6 +14,7 @@ from appionlib import appionScript
 from appionlib import apDisplay
 from appionlib import apEulerDraw
 from appionlib import apEulerJump
+from appionlib import apEulerCalc
 from appionlib import apParam
 from appionlib import apRecon
 from appionlib import apStack
@@ -21,6 +22,7 @@ from appionlib import apSymmetry
 from appionlib import apXmipp
 from appionlib import apChimera
 from appionlib import apProject
+from appionlib import apFile
 
 #=====================
 #=====================
@@ -233,6 +235,10 @@ class generalReconUploader(appionScript.AppionScript):
 			
 		return
 
+	def parseFileForRunParameters(self):
+		''' PACKAGE-SPECIFIC FILE PARSER. This should be defined in subclasses if the parameters were not pickled.  Return parameters in dictionary form'''
+		raise NotImplementedError('parseFileForRunParameters is not defined')
+		
 	#=====================
 	def readRunParameters(self):
 		''' read pickled run parameters for refinement procedure '''
@@ -279,37 +285,9 @@ class generalReconUploader(appionScript.AppionScript):
 			apDisplay.printError("no particle text file found; this is a requirement for the upload to insert " \
 				"Euler angles, shifts, etc. Make sure that you have a particle_data_%s_it%.3d_vol%.3d.txt file with" \
 				"all parameters" % (self.params['timestamp'], iteration, reference_number))
+		porderf = os.path.join(self.basepath,'stackpartorder.list')
+		return readParticleFileByFilePath(pdataf,porderf)
 		
-		f = open(pdataf,'r')
-		finfo = f.readlines()
-		f.close()
-		for i, info in enumerate(finfo):
-			if info[0] == "#":
-				pass
-			else:
-				finfo = finfo[i:]
-				break
-		
-		apDisplay.printMsg("reading particle parameters in file: %s" % os.path.basename(pdataf))
-		particledata = {}			
-		for j, info in enumerate(finfo):
-			alldata = {}			
-			data = info.strip().split()
-			alldata['partnum'] = int(float(data[0]))
-			alldata['phi'] = float(data[1])
-			alldata['theta'] = float(data[2])
-			alldata['omega'] = float(data[3])
-			alldata['shiftx'] = float(data[4])
-			alldata['shifty'] = float(data[5])
-			alldata['mirror'] = bool(data[6])
-			alldata['refnum'] = float(data[7])
-			alldata['clsnum'] = float(data[8])
-			alldata['quality'] = float(data[9])
-			alldata['refine_keep'] = bool(float(data[10]))
-			alldata['postRefine_keep'] = bool(float(data[11]))
-			particledata[j] = alldata
-
-		return particledata
 	
 	#=====================
 	def verifyUploadIterations(self, lastiter=float("inf")):
@@ -487,9 +465,12 @@ class generalReconUploader(appionScript.AppionScript):
 			stackp = appiondata.ApStackParticleData.direct_query(defid)
 			if not stackp:
 				apDisplay.printError("particle "+str(prtlnum)+" not in stack id="+str(self.runparams['stackid']))
-			
-			### convert Euler angles to EMAN format (temporary fix)
-			alt, az, phi = apXmipp.convertXmippEulersToEman(particledata[i]['phi'], particledata[i]['theta'], particledata[i]['omega'])
+
+			### convert icos convention to standard convention
+			full_sym_name = iterationParamsq['symmetry']['symmetry']
+			phi,theta,omega = apEulerCalc.convert3DEMEulerToStandard(full_sym_name,particledata[i]['phi'], particledata[i]['theta'], particledata[i]['omega'])
+			### convert Euler angles from 3DEM to EMAN format (temporary fix)
+			alt, az, phi = apXmipp.convertXmippEulersToEman(phi, theta, omega)
 
 			if self.multiModelRefinementRun is True:
 				prtlq['multiModelRefineRun'] = self.multimodelq
@@ -501,12 +482,25 @@ class generalReconUploader(appionScript.AppionScript):
 			prtlq['euler3'] = float(phi)
 			prtlq['shiftx'] = particledata[i]['shiftx']
 			prtlq['shifty'] = particledata[i]['shifty']
-			prtlq['mirror'] = particledata[i]['mirror']
+			prtlq['mirror'] = 0
+#			prtlq['mirror'] = particledata[i]['mirror']
 			prtlq['3Dref_num'] = particledata[i]['refnum']
-			prtlq['2Dclass_num'] = particledata[i]['clsnum']
-			prtlq['quality_factor'] = particledata[i]['quality']
-			prtlq['refine_keep'] = particledata[i]['refine_keep']
-			prtlq['postRefine_keep'] = particledata[i]['postRefine_keep']				
+			try:
+				prtlq['2Dclass_num'] = particledata[i]['clsnum']
+			except:
+				pass
+			try:
+				prtlq['quality_factor'] = particledata[i]['quality']
+			except:
+				pass
+			try:
+				prtlq['refine_keep'] = particledata[i]['refine_keep']
+			except:
+				pass
+			try:
+				prtlq['postRefine_keep'] = particledata[i]['postRefine_keep']				
+			except:
+				pass
 			prtlq['euler_convention'] = euler_convention
 						
 			if self.params['commit'] is True:
@@ -657,4 +651,62 @@ class generalReconUploader(appionScript.AppionScript):
 		return refine_complete
 		
 	
+# general function that does not need database connection
+def readParticleFileByFilePath(pdatafile,porderfile=''):
+	# read particle file
+	f = open(pdatafile,'r')
+	finfo = f.readlines()
+	f.close()
+	for i, info in enumerate(finfo):
+		if info[0] == "#":
+			pass
+		else:
+			finfo = finfo[i:]
+			break
+	apDisplay.printMsg("reading particle parameters in file: %s" % os.path.basename(pdatafile))
+	
+	# use saved particle order file particle number if availabe
+	if porderfile and os.path.isfile(porderfile):
+		orderf = open(porderfile,'r')
+		lines = orderf.readlines()
+		orderlist = map(lambda x:int(x[:-1]),lines)
+	else:
+		orderlist = range(1,len(finfo)+1)
+	# construct data
+	particledata = {}			
+	for j, info in enumerate(finfo):
+		alldata = {}			
+		data = info.strip().split()
+		alldata['partnum'] = orderlist[j]
+		alldata['phi'] = float(data[1])
+		alldata['theta'] = float(data[2])
+		alldata['omega'] = float(data[3])
+		alldata['shiftx'] = float(data[4])
+		alldata['shifty'] = float(data[5])
+		alldata['refnum'] = float(data[6])
+		try:
+			alldata['clsnum'] = float(data[7])
+		except:
+			pass
+		try:
+			alldata['quality'] = float(data[8])
+		except:
+			pass
+		try:
+			alldata['refine_keep'] = bool(float(data[9]))
+		except:
+			pass
+		try:
+			alldata['postRefine_keep'] = bool(float(data[10]))
+		except: 
+			pass
+#		alldata['mirror'] = bool(float(data[6]))
+#		alldata['refnum'] = float(data[7])
+#		alldata['clsnum'] = float(data[8])
+#		alldata['quality'] = float(data[9])
+#		alldata['refine_keep'] = bool(float(data[10]))
+#		alldata['postRefine_keep'] = bool(float(data[11]))
+		particledata[j] = alldata
+	return particledata
+
 

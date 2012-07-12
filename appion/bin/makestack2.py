@@ -94,7 +94,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 				self.logpeaks = math.ceil(logpeaks)
 				numpeaks = math.ceil(math.exp(self.logpeaks))
 				apDisplay.printMsg("averaging stack, next average at %d particles"%(numpeaks))
-				stackpath = os.path.join(self.params['rundir'], "start.hed")
+				stackpath = os.path.join(self.params['rundir'], self.params['single'])
 				apStack.averageStack(stack=stackpath)
 		return totalpart
 
@@ -333,6 +333,26 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		if len(parttree) != numpart:
 			apDisplay.printError("There is a mismatch in the number of particles expected and that were boxed")
 
+		### rectangular box masking
+		if self.params['boxmask'] is not None:
+			# create a stack of rectangular masks, which will be applied to 
+			# the particles as they are added to the final stack
+			pixsz = apDatabase.getPixelSize(imgdata)*self.params['bin']
+			boxsz = self.boxsize/self.params['bin']
+
+			bxmask = int(self.params['bxmask']/pixsz)
+			bymask = int(self.params['bymask']/pixsz)
+			if self.params['bimask'] > 0:
+				bimask = int(self.params['bimask']/pixsz)
+			else: bimask = None
+			falloff = self.params['falloff']/pixsz
+			# adjust masks for falloff
+			bxmask -= falloff/2
+			bymask = (bymask/2)-(falloff/2)
+
+			self.params['boxmaskf'] = os.path.splitext(imgstackfile)[0]+"-mask.hed"
+			apBoxer.boxMaskStack(self.params['boxmaskf'], boxedpartdatas, boxsz, bxmask, bymask, falloff, bimask, norotate=self.params['rotate'])
+
 		return boxedpartdatas, imgstackfile, partmeantree
 
 	############################################################
@@ -357,6 +377,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 
 	#=======================
 	def tiltPhaseFlipParticles(self, imgdata, imgstackfile, partdatas):
+		apDisplay.printMsg("Applying per-particle CTF")
 		ctfvalue = ctfdb.getBestTiltCtfValueForImage(imgdata)
 		if ctfvalue is None:
 			apDisplay.printError("Failed to get ctf parameters")
@@ -387,7 +408,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		# find cs
 		cs = self.getCS(ctfvalue)
 
-		imagicdata = apImagicFile.readImagic(imgstackfile)
+		imagicdata = apImagicFile.readImagic(imgstackfile, msg=False)
 		ctfpartstack = []
 		for i in range(len(partdatas)):
 			partdata = partdatas[i]
@@ -427,6 +448,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 
 	#=======================
 	def phaseFlipParticles(self, imgdata, imgstackfile):
+		apDisplay.printMsg("Applying CTF to particles")
 		imgname = imgdata['filename']
 		shortname = apDisplay.short(imgname)
 		ctfimgstackfile = os.path.join(self.params['rundir'], apDisplay.short(imgdata['filename'])+"-ctf.hed")
@@ -549,9 +571,16 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			# create ctfvalues_file from ctf run
 			ctfvaluesfile = "tmp_ctfvaluesfile.txt"
 
-			df1 = bestctfvalue['defocus1']
-			df2 = bestctfvalue['defocus2']
-			angast = bestctfvalue['angle_astigmatism']*math.pi/180.0
+			if abs(bestctfvalue['defocus1']) < abs(bestctfvalue['defocus2']):
+				## this is the canonical form
+				df1 = bestctfvalue['defocus1']
+				df2 = bestctfvalue['defocus2']			
+				angast = bestctfvalue['angle_astigmatism']
+			else:
+				apDisplay.printWarning("|def1| > |def2|, flipping defocus axes")
+				df1 = bestctfvalue['defocus2']
+				df2 = bestctfvalue['defocus1']			
+				angast = bestctfvalue['angle_astigmatism'] + 90			
 			amp = bestctfvalue['amplitude_contrast']
 			kv = imgdata['scope']['high tension']/1000
 			cs = bestctfvalue['cs']/1000
@@ -561,7 +590,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 				os.remove(ctfvaluesfile)
 			f = open(ctfvaluesfile,'w')
 			f.write("\tFinal Params for image: %s.mrc\n"%imgdata['filename'])
-			f.write("\tFinal Defocus (m,m,deg): %.6e %.6e %.6f\n"%(df1,df2,math.degrees(angast)))
+			f.write("\tFinal Defocus (m,m,deg): %.6e %.6e %.6f\n"%(df1,df2,angast))
 			f.write("\tAmplitude Contrast: %.6f\n"%amp)
 			f.write("\tVoltage (kV): %.6f\n"%kv)
 			f.write("\tSpherical Aberration (mm): %.6e\n"%cs)
@@ -677,14 +706,20 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 ############################################################
 	#=======================
 	def mergeImageStackIntoBigStack(self, imgstackfile, imgdata):
+		# if applying a boxmask, write to a temporary file before adding to main stack
 		bigimgstack = os.path.join(self.params['rundir'], self.params['single'])
-
+		if self.params['boxmask'] is not None:
+			bigimgstack = os.path.splitext(imgstackfile)[0]+"-premask.hed"
 		emancmd="proc2d %s %s" %(imgstackfile, bigimgstack)
 		### normalization
 		if self.params['normalized'] is True:
 			emancmd += " norm=0.0,1.0"
 			# edge normalization
 			emancmd += " edgenorm"
+		### bin images if specified
+		if self.params['bin'] > 1:
+			emancmd += " shrink=%d"%(self.params['bin'])
+
 		### high / low pass filtering
 		if self.params['highpass'] or self.params['lowpass']:
 			emancmd += " apix=%s" % apDatabase.getPixelSize(imgdata)
@@ -692,20 +727,32 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 				emancmd += " hp=%.2f" % self.params['highpass']
 			if self.params['lowpass']:
 				emancmd += " lp=%.2f" % self.params['lowpass']
-		### bin images if specified
-		if self.params['bin'] > 1:
-			emancmd += " shrink=%d"%(self.params['bin'])
-		emancmd += " clip=%d,%d"%(self.boxsize,self.boxsize)
 		### unless specified, invert the images
 		if self.params['inverted'] is True:
 			emancmd += " invert"
 		### if specified, create spider stack
 		if self.params['spider'] is True:
 			emancmd += " spiderswap"
+		emancmd += " clip=%d,%d"%(self.boxsize,self.boxsize)
 
 		apDisplay.printMsg("appending particles to stack: "+bigimgstack)
 		t0 = time.time()
 		apEMAN.executeEmanCmd(emancmd)
+
+		# if applying boxmask, now mask the particles & append to stack
+		if self.params['boxmask'] is not None:
+			# normalize particles before boxing, since zeros in mask
+			# can affect subsequent processing if not properly normalized
+			apEMAN.executeEmanCmd("proc2d %s %s edgenorm inplace"%(bigimgstack,bigimgstack),showcmd=False)
+			imgstack = apImagicFile.readImagic(bigimgstack,msg=False)
+			maskstack = apImagicFile.readImagic(self.params['boxmaskf'],msg=False)
+			for i in range(len(imgstack['images'])):
+				imgstack['images'][i]*=maskstack['images'][i]
+			maskedpartstack = os.path.splitext(imgstackfile)[0]+"-aftermask.hed"
+			apImagicFile.writeImagic(imgstack['images'], maskedpartstack)
+			bigimgstack = os.path.join(self.params['rundir'], self.params['single'])
+			apEMAN.executeEmanCmd("proc2d %s %s flip"%(maskedpartstack,bigimgstack))
+
 		self.mergestacktimes.append(time.time()-t0)
 
 		### count particles
@@ -873,6 +920,8 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			help="normalize the entire stack using xmipp")
 		self.parser.add_option("--helicalstep", dest="helicalstep", type="float",
 			help="helical step, in Angstroms")
+		self.parser.add_option("--boxmask", dest="boxmask",
+			help="box mask parameters: xmask,ymask,imask,falloff (in Angstroms)")
 
 		### true/false
 		self.parser.add_option("--phaseflip", dest="phaseflipped", default=False,
@@ -929,16 +978,20 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		if self.params['maskassess'] is not None and not self.params['checkmask']:
 			apDisplay.printMsg("running mask assess")
 			self.params['checkmask'] = True
-		if self.params['fliptype'] == 'ace2image' and self.params['ctfmethod'] is None:
-			apDisplay.printMsg("setting ctf method to ace2")
-			self.params['ctfmethod'] = 'ace2'
 		if self.params['xmipp-norm'] is not None or self.params['xmipp-norm-before'] is not None:
 			self.xmippexe = apParam.getExecPath("xmipp_normalize", die=True)
 		if self.params['particlelabel'] == 'user' and self.params['rotate'] is True:
 			apDisplay.printError("User selected targets do not have rotation angles")
 		if self.params['particlelabel'] == 'helical' and self.params['rotate'] is False:
 			apDisplay.printWarning("Rotate parameter is not set, helical filaments will not be aligned")
-			
+		if self.params['boxmask'] is not None:
+			bxlist=self.params['boxmask'].split(',')
+			if len(bxlist) < 4:
+				apDisplay.printError("boxmask requires 4 values separated by commas")
+			self.params['bxmask']=int(float(bxlist[0]))
+			self.params['bymask']=int(float(bxlist[1]))
+			self.params['bimask']=int(float(bxlist[2]))
+			self.params['falloff']=int(float(bxlist[3]))
 
 	def resetStack(self):
 		if self.params['helicalstep'] is not None:
@@ -994,7 +1047,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		if self.noimages is True:
 			return
 		### Averaging completed stack
-		stackpath = os.path.join(self.params['rundir'], "start.hed")
+		stackpath = os.path.join(self.params['rundir'], self.params['single'])
 		apStack.averageStack(stack=stackpath)
 		### Create Stack Mean Plot
 		if self.params['commit'] is True and self.params['meanplot'] is True:

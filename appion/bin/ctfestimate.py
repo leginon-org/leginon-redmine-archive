@@ -142,7 +142,11 @@ class ctfEstimateLoop(appionLoop2.AppionLoop):
 		defocus = abs(imgdata['scope']['defocus']*-1.0e10)
 		bestdef = abs(ctfdb.getBestDefocusForImage(imgdata, msg=True)*1.0e10)
 		# dstep is the physical detector pixel size
-		dstep = float(imgdata['camera']['pixel size']['x'])
+		dstep = imgdata['camera']['pixel size']['x']
+		if dstep is None:
+			dstep = apDatabase.getPixelSize(imgdata)*imgdata['scope']['magnification']/10000.0
+			dstep /=1e6
+		dstep = float(dstep)
 		mpixelsize = apDatabase.getPixelSize(imgdata)*1e-10
 		xmag = dstep / mpixelsize
 		print xmag, dstep, mpixelsize
@@ -200,7 +204,7 @@ class ctfEstimateLoop(appionLoop2.AppionLoop):
 		### additional ctftilt parameters
 		if self.params['ctftilt'] is True:
 			tiltang = apDatabase.getTiltAngleDeg(imgdata)
-			line4cmd += (","+str(tiltang)+",2.5")
+			line4cmd += (","+str(tiltang)+",10")
 		line4cmd += "\n"
 
 		if os.path.isfile(inputparams['output']):
@@ -355,7 +359,7 @@ class ctfEstimateLoop(appionLoop2.AppionLoop):
 			apDisplay.printWarning("ctf estimation failed to find any values")
 			return False
 
-		print "Committing ctf parameters for",apDisplay.short(imgdata['filename']), "to database."
+		apDisplay.printMsg("Committing ctf parameters for "+apDisplay.short(imgdata['filename'])+" to database.")
 		ctfq = appiondata.ApCtfData()
 		ctfq['acerun'] = self.ctfrun
 		ctfq['image']      = imgdata
@@ -390,7 +394,7 @@ class ctfEstimateLoop(appionLoop2.AppionLoop):
 			help="Low resolution end of data to be fitted", metavar="#")
 		self.parser.add_option("--resmax", dest="resmax", type="float", default=15.0,
 			help="High resolution end of data to be fitted", metavar="#")
-		self.parser.add_option("--defstep", dest="defstep", type="float", default=5000.0,
+		self.parser.add_option("--defstep", dest="defstep", type="float", default=1000.0,
 			help="Step width for grid search in Angstroms", metavar="#")
 		self.parser.add_option("--numstep", dest="numstep", type="int", default=25,
 			help="Number of steps to search in grid", metavar="#")
