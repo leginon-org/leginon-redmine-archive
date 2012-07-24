@@ -5,6 +5,12 @@ import collections
 import itertools
 import os
 
+debug = True
+def debug(s):
+	if debug:
+		sys.stderr.write(s)
+		sys.stderr.write('\n')
+
 class FileObjectWrapper(object):
 	'''
 	Override the close method, so we can track changes to files.
@@ -76,9 +82,14 @@ class CacheFS(fs.osfs.OSFS):
 			existing = True
 		# update order
 		if existing:
-			# The remove method of a deque can be slow for items
-			# farther right in the deque
-			self.order.remove(name)
+			# In an attempt to fix Bug #1762, catch the exception, but still
+			# not sure why it happens.
+			try:
+				# The remove method of a deque can be slow for items
+				# farther right in the deque
+				self.order.remove(name)
+			except ValueError:
+				debug('NEED TO FIX:  self.order does not contain %s' % (name,))
 		self.order.appendleft(name)
 
 	def clean(self):
