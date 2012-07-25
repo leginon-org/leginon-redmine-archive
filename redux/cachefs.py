@@ -4,6 +4,7 @@ import fs.osfs
 import collections
 import itertools
 import os
+import threading
 
 debug = True
 def debug(s):
@@ -39,6 +40,7 @@ class Constrainer(object):
 	def __init__(self, maxsize, remove_callback):
 		self.max_size = maxsize
 		self.remove_callback = remove_callback
+		self.lock = threading.Lock()
 
 		self.total_size = 0
 		self.size_dict = {}
@@ -55,6 +57,7 @@ class Constrainer(object):
 		print '=============================================================='
 
 	def insert(self, o, newsize):
+		self.lock.acquire()
 		if o in self.size_dict:
 			oldsize = self.size_dict[o]
 			self.order.remove(o)
@@ -65,15 +68,16 @@ class Constrainer(object):
 		self.order.appendleft(o)
 		self.total_size += (newsize - oldsize)
 
-		self.clean()
+		self.__clean()
 		if self.debug:
 			self.print_contents()
+		self.lock.release()
 
-	def clean(self):
+	def __clean(self):
 		while self.total_size > self.max_size:
-			self.remove_oldest()
+			self.__remove_oldest()
 
-	def remove_oldest(self):
+	def __remove_oldest(self):
 		o = self.order.pop()
 		oldsize = self.size_dict[o]
 		del self.size_dict[o]
