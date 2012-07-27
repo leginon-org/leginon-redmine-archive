@@ -22,23 +22,52 @@ class Shape(Pipe):
 			is_rgb=False
 
 		# determine whether to use imagefun.bin or scipy.ndimage.zoom
-		binfactor = [input.shape[0] / shape[0], input.shape[1] / shape[1]]
+		binfactors = []
 		zoomfactors = []
 		for i in range(len(shape)):
-			# zoom factor on this axis
 			zoomfactors.append(float(shape[i])/float(input.shape[i]))
+
+			## for rgb, binning not implemented
+			if is_rgb:
+				binfactors.append(1)
+				continue
+			else:
+				binfactors.append(input.shape[i] / shape[i])
 
 			# check original shape is divisible by new shape
 			if input.shape[i] % shape[i]:
-				binfactor[i] = None   # binning will not work
-				
+				# binning alone will not work, try initial bin, then interp
+				start = binfactors[i]
+				for trybin in range(start, 0, -1):
+					if input.shape[i] % trybin:
+						continue
+					binfactors[i] = trybin
+					zoomfactors[i] *= binfactors[i]
+					break
+			else:
+				# just use bin
+				zoomfactors[i] = 1.0
+
+		## don't zoom 3rd axis of rgb image
 		if is_rgb:
 			zoomfactors.append(1.0)
-			binfactor=None
-		if binfactor and binfactor[0] and binfactor[1]:
-			output = pyami.imagefun.bin(input, binfactor[0], binfactor[1])
-		else:
-			output = scipy.ndimage.zoom(input, zoomfactors)
+
+		output = input
+
+		## run bin if any bin factors not 1
+		if binfactors:
+			for binfactor in binfactors:
+				if binfactor != 1:
+					output = pyami.imagefun.bin(output, binfactors[0], binfactors[1])
+					break
+
+		## run zoom if any zoom factors not 1.0
+		if zoomfactors:
+			for zoomfactor in zoomfactors:
+				if zoomfactor != 1.0:
+					output = scipy.ndimage.zoom(output, zoomfactors)
+					break
+
 		return output
 
 	def make_dirname(self):
