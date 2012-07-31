@@ -573,13 +573,13 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 
 			if abs(bestctfvalue['defocus1']) < abs(bestctfvalue['defocus2']):
 				## this is the canonical form
-				df1 = bestctfvalue['defocus1']
-				df2 = bestctfvalue['defocus2']			
+				df1 = abs(bestctfvalue['defocus1'])
+				df2 = abs(bestctfvalue['defocus2'])
 				angast = bestctfvalue['angle_astigmatism']
 			else:
 				apDisplay.printWarning("|def1| > |def2|, flipping defocus axes")
-				df1 = bestctfvalue['defocus2']
-				df2 = bestctfvalue['defocus1']			
+				df1 = abs(bestctfvalue['defocus2'])
+				df2 = abs(bestctfvalue['defocus1'])		
 				angast = bestctfvalue['angle_astigmatism'] + 90			
 			amp = bestctfvalue['amplitude_contrast']
 			kv = imgdata['scope']['high tension']/1000
@@ -672,8 +672,8 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		spi_imgpath = os.path.join(self.params['rundir'], shortname+".spi")
 
 		
-		df1 = bestctfvalue['defocus1']
-		df2 = bestctfvalue['defocus2']
+		df1 = abs(bestctfvalue['defocus1'])
+		df2 = abs(bestctfvalue['defocus2'])
 		defocus = (df1+df2)/2*1.0e6
 
 		apix = apDatabase.getPixelSize(imgdata)
@@ -687,8 +687,8 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 		emancmd="proc2d %s %s spidersingle"%(inimgpath,spi_imgpath)
 		apEMAN.executeEmanCmd(emancmd, showcmd=True)
 		apDisplay.printMsg("phaseflipping entire micrograph with defocus "+str(round(defocus,3))+" microns")
-		# spider defocus is +, and in Angstroms
-		defocus *= -10000 
+		# spider defocus is in Angstroms
+		defocus *= 10000 
 		outimgpath = filters.phaseFlipImage(spi_imgpath,cs,defocus,voltage,imgsize,apix)
 
 		# convert image back to mrc
@@ -855,6 +855,8 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			return
 		elif uniqrundatas and not uniqstackdatas:
 			apDisplay.printError("Weird, run data without stack already in the database")
+		elif not uniqrundatas and uniqstackdatas:
+			apDisplay.printError("Weird, stack data without run already in the database")
 		else:
 			rinstackq['stack'] = stackq
 			rinstack = rinstackq.query(results=1)

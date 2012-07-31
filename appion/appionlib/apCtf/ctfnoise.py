@@ -2,9 +2,11 @@
 
 import sys
 import math
+import time
 import numpy
 import scipy.optimize
 import scipy.ndimage
+import scipy.interpolate
 from appionlib import apDisplay
 
 
@@ -99,6 +101,8 @@ class CtfNoise(object):
 		"""
 		constraint: f(x) - fit(x) < 0
 			     OR: fit(x) - f(x) > 0  -- forces to fit above function
+
+		if returns value of constraint, such that any thing below zero is bad
 		"""
 		if model is None:
 			model = self.noiseModel
@@ -113,6 +117,8 @@ class CtfNoise(object):
 	def modelConstFunBelow(self, fitparams, xdata=None, ctfdata=None, model=None):
 		"""
 		constraint: f(x) - fit(x) > 0  -- forces to fit below function
+
+		if returns value of constraint, such that any thing below zero is bad
 		"""
 		if model is None:
 			model = self.noiseModel
@@ -486,7 +492,14 @@ class CtfNoise(object):
 	def modelCTFNoise(self, xdata, ctfdata, contraint="below"):
 		"""
 		Master control function to fit the CTF noise function
+
+		xdata - should be in inverse Angstroms
 		"""
+		t0 = time.time()
+		### need to reduce precision of the xdata
+		### otherwise it takes too long, with no better of a fit
+		xdata = xdata.astype(numpy.float32)
+
 		if self.debug is True:
 			apDisplay.printColor("CTF limits %.1f A -->> %.1fA"
 				%(1./xdata.min(), 1./xdata.max()), "cyan")
@@ -603,12 +616,78 @@ class CtfNoise(object):
 			pyplot.clf()
 			"""
 
-
+		apDisplay.printColor("Noise Model Complete in %s"
+			%(apDisplay.timeString(time.time()-t0)), "cyan")
 
 		return bestfitparams
 
 
+def peakExtender(raddata, rotdata, extrema, extrematype="below"):
+	"""
+	raddata - x data in inverse Angstroms
+	rotdata - powerspectra data, almost normalized to 0 and 1
+	extrema - numpy array of peak or valley locations in inverse Angstroms
+	extrematype - type of extrema, must be either below or above
+	"""
 
+	extremeindices = numpy.searchsorted(raddata, extrema)
+
+	raddatasq = raddata**2
+
+	xdata = []
+	ydata = []
+	minx = extremeindices[0]
+	for i in range(extremeindices.shape[0]-1):
+		if extremeindices[i+1] > raddata.shape[0]-2:
+			## no more data
+			break
+		eindex = extremeindices[i]
+		if i == 0:
+			preveindex = int(eindex/2)
+		else:
+			preveindex = extremeindices[i-1]
+		nexteindex = extremeindices[i+1]
+		eindex1 = int(eindex - abs(preveindex-eindex)/3.0)
+		eindex2 = int(eindex + abs(nexteindex-eindex)/3.0)
+
+		values = rotdata[eindex1:eindex2]
+		if extrematype is "below":
+			value = values.min()
+		elif extrematype is "above":
+			value = values.max()
+
+		maxx = eindex
+		xdata.append(raddatasq[eindex])
+		ydata.append(value)
+
+	func = scipy.interpolate.interp1d(xdata, ydata, kind='slinear')
+	extremedata = func(raddatasq[minx:maxx])
+	if extrematype is "below":
+		startvalue = rotdata[int(minx*0.5):minx].min()
+		endvalue = rotdata[maxx:].min()
+	elif extrematype is "above":
+		startvalue = rotdata[int(minx*0.5):minx].max()
+		endvalue = rotdata[maxx:].max()
+
+	#print startvalue, endvalue
+
+	startdata = numpy.ones((minx)) * startvalue
+	enddata = numpy.ones((raddata.shape[0]-maxx)) * endvalue
+
+	extremedata = numpy.hstack( (startdata, extremedata, enddata) )
+
+	from matplotlib import pyplot
+	pyplot.clf()
+	pyplot.plot(raddatasq, rotdata, 'k-', )
+	pyplot.plot(raddatasq, rotdata, 'k.', )
+	pyplot.plot(raddatasq, extremedata, 'b-', )
+	for eindex in extremeindices:
+		if eindex > raddata.shape[0]-1:
+			break
+		pyplot.axvline(x=raddatasq[eindex], linewidth=2, color="gold", alpha=0.5)
+	pyplot.show()
+
+	return extremedata
 
 
 

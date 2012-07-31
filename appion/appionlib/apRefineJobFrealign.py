@@ -293,7 +293,7 @@ class FrealignRefineJob(apRefineJob.RefineJob):
 			'hostname'
 			'',
 			'### START FREALIGN ###',
-			'frealign_v8.exe << EOF > frealign.recon.out',
+			'frealign_v8_mp.exe << EOF > frealign.recon.out',
 			]
 		lines_after_input=[
 			'EOF',
@@ -338,7 +338,7 @@ class FrealignRefineJob(apRefineJob.RefineJob):
 				'',
 				'',
 				'### START FREALIGN ###',
-				'frealign_v8_mp.exe << EOF > frealign.proc%03d.out' % proc,
+				'frealign_v8.exe << EOF > frealign.proc%03d.out' % proc,
 				]
 			lines_after_input=[
 				'EOF',
@@ -403,7 +403,8 @@ class FrealignRefineJob(apRefineJob.RefineJob):
 		if not self.params['refineonly']:
 			# combine and recon parallelized only on one node
 			recon_file = self.writeReconShell(iter,inputlines_template,iterpath,self.ppn)	
-			tasks = self.addToTasks(tasks,recon_file,self.recon_mem,self.ppn)
+			mp_recon = self.setupMPRun(recon_file,self.recon_mem,self.ppn)
+			tasks = self.addToTasks(tasks,mp_recon,self.recon_mem,self.ppn)
 			tasks = self.addToTasks(tasks,'cd %s' % iterpath)
 			tasks = self.addToTasks(tasks,'getRes.pl %s %d %.3f >> ../resolution.txt' % (iter,self.params['boxsize'],self.params['apix']))
 			tasks = self.logTaskStatus(tasks,'eotest','../resolution.txt',iter)
