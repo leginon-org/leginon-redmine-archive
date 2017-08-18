@@ -37,7 +37,7 @@ class Relion2Align2DForm extends BasicLayoutForm
 		$this->setTestable( False ); // True to activate "test single image".
 		$this->setUseLegOutDir( False ); // The output directory will be created in the Appion run directory rather than Leginon.
 		$this->setShowDesc( True ); // Flag to hide the description field of the run parameters.
-		$this->setUseCluster( True ); // Shows the processing host params to set processors and memory
+		$this->setUseCluster( False ); // Shows the processing host params to set processors and memory
 
 		//------ Add JavaScript functions needed for this form -------------------------//
 
