@@ -104,10 +104,10 @@ class QuickStack(appionScript.AppionScript):
 			action="store_true", help="Invert particle density")
 		self.parser.add_option("-s", "--session", dest="sessionname",
 			help="Session name associated with processing run, e.g. --session=06mar12a", metavar="SESSION")
-		self.parser.add_option("--mode", dest="mode", default="both",
-			type="choice", choices=('relion', 'appion', 'both'),
+		self.parser.add_option("--mode", dest="mode", default="appion",
+			type="choice", choices=('relion', 'appion'),
 			help="Processing modes (1) 'relion'=just a stack, faster; "
-			+"(2) 'appion'=upload to database; or (3) 'both'", metavar="..")
+			+"(2) 'appion'=upload to database'", metavar="..")
 
 	#================================
 	def checkConflicts(self):
@@ -242,27 +242,37 @@ class QuickStack(appionScript.AppionScript):
 	def commitStackToDatabase(self, starlist):
 		partNum = 0
 		self.insertStackRun()
-		stackid = int(self.stackdata.dbid)
-		stackrunid = int(self.stackrundata.dbid)
-		for pickstarfile in starlist:
-			stackpartlist = []
-			statsstarfile = pickstarfile.replace("picks", "stats")
-			star = starFile.StarFile(statsstarfile)
-			star.read()
-			dataBlock = star.getDataBlock("data_particles")
-			loopDict  = dataBlock.getLoopDict()
-			#looplabels = [ "_particleid", "_mean", "_stdev", ]
-			for partdict in loopDict:
-				partNum += 1
-				stackpartval = {
-					'particleid': int(partdict['_particleid']),
-					'particlenum': partNum,
-					'mean': float(partdict['_mean']),
-					'stdev': float(partdict['_stdev']),
-				}
-				stackpartlist.append(stackpartval)
-			sqlcmd = apStack.stackPartListToSQLInsertString(stackpartlist, stackid, stackrunid)
-			sinedon.directq.complexMysqlQuery('appiondata', sqlcmd)
+		print("Committing Stack to Database...")
+		print("self.params['mode']:",self.params['mode'])
+		print("self.params['mode'] != \"relion\":",(self.params['mode'] != "relion"))
+		if self.params['mode'] != "relion":
+			stackid = int(self.stackdata.dbid)
+			stackrunid = int(self.stackrundata.dbid)
+			for pickstarfile in starlist:
+				stackpartlist = []
+				statsstarfile = pickstarfile.replace("picks", "stats")
+				star = starFile.StarFile(statsstarfile)
+				star.read()
+				dataBlock = star.getDataBlock("data_particles")
+				loopDict  = dataBlock.getLoopDict()
+				#looplabels = [ "_particleid", "_mean", "_stdev", ]
+				for partdict in loopDict:
+					partNum += 1
+					stackpartval = {
+						'particleid': int(partdict['_particleid']),
+						'particlenum': partNum,
+						'mean': float(partdict['_mean']),
+						'stdev': float(partdict['_stdev']),
+					}
+					stackpartlist.append(stackpartval)
+				sqlcmd = apStack.stackPartListToSQLInsertString(stackpartlist, stackid, stackrunid)
+				sinedon.directq.complexMysqlQuery('appiondata', sqlcmd)
+		#else:
+		#	stackid = int(self.stackdata.dbid)
+		#	stackrunid = int(self.stackrundata.dbid)
+		#	stackpartlist = ['']
+		#	sqlcmd = apStack.stackPartListToSQLInsertString(stackpartlist,stackid,stackrunid)
+		#	sinedon.directq.complexMysqlQuery('appiondata',sqlcmd)
 
 		return
 
@@ -280,7 +290,9 @@ class QuickStack(appionScript.AppionScript):
 		runq['session'] = self.getSessionData()
 
 		### finish stack object
-		stackq['name'] = "start.hed"
+		if self.params['mode'] != "relion":
+
+			stackq['name'] = "start.hed"
 		if self.params['description'] is not None:
 			stackq['description'] = self.params['description']
 		else:
@@ -295,7 +307,11 @@ class QuickStack(appionScript.AppionScript):
 		stparamq = appiondata.ApStackParamsData()
 		stparamq['boxSize'] = self.params['finalboxsize']
 		stparamq['bin'] = int(math.ceil(downscalefactor))
-		stparamq['fileType'] = "imagic"
+
+		if self.params['mode'] == "relion":
+			stparamq['fileType'] = "relion"
+		else:
+			stparamq['fileType'] = "imagic"
 		stparamq['inverted'] = self.params['invert']
 		stparamq['phaseFlipped'] = False
 
@@ -328,8 +344,8 @@ class QuickStack(appionScript.AppionScript):
 
 	#================================
 	def checkIfStackAlreadyExists(self):
-		if self.params['mode'] == 'relion':
-			return
+		#if self.params['mode'] == "relion":
+		#	return
 
 		### create a stack object
 		stackq = appiondata.ApStackData()
@@ -354,6 +370,7 @@ class QuickStack(appionScript.AppionScript):
 
 	#================================
 	def start(self):
+		print("mode is",self.params['mode'])
 		sessiondata = self.getSessionData()
 		self.checkIfStackAlreadyExists()
 		if self.params['preset'] is not None:
@@ -385,20 +402,21 @@ class QuickStack(appionScript.AppionScript):
 		p.terminate()
 		print "Image Processing Finished in %.3f seconds"%((time.time()-t0)*1)
 
-		if self.params['mode'] == 'appion' or self.params['mode'] == 'both':
+		#if self.params['mode'] == 'appion' or self.params['mode'] == 'both':
+		if self.params['mode'] == 'appion':
 			mergestack = "start.hed"
 			self.mergeStacksIntoOneImagicFile(mergestack, starlist)
 			stackTools.averageStack(mergestack)
 
-		if self.params['mode'] == 'relion' or self.params['mode'] == 'both':
+		if self.params['mode'] == "relion":
 			outputstarfile = self.writeStackStarFile(starlist)
 			fullstarpath = os.path.join(self.params['rundir'], outputstarfile)
 			apDisplay.printColor("RELION Stack saved to %s"%(fullstarpath), "green")
 		else:
 			self.deleteMrcsFiles(starlist)
 
+		self.commitStackToDatabase(starlist)
 		if self.params['mode'] == 'appion' or self.params['mode'] == 'both':
-			self.commitStackToDatabase(starlist)
 			stackid = int(self.stackdata.dbid)
 			apStackMeanPlot.makeStackMeanPlot(stackid)
 

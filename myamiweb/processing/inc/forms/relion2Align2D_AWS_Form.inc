@@ -119,6 +119,11 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 
 		$html = "";
 
+                $html .= "<hr/><h4>Stack format:</h4>\n";
+                $html.= $params->insertRadioField("mode", "relion", "Relion only &ndash; MRC stacks, star file with CTF info, faster, no database", "");
+                $html.= $params->insertRadioField("mode", "appion", "Appion only &ndash; IMAGIC stack file, no CTF, upload data to database", "");
+  
+
 		$html .= "<br /><H4>Stack Selection</H4><hr />";
 
 		if (!$this->stackIds) {
@@ -127,6 +132,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$onchange 	= "switchDefaults(this.value)";
 			$particle 	= new particledata();
 			$options 	= $particle->getStackOptions($this->stackIds);
+			echo var_dump($options)."\n";
 			$html .= $params->insertStackedSelectField( "stack", $options,'', '', $onchange );
 		}
 

@@ -1786,14 +1786,13 @@ class particledata {
 		$options = array();
 		
 		foreach ( $stackIds as $stackid ) {
-			
 			// get stack parameters from database
 			$s = $this->getStackParams( $stackid['stackid'] );
 			
 			// get number of particles in each stack
 			$totalp = $this->getNumStackParticles( $stackid['stackid'] );
-			if ($totalp == 0)
-				continue;
+			//if ($totalp == 0)
+			//	continue;
 				
 			$nump = commafy($totalp);
 			
@@ -1809,13 +1808,21 @@ class particledata {
 			// if imagic stack, send both hed & img files for dmf
 			if (preg_match('~.hed~', $s['name'])) $opvals.='|--|'.preg_replace('~hed~','img',$s['name']);
 			if (preg_match('~.img~', $s['name'])) $opvals.='|--|'.preg_replace('~img~','hed',$s['name']);
-			
 			// Add this stack to the options dictionary
-			$options[$opvals] = $s[shownstackname]." ID: ".$stackid[stackid]." (".$nump." particles, ".$showapix." &Aring;/pix, ".$box."x".$box.")";
+			if ($s['fileType'] == "relion"){
+				$options[$opvals] = $s[shownstackname]." ID: ".$stackid[stackid]." (".$nump." particles, ".$showapix." &Aring;/pix, ".$box."x".$box.") (Relion Stack)";
+			}
+			else{
+				$options[$opvals] = $s[shownstackname]." ID: ".$stackid[stackid]." (".$nump." particles, ".$showapix." &Aring;/pix, ".$box."x".$box.")";
+			}
 		}
 		
 		return $options;
 	}
+	// Returns a list of Relion quickstack jobs, analagous to getStackOptions
+	function getRelionQuickStackOptions( $stackRunIds )
+	{}
+
 
 	function getStackSelector($stackIds,$stackidval,$onchange) {
 		/* THIS FUNCTION SHOULD BE MOVED TO summarytables.inc */
