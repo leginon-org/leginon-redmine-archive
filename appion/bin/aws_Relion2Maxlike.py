@@ -355,7 +355,14 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			relionopts += ( " --angpix %.4f "%(self.stack['apix']*self.params['bin']))
 		elif self.params['mode'] == 'relion':
 			stackpath = self.stackdata['path']['path']
-			relionstarfile = stackpath+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star'
+			if not os.path.isdir(os.path.join(self.params['rundir'],'mrcs')):
+				os.symlink(os.path.join(stackpath,"mrcs"),os.path.join(self.params['rundir'],'mrcs'))
+
+			if not os.path.isfile(self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star'):
+				os.symlink(stackpath+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star',self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star')
+
+			relionstarfile = self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star'
+			print("RELIONSTARFILE IS",relionstarfile)
 			relionopts =  ( " "+" --i %s "%(relionstarfile))
 			relionopts += ( " --angpix %.4f "%(self.stack['apix']))
 
@@ -395,8 +402,9 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		#runcmd = relionexe+" "
 		self.writeRelionLog(runcmd)
 		print("RUNCMD IS",runcmd)
-
-		apAWS.relion_refine_mpi(runcmd,instancetype=self.params['instancetype'])
+		os.chdir(self.params['rundir'])
+		print("CURRENT DIRECTORY: ",os.getcwd())
+		apAWS.relion_refine_mpi(runcmd,instancetype=self.params['instancetype'],symlinks=True)
 		aligntime = time.time() - aligntime
 		apDisplay.printMsg("Alignment time: "+apDisplay.timeString(aligntime))
 
@@ -404,6 +412,8 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		self.createReferenceStack()
 		self.dumpParameters()
 		self.runUploadScript()
+		os.unlink(os.path.join(self.params['rundir'],'mrcs'))
+		os.unlink(self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star')
 
 #=====================
 if __name__ == "__main__":
