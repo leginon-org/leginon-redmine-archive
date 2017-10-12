@@ -150,8 +150,8 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$html .= $params->insertStackedSelectField( "instancetype", $instanceoptions,'','',$onchange );
 
 		$html .="<br />
-		<H4>Data limiting numbers</H4>
-		<hr />";
+			<H4>Data limiting numbers</H4>
+		<hr /><H5 style='color:red'>(Ignore these parameters when using a Relion Stack)</H5>";
 
 		$html .= $params->insertTextField( "clip", $fieldSize, "(pixels)", 'relion2DMaxlike.unbinnedclipdiameter' );
 		$html .= $params->insertTextField( "bin", $fieldSize, '', 'relion2DMaxlike.particlebinning' );
@@ -160,7 +160,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$html .= "
 		<br />
 		<H4>Filters</H4>
-		<hr />";
+		<hr /> <H5 style='color:red'>(Ignore these parameters when using a Relion Stack)</H5>";
 
 		$html .= $params->insertTextField( "lowpass", $fieldSize, "(&Aring;ngstroms)",'relion2DMaxlike.lowpassfilterradius' );
 		$html .= $params->insertTextField( "highpass", $fieldSize, "(&Aring;ngstroms)", 'relion2DMaxlike.highpassfilterradius' );
@@ -222,13 +222,26 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		}
 		*/
 		list($stackid, $apix, $boxsz, $totpart,$stackpath,$startfile1,$startfile2) = preg_split('%\|--\|%',$stack);
+
+		// Command parsing for relion stack options
+
 		echo "STARTFILE! ".$startfile1;
-		if ($startfile1 === 'relion.mrcs'){
+		if ($startfile1 === 'relion.mrcs') {
 			$mode = 'relion';
+			
 		}
-		else{
+		else {
 			$mode = 'appion';
-			$command = $this->addCommandFlag( $command, "mode", "mode", "
+		}
+		$description = $params->getParamValue( "description" );
+		$command = $this->removeCommandFlag( $command, "description" );
+		$command = $this->addCommandFlag( $command, "description", "description", $description );
+
+
+		$command = $this->removeCommandFlag( $command, "mode" );
+		$command = $this->addCommandFlag( $command, "mode", "mode", $mode );
+
+
 		$command = $this->removeCommandFlag( $command, "stack" );
 		$command = $this->addCommandFlag( $command, "stack", "stack", $stackid );
 

@@ -219,9 +219,20 @@ def checkPartLocation(instarfile,indir):
 			if 'data' not in line:
 				if '_rln' in line:
 					if line.split()[0] == '_rlnImageName':
-						imagecolnum=int(line.split('#')[-1])
+						print(line)
+						if len(line.split('#')) > 1:
+							
+							imagecolnum=int(line.split('#')[-1])
+						else:
+							imagecolnum=1
+							print('imagecolnum=1')
 					if line.split()[0] == '_rlnMicrographName':
-						microcolnum=int(line.split('#')[-1])
+						print(line)
+						if len(line.split('#')) > 1:
+							microcolnum=int(line.split('#')[-1])
+						else:
+							microcolnum=2
+							print('microcolnum=2')
 	o44.close()
 
 	if microcolnum == 0:
@@ -229,49 +240,56 @@ def checkPartLocation(instarfile,indir):
 	if microcolnum != 0:
 		o44=open(instarfile,'r')
 		for line in o44:
+			print(line)
 			if len(line.split()) > 0:
-				if 'data' not in line:
-					if '_rln' not in line:
-						if 'loop_' not in line:
-							part=line.split()[imagecolnum-1].split('@')[-1]
-							starfile=''
-							if not os.path.exists(part):
-								error='Error: particle stack %s does not exist.' %(part)
-							if os.path.exists('%s_extract.star' %(part[:-5])):
-								starfile='%s_extract.star' %(part[:-5])
-							InIt=False
-							if indir in part:
-								InIt=True
-							if InIt is False:
-								if len(part.split('/')) == 5:
-									otherPartDir=part.split('/')[0]+'/'+part.split('/')[1]+'/'
-									tmpline=part.split('/')[2]+'/'+part.split('/')[3]+'/'+part.split('/')[4]
-									tmpline=tmpline.replace('//','/')
-									otherPartRclone.append(tmpline)
-								if len(part.split('/')) == 4:
-									otherPartDir=part.split('/')[0]+'/'+part.split('/')[1]+'/'
-									otherPartRclone.append(part.split('/')[2]+'/'+part.split('/')[3])
-								if len(part.split('/')) == 3:
-									otherPartDir=part.split('/')[0]+'/'+part.split('/')[1]+'/'
-                                                                        otherPartRclone.append(part.split('/')[2])
-							'''
-							checkdir=part.split(micro)[0]
-							if checkdir[-1] == '/':
-								checkdir=checkdir[:-1]
-							if checkdir != indir:
-								otherPartDir=checkdir
-								if micro not in otherPartRclone:
-									partfilename=part.split('/')[-1]
-									micdironly=micro.split('/')
-									del micdironly[-1]
-									micdironly='/'.join(micdironly)
-									otherPartRclone.append('%s/%s' %(micdironly,partfilename))
-									if len(starfile) > 0:
-										instarfile='%s/%s_extract.star' %(micdironly,partfilename[:-5])
-										if instarfile not in otherPartRclone:
-											otherPartRclone.append(instarfile)
-							'''
+				if not line.startswith("#"):
+					if 'data' not in line:
+						if '_rln' not in line:
+							if 'loop_' not in line:
+								print("line is: ",line)
+								part=line.split()[imagecolnum-1].split('@')[-1]
+								print("part is")
+								print(part)
+								starfile=''
+								if not os.path.exists(part):
+									error='Error: particle stack %s does not exist.' %(part)
+								if os.path.exists('%s_extract.star' %(part[:-5])):
+									starfile='%s_extract.star' %(part[:-5])
+								InIt=False
+								if indir in part:
+									InIt=True
+								if InIt is False:
+									if len(part.split('/')) == 5:
+										otherPartDir=part.split('/')[0]+'/'+part.split('/')[1]+'/'
+										tmpline=part.split('/')[2]+'/'+part.split('/')[3]+'/'+part.split('/')[4]
+										tmpline=tmpline.replace('//','/')
+										otherPartRclone.append(tmpline)
+									if len(part.split('/')) == 4:
+										otherPartDir=part.split('/')[0]+'/'+part.split('/')[1]+'/'
+										otherPartRclone.append(part.split('/')[2]+'/'+part.split('/')[3])
+									if len(part.split('/')) == 3:
+										otherPartDir=part.split('/')[0]+'/'+part.split('/')[1]+'/'
+										otherPartRclone.append(part.split('/')[2])
+								'''
+								checkdir=part.split(micro)[0]
+								if checkdir[-1] == '/':
+									checkdir=checkdir[:-1]
+								if checkdir != indir:
+									otherPartDir=checkdir
+									if micro not in otherPartRclone:
+										partfilename=part.split('/')[-1]
+										micdironly=micro.split('/')
+										del micdironly[-1]
+										micdironly='/'.join(micdironly)
+										otherPartRclone.append('%s/%s' %(micdironly,partfilename))
+										if len(starfile) > 0:
+											instarfile='%s/%s_extract.star' %(micdironly,partfilename[:-5])
+											if instarfile not in otherPartRclone:
+												otherPartRclone.append(instarfile)
+								'''
 		o44.close()
+		print("Done with Partlocation: otherPartDir,otherPartRclone,error")
+		print(otherPartDir,otherPartRclone,error)
 	return otherPartDir,otherPartRclone,error
 
 #==============================
@@ -402,6 +420,8 @@ def relion_refine_mpi(in_cmd,instancetype=''):
 		if len(particledir) > 0:
 			starfilename='%s/%s' %(particledir,partstarname)
 			numParticles=len(open('%s/%s' %(particledir,partstarname),'r').readlines())
+
+		print("numParticles is",numParticles)
 		magcheck=False
 		pixcheck=False
 		ctfcheck=False
@@ -409,6 +429,7 @@ def relion_refine_mpi(in_cmd,instancetype=''):
 		detectorcolnum=-1
 		magcolnum=-1
 		exampleline=''
+		print("starfilename is",starfilename)
 		for line in open(starfilename,'r'):
 			if len(line.split()) > 0:
 				if line.split()[0] == '_rlnMagnification':
@@ -420,7 +441,12 @@ def relion_refine_mpi(in_cmd,instancetype=''):
 				if line.split()[0] == '_rlnDefocusU':
 					ctfcheck=True
 				if line.split()[0] == '_rlnImageName':
-					partcolnum=int(line.split()[1].split('#')[-1])
+					print("LINE IS",line)
+					if len(line.split()) >1:
+						partcolnum=int(line.split()[1])
+					elif len(line.split())>0:
+						partcolnum=1
+
 				exampleline=line
 		ctfin=False
 		apixin=False

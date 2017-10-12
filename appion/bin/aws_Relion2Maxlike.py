@@ -90,6 +90,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		self.parser.add_option('--usegpu', dest='usegpu',action="store_true",default=False)
 		self.parser.add_option('--preread_images', dest='preread_images',action="store_true",default=False)
 		self.parser.add_option('--instancetype',dest='instancetype',type=str,default=None)
+		self.parser.add_option('--mode',dest='mode',type=str,default='appion')
 
 
 	#=====================
@@ -104,19 +105,26 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		if self.params['runname'] is None:
 			apDisplay.printError("run name was not defined")
 		self.stackdata = apStack.getOnlyStackData(self.params['stackid'], msg=False)
+		print("STACK DATA IS",self.stackdata)
+		print("STACK PATH IS",self.stackdata['path'])
+		a = appiondata.ApRunsInStackData(stack=self.stackdata)
+		print("RUNSINSTACKDATA IS",a)
 		stackfile = os.path.join(self.stackdata['path']['path'], self.stackdata['name'])
+
+
 		# check for virtual stack
 		self.params['virtualdata'] = None
-		if not os.path.isfile(stackfile):
-			vstackdata = apStack.getVirtualStackParticlesFromId(self.params['stackid'])
-			npart = len(vstackdata['particles'])
-			self.params['virtualdata'] = vstackdata
-		else:
-			npart = apFile.numImagesInStack(stackfile)
+		if self.params['mode'] == 'appion':
+			if not os.path.isfile(stackfile):
+				vstackdata = apStack.getVirtualStackParticlesFromId(self.params['stackid'])
+				npart = len(vstackdata['particles'])
+				self.params['virtualdata'] = vstackdata
+			else:
+				npart = apFile.numImagesInStack(stackfile)
 
-		if self.params['numpart'] > npart:
-			apDisplay.printError("trying to use more particles "+str(self.params['numpart'])
-				+" than available "+str(apFile.numImagesInStack(stackfile)))
+			if self.params['numpart'] > npart:
+				apDisplay.printError("trying to use more particles "+str(self.params['numpart'])
+					+" than available "+str(apFile.numImagesInStack(stackfile)))
 
 		boxsize = apStack.getStackBoxsize(self.params['stackid'])
 		self.clipsize = int(math.floor(boxsize/float(self.params['bin']*2)))*2
@@ -331,8 +339,10 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			plist = [int(p['particleNumber'])-1 for p in vparts]
 			a.setValue('list',plist)
 
-		#run proc2d
-		a.run()
+		# if in appion stack mode, run proc2d
+		if self.params['mode'] == 'appion':
+			a.run()
+		
 
 		#if self.params['numpart'] != apFile.numImagesInStack(self.params['localstack']):
 		#	apDisplay.printError("Missing particles in stack")
@@ -340,10 +350,17 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		### setup Relion command
 		aligntime = time.time()
 
-		relionopts = ( " "
-			+" --i %s "%(self.params['localstack'])
+		if self.params['mode'] == 'appion':
+			relionopts =  ( " "+" --i %s "%(self.params['localstack']))
+			relionopts += ( " --angpix %.4f "%(self.stack['apix']*self.params['bin']))
+		elif self.params['mode'] == 'relion':
+			stackpath = self.stackdata['path']['path']
+			relionstarfile = stackpath+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star'
+			relionopts =  ( " "+" --i %s "%(relionstarfile))
+			relionopts += ( " --angpix %.4f "%(self.stack['apix']))
+
+		relionopts += ( " "
 			+" --o %s "%(os.path.join(self.params['rundir'], "part"+self.timestamp))
-			+" --angpix %.4f "%(self.stack['apix']*self.params['bin'])
 			+" --iter %d "%(self.params['maxiter'])
 			+" --K %d "%(self.params['numrefs'])
 			+" --psi_step %d "%(self.params['psistep'])
@@ -377,6 +394,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		#relionexe = "relion_refine_mpi"
 		#runcmd = relionexe+" "
 		self.writeRelionLog(runcmd)
+		print("RUNCMD IS",runcmd)
 
 		apAWS.relion_refine_mpi(runcmd,instancetype=self.params['instancetype'])
 		aligntime = time.time() - aligntime
