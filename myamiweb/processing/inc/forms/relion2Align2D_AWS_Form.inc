@@ -17,7 +17,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 	// Set Default values in the constructor
 	function __construct( $expId, $extraHTML='', $stackId='', $clip='', $bin='1', $numpart='3000',
 		$lowpass='10', $highpass='1000', $numRef='3', $maxIter='30', $angStep='5', $tau='2', $partDiam='',
-		$flat='on', $zero_mask=False, $commit='on',$instancetype='none',$preread_images=False)
+		$flat='on', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$relionstarfile='')
 	{
 		parent::__construct($expId, $extraHTML);
 
@@ -98,11 +98,13 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$params->addParam( "commit", $commit, "Commit to Database" );
 		$params->addParam( "correctnorm",$correctnorm,"Perform normalization error correction");
 		$params->addParam( "instancetype",$instancetype,"Amazon GPU instance type");
+		$params->addParam( "mode",$mode,"Stack mode: Appion or Relion");
 		$params->addParam( "preread_images",$preread_images,"Pre-read images into memory");
+		$params->addParam( "description",$description,"Enter a brief description");
 
 
 		// Validations
-		$params->addValidation( "numpart", "minval=4" );
+//		$params->addValidation( "numpart", "minval=4" );
 
 	}
 
@@ -120,8 +122,8 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$html = "";
 
                 $html .= "<hr/><h4>Stack format:</h4>\n";
-                $html.= $params->insertRadioField("mode", "relion", "Relion only &ndash; MRC stacks, star file with CTF info, faster, no database", "");
                 $html.= $params->insertRadioField("mode", "appion", "Appion only &ndash; IMAGIC stack file, no CTF, upload data to database", "");
+                $html.= $params->insertRadioField("mode", "relion", "Relion only &ndash; MRC stacks, star file with CTF info, faster, no database", "");
   
 
 		$html .= "<br /><H4>Stack Selection</H4><hr />";
@@ -132,7 +134,6 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$onchange 	= "switchDefaults(this.value)";
 			$particle 	= new particledata();
 			$options 	= $particle->getStackOptions($this->stackIds);
-			echo var_dump($options)."\n";
 			$html .= $params->insertStackedSelectField( "stack", $options,'', '', $onchange );
 		}
 
@@ -208,10 +209,26 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$command = parent::buildCommand( $postArray );
 
 		$params = $this->getFormParams();
-
 		// Extract the stack id from the stack string
 		$stack = $params->getParamValue( "stack" );
-		list($stackid, $apix, $boxsz, $totpart) = preg_split('%\|--\|%',$stack);
+		$mode = $params->getParamValue( "mode" );
+		var_dump($stack);
+		/*echo "STACK IS ".var_dump($stack)."\n\n";
+		/if ($mode == "relion") {
+			echo "RELION MODE";
+		}
+		else {
+			echo "NOT RELION MODE";
+		}
+		*/
+		list($stackid, $apix, $boxsz, $totpart,$stackpath,$startfile1,$startfile2) = preg_split('%\|--\|%',$stack);
+		echo "STARTFILE! ".$startfile1;
+		if ($startfile1 === 'relion.mrcs'){
+			$mode = 'relion';
+		}
+		else{
+			$mode = 'appion';
+			$command = $this->addCommandFlag( $command, "mode", "mode", "
 		$command = $this->removeCommandFlag( $command, "stack" );
 		$command = $this->addCommandFlag( $command, "stack", "stack", $stackid );
 
@@ -238,15 +255,6 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		if (!$commit) {
 			$command.= " --no-commit ";
 		}
-/*
-		$nompi  = ($params->getParamValue('nompi') == 'on' ) ? true : false;
-		if ($nompi) {
-			$command = $this->removeCommandFlag( $command, "mpithreads" );
-			$command = $this->removeCommandFlag( $command, "mpimem" );
-			$command = $this->removeCommandFlag( $command, "mpiprocs" );
-			$command = $this->removeCommandFlag( $command, "mpinodes" );
-}
- */
 
 		return $command;
 	}
@@ -255,24 +263,10 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 	public function validate( $postArray )
 	{
 		$msg = parent::validate( $postArray );
+		$msg = '';
 
 		$params = $this->getFormParams();
-/*		$nompi  = ($params->getParamValue('nompi') == 'on' ) ? true : false;
-		if (!$nompi) {
-			$phostinfo = $this->getProcessingHostInfo();
-			$maxmem = $phostinfo['memorymax'];
-			//$numnodes = $PROCESSING_HOSTS[0]['
-			$mpithreads = $params->getParamValue('mpithreads');
-			$mpimem = $params->getParamValue('mpimem');
-			$mpiprocs = $params->getParamValue('mpiprocs');
-			if ($mpiprocs*$mpithreads*$mpimem > $maxmem) {
-				$msg .= "<B>Error:</B> Total MPI threads per node * MPI memory/thread is greater than max memory per node. "
-					."<br>( $mpiprocs procs/node * $mpithreads threads/proc * $mpimem Gb/thread = "
-					.$mpiprocs*$mpithreads*$mpimem." Gb > $maxmem Gb )";
-				return $msg;
-}
-		}
- */
+
 		// Extract the stack id from the stack string
 		$stack = $params->getParamValue( "stack" );
 		list($stackid, $apix, $boxsz, $totpart) = preg_split('%\|--\|%',$stack);
@@ -282,15 +276,15 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$msg .= "<B>Error:</B> Clipping diameter ($clip pixels)"
 			." must be less than or equal to the stack boxsize ($boxsz pixels)";
 		}
-
-		$instancetype = $params->getParamValue('instancetype');
-		if ($instancetype == 'none') {
+		$instancetype = $params->getParamValue( 'instancetype' );
+		if ($instancetype === 'none') {
 			$msg .= "<B>Error:</B> No instance type selected.";
 		}
-		#$description = $params->getParamValue('description');
-		#if ($description == '') {
-		#	$msg .="<B>Error:</B> Enter a job description.";
-		#}
+		$description = $params->getParamValue('description');
+		if ($description === '') {
+			$msg .="<B>Error:</B> Enter a job description.";
+		}
+	//	echo "MSG:".$msg;
 		return $msg;
 	}
 }

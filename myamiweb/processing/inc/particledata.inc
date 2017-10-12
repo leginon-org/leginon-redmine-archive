@@ -1808,8 +1808,9 @@ class particledata {
 			// if imagic stack, send both hed & img files for dmf
 			if (preg_match('~.hed~', $s['name'])) $opvals.='|--|'.preg_replace('~hed~','img',$s['name']);
 			if (preg_match('~.img~', $s['name'])) $opvals.='|--|'.preg_replace('~img~','hed',$s['name']);
+			if ($s['name']===null) $opvals.='start.mrcs|--|start.mrcs';
 			// Add this stack to the options dictionary
-			if ($s['fileType'] == "relion"){
+			if ($s['fileType'] === "relion"){
 				$options[$opvals] = $s[shownstackname]." ID: ".$stackid[stackid]." (".$nump." particles, ".$showapix." &Aring;/pix, ".$box."x".$box.") (Relion Stack)";
 			}
 			else{
