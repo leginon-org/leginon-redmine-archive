@@ -174,24 +174,13 @@ def getCMDrefine(rlncmd):
 			partdiamcounter=counter
 		counter=counter+1
 
-
-        outbasename=rlncmd.split()[outcounter]
-        print("OUTBASENAME IS",outbasename)
-        outdir=rlncmd.split()[outcounter].split('/')
-    
-        del outdir[-1]
-        outdir='/'.join(outdir)
-        print("OUTDIR IN CMDREFINE IS",outdir)
-
 	if indircounter > 0:
 		partstarname=rlncmd.split()[indircounter].split('/')[-1]
-		print("PARTSTARTNAME IS",partstarname)
 		if '.star' not in partstarname:
 			stack=True
 		partdir=rlncmd.split()[indircounter].split('/')
 		del partdir[-1]
 		partdir='/'.join(partdir)
-		print("PARTDIR IS",partdir)
 	if partdiamcounter > 0:
 		diamlength=len(repr(rlncmd.split()[partdiamcounter].strip()))
 		if diamlength>10: 
@@ -199,7 +188,10 @@ def getCMDrefine(rlncmd):
 		if diamlength<=10:
 			particlediameter=float(rlncmd.split()[partdiamcounter].strip())
 		#Since appions command comes with this formatting: 234.0\xc2\xa0
-
+	outbasename=rlncmd.split()[outcounter]
+	outdir=rlncmd.split()[outcounter].split('/')
+	del outdir[-1]
+	outdir='/'.join(outdir)
 	if itercounter > 0:
 		numiterslength=len(repr(rlncmd.split()[itercounter].strip()))
 		if numiterslength>8:
@@ -212,18 +204,6 @@ def getCMDrefine(rlncmd):
 		mask=rlncmd.split()[maskcounter]
 	if continuecounter > 0:
 		contLocation=rlncmd.split()[continuecounter]
-	print("rlncmd: ",rlncmd)
-	print("partdir: ",partdir)
-	print("ref: ",ref)
-	print("outdir: ",outdir)
-	print("autoref: ",autoref)
-	print("numiters: ",numiters)
-	print("partstarname: ",partstarname)
-	print("mask: ",mask)
-	print("stack: ",stack)
-	print("contLocation: ",contLocation)
-	print("outbasename: ",outbasename)
-	print("particlediameter: ",particlediameter)
 	return rlncmd,partdir,ref,outdir,autoref,numiters,partstarname,mask,stack,contLocation,outbasename,particlediameter
 
 #==============================
@@ -239,13 +219,14 @@ def checkPartLocation(instarfile,indir):
 			if 'data' not in line:
 				if '_rln' in line:
 					if line.split()[0] == '_rlnImageName':
-						print(line)
-						if len(line.split('#')) > 1:
-							
-							imagecolnum=int(line.split('#')[-1])
-						else:
-							imagecolnum=1
-							print('imagecolnum=1')
+
+                                                print(line)
+                                                if len(line.split('#')) > 1:
+    
+                                                        imagecolnum=int(line.split('#')[-1])
+                                                else:
+                                                        imagecolnum=1
+                                                        print('imagecolnum=1')
 					if line.split()[0] == '_rlnMicrographName':
 						print(line)
 						if len(line.split('#')) > 1:
@@ -260,8 +241,8 @@ def checkPartLocation(instarfile,indir):
 	if microcolnum != 0:
 		o44=open(instarfile,'r')
 		for line in o44:
-			if len(line.split()) > 0:
-				if not line.startswith("#"):
+			if not line.startswith("#"):
+				if len(line.split()) > 0:
 					if 'data' not in line:
 						if '_rln' not in line:
 							if 'loop_' not in line:
@@ -304,8 +285,6 @@ def checkPartLocation(instarfile,indir):
 												otherPartRclone.append(instarfile)
 								'''
 		o44.close()
-		print("Done with Partlocation: otherPartDir,otherPartRclone,error")
-		print(otherPartDir,otherPartRclone,error)
 	return otherPartDir,otherPartRclone,error
 
 #==============================
@@ -392,7 +371,6 @@ def getSelectParticleDir(selectdir):
 def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 
 	assert type(instancetype) == str
-
 	print("Instance type is: ",instancetype)
 	#Set entry
 	otherPartDir=''
@@ -436,8 +414,6 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 		if len(particledir) > 0:
 			starfilename='%s/%s' %(particledir,partstarname)
 			numParticles=len(open('%s/%s' %(particledir,partstarname),'r').readlines())
-
-		print("numParticles is",numParticles)
 		magcheck=False
 		pixcheck=False
 		ctfcheck=False
@@ -445,7 +421,6 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 		detectorcolnum=-1
 		magcolnum=-1
 		exampleline=''
-		print("starfilename is",starfilename)
 		for line in open(starfilename,'r'):
 			if len(line.split()) > 0:
 				if line.split()[0] == '_rlnMagnification':
@@ -457,12 +432,11 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 				if line.split()[0] == '_rlnDefocusU':
 					ctfcheck=True
 				if line.split()[0] == '_rlnImageName':
-					print("LINE IS",line)
-					if len(line.split()) >1:
-						partcolnum=int(line.split()[1])
-					elif len(line.split())>0:
-						partcolnum=1
-
+                                        print("LINE IS",line)
+                                        if len(line.split()) >1: 
+                                                partcolnum=int(line.split()[1])
+                                        elif len(line.split())>0:
+                                                partcolnum=1
 				exampleline=line
 		ctfin=False
 		apixin=False
@@ -498,7 +472,6 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 		if os.path.exists('%s/handler.txt' %(outdir)):
                         os.remove('%s/handler.txt' %(outdir))
                 cmd='relion_image_handler --i %s --stats > %s/handler.txt' %(examplePart,outdir)
-		print("OUTDIR IS",outdir)
 		subprocess.Popen(cmd,shell=True).wait()
 		partxdim=int(linecache.getline('%s/handler.txt' %(outdir),1).split('=')[1].split('x')[0].strip())
 
@@ -563,10 +536,9 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 	#Check where input particles are located
 	if stack is False:
 		otherPartDir,otherPartRclone,error=checkPartLocation(starfilename,particledir)
-		print("OTHERPARTDIR IS",otherPartDir)
-		print("OTHERPARTRCLONE IS",otherPartRclone)
-		otherPartDir = os.path.join(outdir,"mrcs")
-		print("NEW OTHERPARTDIR IS",otherPartDir)
+		print("otherPartDir: ",otherPartDir)
+		print("otherPartRclone: ",otherPartRclone)
+		print("error: ",error)
 	if len(error) > 0:
 		writeToLog(error,'%s/run.err' %(outdir))
                 sys.exit()
@@ -678,12 +650,8 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 			inputfilesize=subprocess.Popen('du -L %s' %(otherPartDir), shell=True, stdout=subprocess.PIPE).stdout.read().split()[-2]
 		else:
 			inputfilesize=subprocess.Popen('du %s' %(otherPartDir), shell=True, stdout=subprocess.PIPE).stdout.read().split()[-2]
-
-	print("PARTICLEDIR IS",particledir)
 	sizeneeded='%.0f' %(math.ceil((float(inputfilesize)*4)/1000000))
         actualsize='%.0f' %(math.ceil((float(inputfilesize)/1000000)))
-	print("SIZENEEDED: ",sizeneeded)
-	print("ACTUALSIZE: ",actualsize)
 	#Upload data to S3
 	if s3_exist is False:
 		writeToLog('Started uploading %sGB to AWS on %s' %(actualsize,time.asctime(time.localtime(time.time()))),'%s/run.out' %(outdir))
@@ -721,14 +689,14 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 	#Launch instance
 	if os.path.exists('%s/awslog.log' %(outdir)):
 		os.remove('%s/awslog.log' %(outdir))
-	print("OUTDIR IS",outdir)
-	cmd='%s/launch_AWS_instance.py --instance=%s --availZone=%sa --volume=%s > %s/awslog.log' %(awsdir,instance,awsregion,volID,outdir)
+	dirlocation = subprocess.Popen('echo $AWS_DATA_DIRECTORY', shell=True, stdout=subprocess.PIPE).stdout.read().split()[0]
+
+	cmd='%s/launch_AWS_instance.py --instance=%s --availZone=%sa --volume=%s --dirname=%s > %s/awslog.log' %(awsdir,instance,awsregion,volID,dirlocation,outdir)
 	subprocess.Popen(cmd,shell=True).wait()
 	#Get instance ID, keypair, and username:IP
 	instanceID=subprocess.Popen('cat %s/awslog.log | grep ID' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split('ID:')[-1].strip()
 	keypair=subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split()[3].strip()
 	userIP=subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split('@')[-1].strip()
-
 	#Create directories on AWS
 	if instance == 'p2.xlarge':
                 gpu='--gpu '
@@ -766,88 +734,107 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 		mpi=5
 		numfiles=90
 		cost=4.56
-	
+
+	else:
+		instance = 't2.nano'
+		gpu='--gpu '
+		j='--j 1 '
+		mpi=2
+		numfiles=8
+		cost=0.0058
+
 	env.host_string='ubuntu@%s' %(userIP)
         env.key_filename = '%s' %(keypair)
 	if ebs_exist is False:
 		writeToLog('Started transferring %sGB at %s' %(actualsize,time.asctime(time.localtime(time.time()))),'%s/run.out' %(outdir))
-		dirlocation='/data'
+		dirlocation= subprocess.Popen('echo $AWS_DATA_DIRECTORY', shell=True, stdout=subprocess.PIPE).stdout.read().split()[0]
+
 		#if stack is False:
 		#	for entry in particledir.split('/'):
 		#		if len(entry.split('.star')) == 1:
 		#			exec_remote_cmd('mkdir /%s/%s' %(dirlocation,entry))
 		#			dirlocation=dirlocation+'/'+entry
+		exec_remote_cmd('mkdir -p %s '%(particledir))
 		if len(otherPartDir) == 0:
 			if stack is False:
-				#s3_to_ebs(userIP,keypair,bucketname,'/data/%s/' %(particledir),'%s/rclone' %(awsdir),key_ID,secret_ID,awsregion,numfiles)			  
-				print("PARTICLEDIR IS",particledir)
+				#s3_to_ebs(userIP,keypair,bucketname,'/data/%s/' %(particledir),'%s/rclone' %(awsdir),key_ID,secret_ID,awsregion,numfiles)
 				s3_to_ebs(userIP,keypair,bucketname,'/%s/' %(particledir),'%s/rclone' %(awsdir),key_ID,secret_ID,awsregion,numfiles)
 			if stack is True:
 				#s3_to_ebs(userIP,keypair,bucketname,'/data/%s' %(particledir),'%s/rclone' %(awsdir),key_ID,secret_ID,awsregion,numfiles)
 				s3_to_ebs(userIP,keypair,bucketname,'/%s' %(particledir),'%s/rclone' %(awsdir),key_ID,secret_ID,awsregion,numfiles)
 		if len(otherPartDir) > 0:
 			#s3_to_ebs(userIP,keypair,bucketname,'/data/%s/' %(otherPartDir),'%s/rclone' %(awsdir),key_ID,secret_ID,awsregion,numfiles)
-			s3_to_ebs(userIP,keypair,bucketname,'/%s/' %(otherPartDir),'%s/rclone' %(awsdir),key_ID,secret_ID,awsregion,numfiles)
+			s3_to_ebs(userIP,keypair,bucketname,'/%s' %(otherPartDir),'%s/rclone' %(awsdir),key_ID,secret_ID,awsregion,numfiles)
 		writeToLog('Finished transfer at %s' %(time.asctime( time.localtime(time.time()) )),'%s/run.out' %(outdir))
 
-	#Make output d"
-	dirlocation= "/"
+	#Make output directories
+	dirlocation = subprocess.Popen('echo $AWS_DATA_DIRECTORY', shell=True, stdout=subprocess.PIPE).stdout.read().split()[0]
 	outdirlist=outdir.split('/')
 	#exec_remote_cmd('mkdir %s'%particledir)
 	#exec_remote_cmd('echo'+particledir+' > /home/ubuntu/check.log')
-	print("DIRLOCATION",dirlocation)
 	del outdirlist[-1]
-        for entry in outdirlist:
-		print("mkdir dirlocation,entry",dirlocation,entry)
-        	exec_remote_cmd('mkdir /%s/%s' %(dirlocation,entry))
-                dirlocation=dirlocation+'/'+entry
-	cmd='rsync -avzu --rsync-path="rsync" --log-file="%s/rsync.log" -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:%s/ > %s/rsync.log' %(outdir,keypair,outdir,userIP,dirlocation,outdir)
+	#print("OUTDIRLIST IS ",outdirlist)
+	#for entry in outdirlist:
+	#	exec_remote_cmd('mkdir /%s/%s' %(dirlocation,entry))
+	#        dirlocation=dirlocation+'/'+entry
+	dirlocation = outdir
+	cmd='rsync -avzuL --rsync-path="rsync" --log-file="%s/rsync.log" -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s/ ubuntu@%s:%s > %s/rsync.log' %(outdir,keypair,outdir,userIP,outdir,outdir)
+	writeToLog(cmd,"%s/rsync.log" %(outdir))
     	subprocess.Popen(cmd,shell=True).wait()
 	if len(otherPartDir) > 0:
-		#dirlocation='/gpfs'
-		dirlocation = outdir
+		dirlocation= subprocess.Popen('echo $AWS_DATA_DIRECTORY', shell=True, stdout=subprocess.PIPE).stdout.read().split()[0]
 		partdirlist=particledir.split('/')
 		del partdirlist[-1]
-		for entry in partdirlist:
-			exec_remote_cmd('mkdir /%s/%s' %(dirlocation,entry))
-			dirlocation=dirlocation+'/'+entry
-		cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/%s > %s/rsync.log' %(outdir,keypair,particledir,userIP,dirlocation,outdir)
-		os.system("echo "+cmd+" > rsync_command.txt")
+		#for entry in partdirlist:
+		#	exec_remote_cmd('mkdir /%s/%s' %(dirlocation,entry))
+		#	dirlocation=dirlocation+'/'+entry
+		exec_remote_cmd('mkdir -p %s' %(particledir))
+		writeToLog('mkdir -p %s' %(particledir),'%s/run.out' %(outdir))
+		# Sync particle directory with instance
+		cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzuL -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s/ ubuntu@%s:%s > %s/rsync.log' %(outdir,keypair,particledir,userIP,dirlocation,outdir)
+
+		writeToLog(cmd,"%s/rsync.log" %(outdir))
 		subprocess.Popen(cmd,shell=True).wait()
-	if initmodel != 'None':
-		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/data/ > %s/rsync.log' %(outdir,keypair,initmodel,userIP,outdir)
-		cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/%s > %s/rsync.log' %(outdir,keypair,initmodel,userIP,dirlocation,outdir)
-        	subprocess.Popen(cmd,shell=True).wait()
-	if len(mask) > 0:
-		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/data/ > %s/rsync.log' %(outdir,keypair,mask,userIP,outdir)
-                cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/%s > %s/rsync.log' %(outdir,keypair,mask,userIP,dirlocation,outdir)
-                subprocess.Popen(cmd,shell=True).wait()
+#	if initmodel != 'None':
+#		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/data/ > %s/rsync.log' %(outdir,keypair,initmodel,userIP,outdir)
+#		cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/ > %s/rsync.log' %(outdir,keypair,initmodel,userIP,outdir)
+#        	subprocess.Popen(cmd,shell=True).wait()
+#	if len(mask) > 0:
+#		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/data/ > %s/rsync.log' %(outdir,keypair,mask,userIP,outdir)
+#                cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/ > %s/rsync.log' %(outdir,keypair,mask,userIP,outdir)
+#                subprocess.Popen(cmd,shell=True).wait()
 
 	relion_remote_cmd='mpirun -np %i /home/EM_Packages/relion2.0/build/bin/relion_refine_mpi %s %s %s' %(mpi,relioncmd,j,gpu)
 
 	o2=open('run_aws.job','w')
 	o2.write('#!/bin/bash\n')
 	#o2.write('cd /data\n')
-	o2.write('cd /gpfs\n')
+	o2.write('cd %s \n' %(outdir))
 	o2.write('%s\n' %(relion_remote_cmd))
 	o2.close()
 	st = os.stat('run_aws.job')
 	os.chmod('run_aws.job', st.st_mode | stat.S_IEXEC)
+
+	# Sync run_aws.job to instance
+
 	cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -e "ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s" run_aws.job ubuntu@%s:~/ > %s/rsync.log' %(outdir,keypair,userIP,outdir)
 	subprocess.Popen(cmd,shell=True).wait()
-	#cmd='ssh -q -n -f -i %s ubuntu@%s "export LD_LIBRARY_PATH=/home/EM_Packages/relion2.0/build/lib:$LD_LIBRARY_PATH && nohup ./run_aws.job > /data/%s/run.out 2> /data/%s/run.err < /dev/null &"' %(keypair,userIP,outdir,outdir)
+
+	# configure LD_LIBRARY_PATH
 	cmd='ssh -q -n -f -i %s ubuntu@%s "export LD_LIBRARY_PATH=/home/EM_Packages/relion2.0/build/lib:$LD_LIBRARY_PATH && nohup ./run_aws.job > /%s/run.out 2> /%s/run.err < /dev/null &"' %(keypair,userIP,outdir,outdir)
 	subprocess.Popen(cmd,shell=True)
 
 	writeToLog('Job submitted to the cloud...','%s/run.out' %(outdir))
-	#cmd='scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i %s %s/run.out ubuntu@%s:/data/%s/ > %s/rsync.log' %(keypair,outdir,userIP,outdir,outdir)
-	cmd='scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i %s %s/run.out ubuntu@%s:/%s/ > %s/rsync.log' %(keypair,outdir,userIP,outdir,outdir)
+	cmd='scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i %s %s/run.out ubuntu@%s:/%s > %s/rsync.log' %(keypair,outdir,userIP,outdir,outdir)
 	subprocess.Popen(cmd,shell=True)
 	isdone=0
-
+	print("OUTDIR IS",outdir)
+	print("OUTBASEDIR IS ",outbasename)
+	# Sync instance with local storage while job is still running
 	while isdone == 0:
-		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -e "ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s" ubuntu@%s:/data/%s/ %s/ > %s/rsync.log' %(outdir,keypair,userIP,outdir,outdir,outdir)
-		cmd='mkdir -p %s/%s; rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -e "ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s" ubuntu@%s:/%s/ %s/ > %s/rsync.log' %(outdir,outbasename,outdir,keypair,userIP,outdir,outdir,outdir)
+
+		cmd='mkdir -p /%s; rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -e "ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s" ubuntu@%s:/%s/ %s > %s/rsync.log' %(outbasename,outdir,keypair,userIP,outdir,outdir,outdir)
+		writeToLog(cmd,"%s/rsync.log" %(outdir))
 		subprocess.Popen(cmd,shell=True).wait()
 		time.sleep(2)
 		if autoref == -1:
