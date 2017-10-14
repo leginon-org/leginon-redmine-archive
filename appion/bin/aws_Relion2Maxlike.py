@@ -412,7 +412,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		self.createReferenceStack()
 		self.dumpParameters()
 		self.runUploadScript()
-		os.unlink(os.path.join(self.params['rundir'],'mrcs'))
+#		os.unlink(os.path.join(self.params['rundir'],'mrcs'))
 		os.unlink(self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star')
 
 #=====================

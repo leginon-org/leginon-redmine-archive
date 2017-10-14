@@ -39,6 +39,8 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 			help="Timestamp of files, e.g. 08nov02b35", metavar="CODE")
 		self.parser.add_option("--no-sort", dest="sort", default=True,
 			action="store_false", help="Do not sort files into nice folders")
+		self.parser.add_option("--mode",dest="mode",default="appion", type="str",
+			help="Type of stack; appion or relion",metavar="STR")
 
 	#=====================
 	def checkConflicts(self):
@@ -133,14 +135,23 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		#ref16may17u43_it030_data.star
 		inputfile = "ref%s_final_data.star"%(self.params['timestamp'])
 		lastiterfile = "ref%s_it%03d_data.star"%(self.params['timestamp'], self.lastiter)
+
+		# testing
+		#inputfile = "ref17oct14k39_final_data.star"
+		#lasteriterfile = "ref17oct14k39_it002_data.star"
+
 		if not os.path.isfile(lastiterfile):
 			# may be in refalign after file sorting but did not upload properly
 			lastiterfile = os.path.join("refalign", lastiterfile)
+			print("No lasteriterfile")
 		shutil.copy(lastiterfile, inputfile)
-
+		print("final star file is",inputfile)
 		starData = starFile.StarFile(inputfile)
+		print("starData is",starData)
 		starData.read()
 		dataBlock = starData.getDataBlock('data_images')
+		print("dataBlock is",dataBlock)
+
 		particleTree = dataBlock.getLoopDict()
 
 		fakereflist = [{ 'xshift': 0, 'yshift':0, 'inplane':0}]
@@ -158,13 +169,22 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		#part16may17u43_it030_data.star
 		inputfile = "part%s_final_data.star"%(self.params['timestamp'])
 		lastiterfile = "part%s_it%03d_data.star"%(self.params['timestamp'], self.lastiter)
+
+		# TESTING
+		inputfile = "part17oct14k39_final_data.star"
+		lasteriterfile = "part17oct14k39_it002_data.star"
 		if self.params['sort'] is True:
 			lastiterfile = os.path.join("iter%03d"%(self.lastiter), lastiterfile)
 		shutil.copy(lastiterfile, inputfile)
 
 		starData = starFile.StarFile(inputfile)
+		print("starData is",starData)
 		starData.read()
-		dataBlock = starData.getDataBlock('data_images')
+		if self.params['mode'] == 'relion':
+			dataBlock = starData.getDataBlock('data_')
+		else:
+			dataBlock = starData.getDataBlock('data_images')
+		print("datablock is",dataBlock)
 		particleTree = dataBlock.getLoopDict()
 		self.class_count = {}
 		for relionpartdict in particleTree:
@@ -186,8 +206,11 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		apDisplay.printMsg("Reading old parameter file: %s"%(paramfile))
 		f = open(paramfile, "r")
 		runparams = cPickle.load(f)
+		
 		if not 'localstack' in runparams:
 			runparams['localstack'] = self.params['timestamp']+".hed"
+		print("localstack is",runparams['localstack'])
+
 		if not 'student' in runparams:
 			runparams['student'] = 0
 		apDisplay.printMsg("Read %d old parameters"%(len(runparams)))
@@ -441,7 +464,11 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		### create aligned stacks
 		partlist = self.readPartStarFile(reflist)
 		#self.writePartDocFile(partlist)
-		alignimagicfile = self.createAlignedStack(partlist, runparams['localstack'])
+
+		if self.params['mode'] == 'relion':
+			alignimagicfile = ''
+		else:
+			alignimagicfile = self.createAlignedStack(partlist, runparams['localstack'])
 
 		# convert unaligned weighted refstack from mrc to imagic format
 		unaligned_refstack_mrc = os.path.join('iter%03d' % self.lastiter,'part%s_it%03d_classes.mrcs' % (self.params['timestamp'], self.lastiter))
@@ -460,14 +487,18 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 				%(len(blank_classes), len(stackarray), str(blank_classes)))
 		apImagicFile.writeImagic(stackarray, unaligned_refstack_imagic)
 
+
 		# createAlignedStack
 		temp_imagicfile = apStackFile.createAlignedStack(reflist, unaligned_refstack_imagic, 'temp_aligned_ref')
+
+
 		apFile.moveStack(temp_imagicfile, alignref_imagicfile)
 		#sys.exit(1)
 
 		#create average image for web
-		apStack.averageStack(alignimagicfile, msg=False)
 
+		if self.params['mode'] == 'appion':
+			apStack.averageStack(alignimagicfile, msg=False)
 		### calculate resolution for each reference
 		### The way the function average particles in each class
 		### without weighting causes Issue #4566.
@@ -476,8 +507,11 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		#self.createAlignedReferenceStack(runparams)
 
 		### insert into databse
-		self.insertRunIntoDatabase(alignref_imagicfile, alignimagicfile, runparams)
-		self.insertParticlesIntoDatabase(runparams['stackid'], partlist)
+		if self.params['mode'] == 'appion':
+			self.insertRunIntoDatabase(alignref_imagicfile, alignimagicfile, runparams)
+			self.insertParticlesIntoDatabase(runparams['stackid'], partlist)
+		else:
+			self.insertRunIntoDatabase(alignref_imagicfile, alignref_imagicfile, runparams)
 
 		apFile.removeStack(runparams['localstack'], warn=False)
 

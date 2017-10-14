@@ -50,7 +50,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$javascript .= "	stackArray[3] = stackArray[3].replace(/\,/g,'');\n";
 		$javascript .= "	document.viewerform.numpart.value = stackArray[3];\n";
 		$javascript .= "	document.viewerform.clip.value = stackArray[2];\n";
-		$javascript .= "	document.viewerform.numRef.value = Math.ceil(Math.sqrt(stackArray[3])/10+1);\n";
+		//$javascript .= "	document.viewerform.numRef.value = Math.ceil(Math.sqrt(stackArray[3])/10+1);\n";
 		$javascript .= "	document.viewerform.partDiam.value = Math.floor(document.viewerform.clip.value*stackArray[1]*2/6)*2;\n";
 
 		// set binning
