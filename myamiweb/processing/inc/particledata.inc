@@ -1788,12 +1788,16 @@ class particledata {
 		foreach ( $stackIds as $stackid ) {
 			// get stack parameters from database
 			$s = $this->getStackParams( $stackid['stackid'] );
-			
 			// get number of particles in each stack
-			$totalp = $this->getNumStackParticles( $stackid['stackid'] );
+			if ($s['name']==='relion.mrcs') {
+				//echo (var_dump($s['path']));
+				$totalp = system('tail -n +24 '.$s['path'].'/'.$s['stackRunName'].'-complete_relion_stack.star | head -n -3 | wc -l');
+			}
+			else {
+				$totalp = $this->getNumStackParticles( $stackid['stackid'] );
+			}
 			//if ($totalp == 0)
 			//	continue;
-				
 			$nump = commafy($totalp);
 			
 			// get pixel size of stack
@@ -1808,7 +1812,7 @@ class particledata {
 			// if imagic stack, send both hed & img files for dmf
 			if (preg_match('~.hed~', $s['name'])) $opvals.='|--|'.preg_replace('~hed~','img',$s['name']);
 			if (preg_match('~.img~', $s['name'])) $opvals.='|--|'.preg_replace('~img~','hed',$s['name']);
-			if ($s['name']===null) $opvals.='start.mrcs|--|start.mrcs';
+			if ($s['name']==="relion.mrcs") $opvals.='start.mrcs|--|start.mrcs';
 			// Add this stack to the options dictionary
 			if ($s['fileType'] === "relion"){
 				$options[$opvals] = $s[shownstackname]." ID: ".$stackid[stackid]." (".$nump." particles, ".$showapix." &Aring;/pix, ".$box."x".$box.") (Relion Stack)";
