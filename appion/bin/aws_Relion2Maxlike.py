@@ -5,6 +5,7 @@ import time
 import glob
 import math
 import cPickle
+import shutil
 import subprocess
 from pyami import mrc
 #appion
@@ -91,6 +92,8 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		self.parser.add_option('--preread_images', dest='preread_images',action="store_true",default=False)
 		self.parser.add_option('--instancetype',dest='instancetype',type=str,default=None)
 		self.parser.add_option('--mode',dest='mode',type=str,default='appion')
+		self.parser.add_option('--recenter',dest='recenter',action="store_true",default=False,
+			help="Recenter particles; relion mode only.")
 
 
 	#=====================
@@ -109,9 +112,11 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		print("STACK PATH IS",self.stackdata['path'])
 		a = appiondata.ApRunsInStackData(stack=self.stackdata)
 		print("RUNSINSTACKDATA IS",a)
-		stackfile = os.path.join(self.stackdata['path']['path'], self.stackdata['name'])
+		print("self.stackdata['name']",self.stackdata['name'])
+		print("self.stackdata['path']['path']",self.stackdata['path']['path'])
+		stackfile = os.path.join(self.stackdata['path']['path'], "relion.mrcs")
 
-
+		print("mode is",self.params['mode'])
 		# check for virtual stack
 		self.params['virtualdata'] = None
 		if self.params['mode'] == 'appion':
@@ -284,6 +289,31 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		return
 
 	#=====================
+	def relionRecenterParticles(self):
+		exename = 'relion_preprocess'
+		preprocess_exename = subprocess.Popen("which "+exename, shell=True, stdout=subprocess.PIPE).stdout.read().strip()
+
+		preprocess_cmd = '%s --operate_on %s-complete_relion_stack.star --recenter --operate_out %s-recentered.star'%(preprocess_exename,self.stackname,self.stackname)
+
+		proc = subprocess.Popen(preprocess_cmd,shell=True,stdout=subprocess.PIPE)
+                proc.wait()
+		#lines = proc.stdout.readlines()
+		#if lines and len(lines) > 0:
+		#	print("Error, could not run relion_preprocess correctly.")
+		#else:
+		#	print(lines)
+		for line in proc.stdout:
+			print(line)
+		return
+
+	#=====================
+	def symlinkQuickStack(self):
+		if not os.path.isdir(os.path.join(self.params['rundir'],'mrcs')):
+			os.symlink(os.path.join(self.stackpath,"mrcs"),os.path.join(self.params['rundir'],'mrcs'))
+
+		if not os.path.isfile(self.params['rundir']+'/'+self.stackname+'-complete_relion_stack.star'):
+			os.symlink(self.stackpath+'/'+self.stackname+'-complete_relion_stack.star',self.params['rundir']+'/'+self.stackname+'-complete_relion_stack.star')
+	#=====================
 	def start(self):
 		self.insertMaxLikeJob()
 		self.stack = {}
@@ -299,50 +329,52 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		#self.estimateIterTime(nprocs)
 		self.dumpParameters()
 
+
+		# if in appion stack mode, run proc2d
+
 		### process stack to local file
 		self.params['localstack'] = os.path.join(self.params['rundir'], self.timestamp+".hed")
 
-		a = proc2dLib.RunProc2d()
-		a.setValue('infile',self.stack['file'])
-		a.setValue('outfile',self.params['localstack'])
-		a.setValue('apix',self.stack['apix'])
-		a.setValue('bin',self.params['bin'])
-		a.setValue('last',self.params['numpart']-1)
-		a.setValue('append',False)
-		print('done with proc2d')
-		### pixlimit and normalization are required parameters for RELION
-		if self.params['correctnorm'] is True:
-			a.setValue('pixlimit',4.49)
-		a.setValue('normalizemethod','edgenorm')
-
-		if self.params['lowpass'] is not None and self.params['lowpass'] > 1:
-			a.setValue('lowpass',self.params['lowpass'])
-		if self.params['highpass'] is not None and self.params['highpass'] > 1:
-			a.setValue('highpass',self.params['highpass'])
-		if self.params['invert'] is True:
-			a.setValue('inverted',True)
-
-		if self.params['virtualdata'] is not None:
-			vparts = self.params['virtualdata']['particles']
-			plist = [int(p['particleNumber'])-1 for p in vparts]
-			a.setValue('list',plist)
-
-		# clip not yet implemented
-		if self.params['clipsize'] is not None:
-			clipsize = int(self.clipsize)*self.params['bin']
-			if clipsize % 2 == 1:
-				clipsize += 1 ### making sure that clipped boxsize is even
-			a.setValue('clip',clipsize)
-
-		if self.params['virtualdata'] is not None:
-			vparts = self.params['virtualdata']['particles']
-			plist = [int(p['particleNumber'])-1 for p in vparts]
-			a.setValue('list',plist)
-
-		# if in appion stack mode, run proc2d
 		if self.params['mode'] == 'appion':
+			a = proc2dLib.RunProc2d()
+			a.setValue('infile',self.stack['file'])
+			a.setValue('outfile',self.params['localstack'])
+			a.setValue('apix',self.stack['apix'])
+			a.setValue('bin',self.params['bin'])
+			a.setValue('last',self.params['numpart']-1)
+			a.setValue('append',False)
+			### pixlimit and normalization are required parameters for RELION
+			if self.params['correctnorm'] is True:
+				a.setValue('pixlimit',4.49)
+			a.setValue('normalizemethod','edgenorm')
+
+			if self.params['lowpass'] is not None and self.params['lowpass'] > 1:
+				a.setValue('lowpass',self.params['lowpass'])
+			if self.params['highpass'] is not None and self.params['highpass'] > 1:
+				a.setValue('highpass',self.params['highpass'])
+			if self.params['invert'] is True:
+				a.setValue('inverted',True)
+
+			if self.params['virtualdata'] is not None:
+				vparts = self.params['virtualdata']['particles']
+				plist = [int(p['particleNumber'])-1 for p in vparts]
+				a.setValue('list',plist)
+
+			# clip not yet implemented
+			if self.params['clipsize'] is not None:
+				clipsize = int(self.clipsize)*self.params['bin']
+				if clipsize % 2 == 1:
+					clipsize += 1 ### making sure that clipped boxsize is even
+				a.setValue('clip',clipsize)
+
+			if self.params['virtualdata'] is not None:
+				vparts = self.params['virtualdata']['particles']
+				plist = [int(p['particleNumber'])-1 for p in vparts]
+				a.setValue('list',plist)
+
 			a.run()
-		
+			print('done with proc2d')
+			
 
 		#if self.params['numpart'] != apFile.numImagesInStack(self.params['localstack']):
 		#	apDisplay.printError("Missing particles in stack")
@@ -354,16 +386,27 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			relionopts =  ( " "+" --i %s "%(self.params['localstack']))
 			relionopts += ( " --angpix %.4f "%(self.stack['apix']*self.params['bin']))
 		elif self.params['mode'] == 'relion':
-			stackpath = self.stackdata['path']['path']
-			if not os.path.isdir(os.path.join(self.params['rundir'],'mrcs')):
-				os.symlink(os.path.join(stackpath,"mrcs"),os.path.join(self.params['rundir'],'mrcs'))
+			self.stackpath = self.stackdata['path']['path']
+			self.stackname = self.stackpath.split('/')[-1]
+			# if recentering, use the recentered star file and mrcs as input to relion
+			self.symlinkQuickStack()
+			if self.params['recenter']:
+				self.relionRecenterParticles()
+				self.params['localstack'] = self.stackname+'-recentered.star'
+				shutil.move(os.path.join(self.params['rundir'],self.stackname+'-recentered.mrcs.mrcs'),os.path.join(self.params['rundir'],self.stackname+'-recentered.mrcs'))
+				relionstarfile = os.path.join(self.params['rundir'],self.stackname+'-recentered.star')
+				os.unlink(os.path.join(self.params['rundir'],self.stackname+'-complete_relion_stack.star'))
+				os.unlink(os.path.join(self.params['rundir'],'mrcs'))
+				self.relioninputstack = os.path.join(self.params['rundir'],self.stackname+'-recentered.mrcs')
 
-			if not os.path.isfile(self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star'):
-				os.symlink(stackpath+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star',self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star')
-
-			relionstarfile = self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star'
+			# else use the star file and multiple mrcs stacks that are the output from relion quickstack
+			else:
+				relionstarfile = self.params['rundir']+'/'+self.stackname+'-complete_relion_stack.star'
 			print("RELIONSTARFILE IS",relionstarfile)
-			relionopts =  ( " "+" --i %s "%(relionstarfile))
+			if self.params['recenter']:
+				relionopts =  ( " "+" --i %s "%(self.relioninputstack))
+			else:
+				relionopts =  ( " "+" --i %s "%(relionstarfile))
 			relionopts += ( " --angpix %.4f "%(self.stack['apix']))
 
 		relionopts += ( " "
@@ -412,8 +455,6 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		self.createReferenceStack()
 		self.dumpParameters()
 		self.runUploadScript()
-#		os.unlink(os.path.join(self.params['rundir'],'mrcs'))
-		os.unlink(self.params['rundir']+'/'+stackpath.split('/')[-1]+'-complete_relion_stack.star')
 
 #=====================
 if __name__ == "__main__":

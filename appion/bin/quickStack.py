@@ -290,9 +290,12 @@ class QuickStack(appionScript.AppionScript):
 		runq['session'] = self.getSessionData()
 
 		### finish stack object
-		if self.params['mode'] != "relion":
+		if self.params['mode'] == "appion":
 
 			stackq['name'] = "start.hed"
+		else:
+			stackq['name'] = "relion.mrcs"
+			
 		if self.params['description'] is not None:
 			stackq['description'] = self.params['description']
 		else:

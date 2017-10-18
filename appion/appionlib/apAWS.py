@@ -226,14 +226,11 @@ def checkPartLocation(instarfile,indir):
                                                         imagecolnum=int(line.split('#')[-1])
                                                 else:
                                                         imagecolnum=1
-                                                        print('imagecolnum=1')
 					if line.split()[0] == '_rlnMicrographName':
-						print(line)
 						if len(line.split('#')) > 1:
 							microcolnum=int(line.split('#')[-1])
 						else:
 							microcolnum=2
-							print('microcolnum=2')
 	o44.close()
 
 	if microcolnum == 0:
@@ -536,9 +533,6 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 	#Check where input particles are located
 	if stack is False:
 		otherPartDir,otherPartRclone,error=checkPartLocation(starfilename,particledir)
-		print("otherPartDir: ",otherPartDir)
-		print("otherPartRclone: ",otherPartRclone)
-		print("error: ",error)
 	if len(error) > 0:
 		writeToLog(error,'%s/run.err' %(outdir))
                 sys.exit()
@@ -569,7 +563,7 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 					instance='p2.8xlarge'
 			if autoref != -1: #3D refinement
 				instance='p2.8xlarge'
-			instance='p2.xlarge'
+			#instance='p2.xlarge'
 	elif instancetype not in ['p2.xlarge','p2.8xlarge','p2.16xlarge','g3.8xlarge','g3.16xlarge']:
 		writeToLog("Error, invalid instance type. Must be p2.xlarge, p2.8xlarge, p2.16xlarge, g3.8xlarge, or g3.16xlarge.",'%s/run.out' %(outdir))
 		sys.exit()
@@ -735,14 +729,6 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 		numfiles=90
 		cost=4.56
 
-	else:
-		instance = 't2.nano'
-		gpu='--gpu '
-		j='--j 1 '
-		mpi=2
-		numfiles=8
-		cost=0.0058
-
 	env.host_string='ubuntu@%s' %(userIP)
         env.key_filename = '%s' %(keypair)
 	if ebs_exist is False:
@@ -773,12 +759,11 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 	#exec_remote_cmd('mkdir %s'%particledir)
 	#exec_remote_cmd('echo'+particledir+' > /home/ubuntu/check.log')
 	del outdirlist[-1]
-	#print("OUTDIRLIST IS ",outdirlist)
 	#for entry in outdirlist:
 	#	exec_remote_cmd('mkdir /%s/%s' %(dirlocation,entry))
 	#        dirlocation=dirlocation+'/'+entry
 	dirlocation = outdir
-	cmd='rsync -avzuL --rsync-path="rsync" --log-file="%s/rsync.log" -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s/ ubuntu@%s:%s > %s/rsync.log' %(outdir,keypair,outdir,userIP,outdir,outdir)
+	cmd='rsync -avuL --rsync-path="rsync" --log-file="%s/rsync.log" -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s/ ubuntu@%s:%s > %s/rsync.log' %(outdir,keypair,outdir,userIP,outdir,outdir)
 	writeToLog(cmd,"%s/rsync.log" %(outdir))
     	subprocess.Popen(cmd,shell=True).wait()
 	if len(otherPartDir) > 0:
@@ -791,17 +776,17 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 		exec_remote_cmd('mkdir -p %s' %(particledir))
 		writeToLog('mkdir -p %s' %(particledir),'%s/run.out' %(outdir))
 		# Sync particle directory with instance
-		cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzuL -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s/ ubuntu@%s:%s > %s/rsync.log' %(outdir,keypair,particledir,userIP,dirlocation,outdir)
+		cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avuL -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s/ ubuntu@%s:%s > %s/rsync.log' %(outdir,keypair,particledir,userIP,dirlocation,outdir)
 
 		writeToLog(cmd,"%s/rsync.log" %(outdir))
 		subprocess.Popen(cmd,shell=True).wait()
 #	if initmodel != 'None':
-#		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/data/ > %s/rsync.log' %(outdir,keypair,initmodel,userIP,outdir)
-#		cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/ > %s/rsync.log' %(outdir,keypair,initmodel,userIP,outdir)
+#		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/data/ > %s/rsync.log' %(outdir,keypair,initmodel,userIP,outdir)
+#		cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/ > %s/rsync.log' %(outdir,keypair,initmodel,userIP,outdir)
 #        	subprocess.Popen(cmd,shell=True).wait()
 #	if len(mask) > 0:
-#		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/data/ > %s/rsync.log' %(outdir,keypair,mask,userIP,outdir)
-#                cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/ > %s/rsync.log' %(outdir,keypair,mask,userIP,outdir)
+#		#cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/data/ > %s/rsync.log' %(outdir,keypair,mask,userIP,outdir)
+#                cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avu -R -e "ssh -q -o StrictHostKeyChecking=no -i %s" %s ubuntu@%s:/ > %s/rsync.log' %(outdir,keypair,mask,userIP,outdir)
 #                subprocess.Popen(cmd,shell=True).wait()
 
 	relion_remote_cmd='mpirun -np %i /home/EM_Packages/relion2.0/build/bin/relion_refine_mpi %s %s %s' %(mpi,relioncmd,j,gpu)
@@ -817,7 +802,7 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 
 	# Sync run_aws.job to instance
 
-	cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -e "ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s" run_aws.job ubuntu@%s:~/ > %s/rsync.log' %(outdir,keypair,userIP,outdir)
+	cmd='rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avu -e "ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s" run_aws.job ubuntu@%s:~/ > %s/rsync.log' %(outdir,keypair,userIP,outdir)
 	subprocess.Popen(cmd,shell=True).wait()
 
 	# configure LD_LIBRARY_PATH
@@ -828,12 +813,10 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 	cmd='scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i %s %s/run.out ubuntu@%s:/%s > %s/rsync.log' %(keypair,outdir,userIP,outdir,outdir)
 	subprocess.Popen(cmd,shell=True)
 	isdone=0
-	print("OUTDIR IS",outdir)
-	print("OUTBASEDIR IS ",outbasename)
 	# Sync instance with local storage while job is still running
 	while isdone == 0:
 
-		cmd='mkdir -p /%s; rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avzu -e "ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s" ubuntu@%s:/%s/ %s > %s/rsync.log' %(outbasename,outdir,keypair,userIP,outdir,outdir,outdir)
+		cmd='mkdir -p /%s; rsync --rsync-path="rsync" --log-file="%s/rsync.log" -avuL -e "ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s" ubuntu@%s:/%s/ %s > %s/rsync.log' %(outbasename,outdir,keypair,userIP,outdir,outdir,outdir)
 		writeToLog(cmd,"%s/rsync.log" %(outdir))
 		subprocess.Popen(cmd,shell=True).wait()
 		time.sleep(2)

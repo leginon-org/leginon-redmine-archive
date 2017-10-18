@@ -17,7 +17,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 	// Set Default values in the constructor
 	function __construct( $expId, $extraHTML='', $stackId='', $clip='', $bin='1', $numpart='3000',
 		$lowpass='10', $highpass='1000', $numRef='3', $maxIter='30', $angStep='5', $tau='2', $partDiam='',
-		$flat='on', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$relionstarfile='')
+		$flat='on', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=False,$relionstarfile='')
 	{
 		parent::__construct($expId, $extraHTML);
 
@@ -101,6 +101,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$params->addParam( "mode",$mode,"Stack mode: Appion or Relion");
 		$params->addParam( "preread_images",$preread_images,"Pre-read images into memory");
 		$params->addParam( "description",$description,"Enter a brief description");
+		$params->addParam( "recenter",$recenter,"Recenter particles (Relion stack only)");
 
 
 		// Validations
@@ -176,6 +177,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$html .= $params->insertTextField( "maxIter", $fieldSize,'','relion2DMaxlike.maxnumberofiterations' );
 		$html .= $params->insertTextField( "angStep", $fieldSize,'(degrees)','relion2DMaxlike.angleinc' );
 		$html .= $params->insertTextField( "tau", $fieldSize,'','appion.tau2fudge' );
+		$html .= $params->insertCheckboxField("recenter",'','relion2DMaxlike.recenter');
 		$html .= $params->insertCheckboxField("flat",'','relion2DMaxlike.flattensolvent');
 		$html .= $params->insertCheckboxField("zero_mask",'','relion2DMaxlike.zeromasking');
 		$html .= $params->insertCheckboxField("correctnorm",'','relion2DMaxlike.correctnorm');
@@ -212,20 +214,10 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		// Extract the stack id from the stack string
 		$stack = $params->getParamValue( "stack" );
 		$mode = $params->getParamValue( "mode" );
-		var_dump($stack);
-		/*echo "STACK IS ".var_dump($stack)."\n\n";
-		/if ($mode == "relion") {
-			echo "RELION MODE";
-		}
-		else {
-			echo "NOT RELION MODE";
-		}
-		*/
 		list($stackid, $apix, $boxsz, $totpart,$stackpath,$startfile1,$startfile2) = preg_split('%\|--\|%',$stack);
 
 		// Command parsing for relion stack options
 
-		echo "STARTFILE! ".$startfile1;
 		if ($startfile1 === 'relion.mrcs') {
 			$mode = 'relion';
 			
