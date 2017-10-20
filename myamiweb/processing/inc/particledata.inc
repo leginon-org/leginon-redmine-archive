@@ -1791,7 +1791,7 @@ class particledata {
 			// get number of particles in each stack
 			if ($s['name']==='relion.mrcs') {
 				//echo (var_dump($s['path']));
-				$totalp = system('tail -n +24 '.$s['path'].'/'.$s['stackRunName'].'-complete_relion_stack.star | head -n -3 | wc -l');
+				$totalp = exec('tail -n +24 '.$s['path'].'/'.$s['stackRunName'].'-complete_relion_stack.star | head -n -3 | wc -l');
 			}
 			else {
 				$totalp = $this->getNumStackParticles( $stackid['stackid'] );
@@ -1825,9 +1825,6 @@ class particledata {
 		
 		return $options;
 	}
-	// Returns a list of Relion quickstack jobs, analagous to getStackOptions
-	function getRelionQuickStackOptions( $stackRunIds )
-	{}
 
 
 	function getStackSelector($stackIds,$stackidval,$onchange) {

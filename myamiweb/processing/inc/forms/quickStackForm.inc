@@ -34,7 +34,7 @@ class QuickStackForm extends BasicLayoutForm
 
 	// Set Default values in the constructor
 	function __construct( $expId, $extraHTML='', $selectid='', $initboxsize='', $finalboxsize='',
-		$lowpass='10', $highpass='1000', $commit='on', $invert='on', $overridebox='', $mode='both')
+		$lowpass='10', $highpass='1000', $commit='on', $invert='on', $overridebox='', $mode='appion',$apix='')
 	{
 		parent::__construct($expId, $extraHTML);
 
@@ -99,6 +99,7 @@ class QuickStackForm extends BasicLayoutForm
 		$req = "<font color='red'><b>**</b></font>";
 
 		$params->addParam( "selectid", $selectid, "Select a Particle Run", "onChange='binningCheck()'" );
+		$params->addParam( "apix",$apix, "Pixel Size");
 		$params->addParam( "init-boxsize", $initboxsize, "$req Initial Micrograph Boxsize", "onChange='binningCheck()'" );
 		$params->addParam( "final-boxsize", $finalboxsize, "$req Final Reduced Particle Boxsize", "onChange='binningCheck()'" );
 		//$params->addParam( "lowpass", $lowpass, "Low Pass Filter Radius" );
@@ -116,6 +117,8 @@ class QuickStackForm extends BasicLayoutForm
 		//$params->addValidation( "description", "req" );
 		$params->addValidation( "selectid", "num" );
 		$params->addValidation( "mode", "req" );
+		$params->addValidation( "apix", "req" );
+		$params->addValidation( "apix","minval=0" );
 
 	}
 
@@ -161,9 +164,9 @@ class QuickStackForm extends BasicLayoutForm
 				}
 				$html .=">$runname ($totparts parts)</option>\n";
 			}
-			$html .= "</select>\n";
+			$html .= "</select><br><br>\n";
 		}
-
+		$html .= $params->insertTextField( "apix",$fieldSize, "(Angstroms per pixel)", 'quickStack.apix' );
 		$html .= "<br /><hr/><H4>Particle box sizes</H4>";
 
 		$html .= $params->insertTextField( "init-boxsize", $fieldSize, "(pixels)", 'quickStack.initboxsize' );
@@ -179,7 +182,7 @@ class QuickStackForm extends BasicLayoutForm
 
 		$html.= $params->insertRadioField("mode", "relion", "Relion only &ndash; MRC stacks, star file with CTF info, faster, no database", "");
 		$html.= $params->insertRadioField("mode", "appion", "Appion only &ndash; IMAGIC stack file, no CTF, upload data to database", "");
-		$html.= $params->insertRadioField("mode", "both", "Both &ndash; create both MRC and IMAGIC stack, uses more file space","");
+		//$html.= $params->insertRadioField("mode", "both", "Both &ndash; create both MRC and IMAGIC stack, uses more file space","");
 
 		/*
 		$html .= "

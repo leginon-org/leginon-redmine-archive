@@ -180,10 +180,11 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		starData = starFile.StarFile(inputfile)
 		print("starData is",starData)
 		starData.read()
-		if self.params['mode'] == 'relion':
-			dataBlock = starData.getDataBlock('data_')
-		else:
-			dataBlock = starData.getDataBlock('data_images')
+		#if self.params['mode'] == 'relion':
+		#	dataBlock = starData.getDataBlock('data_')
+		#else:
+		#	dataBlock = starData.getDataBlock('data_images')
+		dataBlock = starData.getDataBlock('data_images')
 		print("datablock is",dataBlock)
 		particleTree = dataBlock.getLoopDict()
 		self.class_count = {}
@@ -435,6 +436,7 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 
 	#=====================
 	def start(self):
+		print("MODE IS",self.params['mode'])
 		# initialize variables
 		self.resdict = {}
 
@@ -465,10 +467,11 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		partlist = self.readPartStarFile(reflist)
 		#self.writePartDocFile(partlist)
 
-		if self.params['mode'] == 'relion':
-			alignimagicfile = ''
-		else:
-			alignimagicfile = self.createAlignedStack(partlist, runparams['localstack'])
+		#if self.params['mode'] == 'relion':
+		#	alignimagicfile = ''
+		#else:
+		#	alignimagicfile = self.createAlignedStack(partlist, runparams['localstack'])
+		alignimagicfile = self.createAlignedStack(partlist, runparams['localstack'])
 
 		# convert unaligned weighted refstack from mrc to imagic format
 		unaligned_refstack_mrc = os.path.join('iter%03d' % self.lastiter,'part%s_it%03d_classes.mrcs' % (self.params['timestamp'], self.lastiter))
@@ -497,8 +500,9 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 
 		#create average image for web
 
-		if self.params['mode'] == 'appion':
-			apStack.averageStack(alignimagicfile, msg=False)
+		#if self.params['mode'] == 'appion':
+		#	apStack.averageStack(alignimagicfile, msg=False)
+		apStack.averageStack(alignimagicfile, msg=False)
 		### calculate resolution for each reference
 		### The way the function average particles in each class
 		### without weighting causes Issue #4566.

@@ -17,7 +17,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 	// Set Default values in the constructor
 	function __construct( $expId, $extraHTML='', $stackId='', $clip='', $bin='1', $numpart='3000',
 		$lowpass='10', $highpass='1000', $numRef='3', $maxIter='30', $angStep='5', $tau='2', $partDiam='',
-		$flat='on', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=False,$relionstarfile='')
+		$flat='on', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=True,$relionstarfile='',$normalize=True)
 	{
 		parent::__construct($expId, $extraHTML);
 
@@ -102,6 +102,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$params->addParam( "preread_images",$preread_images,"Pre-read images into memory");
 		$params->addParam( "description",$description,"Enter a brief description");
 		$params->addParam( "recenter",$recenter,"Recenter particles (Relion stack only)");
+		$params->addParam( "normalize",$normalize,"Normalize particles (Relion stack only)");
 
 
 		// Validations
@@ -121,12 +122,6 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$fieldSize = 5;
 
 		$html = "";
-
-                $html .= "<hr/><h4>Stack format:</h4>\n";
-                $html.= $params->insertRadioField("mode", "appion", "Appion only &ndash; IMAGIC stack file, no CTF, upload data to database", "");
-                $html.= $params->insertRadioField("mode", "relion", "Relion only &ndash; MRC stacks, star file with CTF info, faster, no database", "");
-  
-
 		$html .= "<br /><H4>Stack Selection</H4><hr />";
 
 		if (!$this->stackIds) {
@@ -178,11 +173,13 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$html .= $params->insertTextField( "angStep", $fieldSize,'(degrees)','relion2DMaxlike.angleinc' );
 		$html .= $params->insertTextField( "tau", $fieldSize,'','appion.tau2fudge' );
 		$html .= $params->insertCheckboxField("recenter",'','relion2DMaxlike.recenter');
+		$html .= $params->insertCheckboxField("normalize",'','relion2DMaxlike.normalize');
 		$html .= $params->insertCheckboxField("flat",'','relion2DMaxlike.flattensolvent');
 		$html .= $params->insertCheckboxField("zero_mask",'','relion2DMaxlike.zeromasking');
 		$html .= $params->insertCheckboxField("correctnorm",'','relion2DMaxlike.correctnorm');
 		$html .= $params->insertCheckboxField("preread_images",'','relion2DMaxlike.preread_images');
 		$html .= $params->insertCheckboxField("commit");
+		$html .= $params->insertHiddenField( "mode" );
 
 		// When loading this page the first time, use the switchDefaults javascript function to set
 		// form parameters based on the currently selected stack.
@@ -261,6 +258,13 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$command.= " --no-commit ";
 		}
 
+		if ($mode == 'relion') {
+			$command = $this->removeCommandFlag($command, "clip" );
+			$command = $this->removeCommandFlag($command, "bin" );
+			$command = $this->removeCommandFlag($command, "lowpass" );
+			$command = $this->removeCommandFlag($command, "highpass" );
+		}
+
 		return $command;
 	}
 
@@ -272,6 +276,8 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 
 		$params = $this->getFormParams();
 
+		$mode = $params->getParamValue( 'mode' );
+		if ($mode == 'appion') {
 		// Extract the stack id from the stack string
 		$stack = $params->getParamValue( "stack" );
 		list($stackid, $apix, $boxsz, $totpart) = preg_split('%\|--\|%',$stack);
@@ -281,6 +287,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$msg .= "<B>Error:</B> Clipping diameter ($clip pixels)"
 			." must be less than or equal to the stack boxsize ($boxsz pixels)";
 		}
+		}
 		$instancetype = $params->getParamValue( 'instancetype' );
 		if ($instancetype === 'none') {
 			$msg .= "<B>Error:</B> No instance type selected.";
@@ -289,7 +296,6 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		if ($description === '') {
 			$msg .="<B>Error:</B> Enter a job description.";
 		}
-	//	echo "MSG:".$msg;
 		return $msg;
 	}
 }

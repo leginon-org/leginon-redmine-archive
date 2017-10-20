@@ -20,6 +20,7 @@ from appionlib import apImagicFile
 from appionlib import apProject
 from appionlib import proc2dLib
 from appionlib import apAWS
+from pyami import mrc
 import sinedon
 import MySQLdb
 
@@ -76,13 +77,13 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			help="Minimum Processors per node", metavar="#")
 		self.parser.add_option("--mem", dest="mem", type="int", default=4,
 			help="Maximum memory per node (in GB)", metavar="#")
-		self.parser.add_option("--mpinodes", dest="mpinodes", type=int, default=2,
+		self.parser.add_option("--mpinodes", dest="mpinodes", type=int, default=1,
 			help="Number of nodes used for the entire job.", metavar="#")
-		self.parser.add_option("--mpiprocs", dest="mpiprocs", type=int, default=4,
+		self.parser.add_option("--mpiprocs", dest="mpiprocs", type=int, default=1,
 			help="Number of processors allocated for a subjob. For memory intensive jobs, decrease this value.", metavar="#")
 		self.parser.add_option("--mpithreads", dest="mpithreads", type=int, default=1,
 			help="Number of threads to generate per processor. For memory intensive jobs, increase this value.", metavar="#")
-		self.parser.add_option("--mpimem", dest="mpimem", type=int, default=4,
+		self.parser.add_option("--mpimem", dest="mpimem", type=int, default=1,
 			help="Amount of memory (Gb) to allocate per thread. Increase this value for memory intensive jobs. ", metavar="#")
 		self.parser.add_option("--walltime", dest="walltime", type="int", default=24,
 			help="Maximum walltime in hours", metavar="#")
@@ -94,6 +95,8 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		self.parser.add_option('--mode',dest='mode',type=str,default='appion')
 		self.parser.add_option('--recenter',dest='recenter',action="store_true",default=False,
 			help="Recenter particles; relion mode only.")
+		self.parser.add_option('--normalize',dest='normalize',action="store_true",default=False,
+			help="Normalize particles; relion mode only.")	
 
 
 	#=====================
@@ -114,7 +117,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		print("RUNSINSTACKDATA IS",a)
 		print("self.stackdata['name']",self.stackdata['name'])
 		print("self.stackdata['path']['path']",self.stackdata['path']['path'])
-		stackfile = os.path.join(self.stackdata['path']['path'], "relion.mrcs")
+		stackfile = os.path.join(self.stackdata['path']['path'], self.stackdata['name'])
 
 		print("mode is",self.params['mode'])
 		# check for virtual stack
@@ -131,8 +134,8 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 				apDisplay.printError("trying to use more particles "+str(self.params['numpart'])
 					+" than available "+str(apFile.numImagesInStack(stackfile)))
 
-		boxsize = apStack.getStackBoxsize(self.params['stackid'])
-		self.clipsize = int(math.floor(boxsize/float(self.params['bin']*2)))*2
+		self.boxsize = apStack.getStackBoxsize(self.params['stackid'])
+		self.clipsize = int(math.floor(self.boxsize/float(self.params['bin']*2)))*2
 		if self.params['clipsize'] is not None:
 			if self.params['clipsize'] > self.clipsize:
 				apDisplay.printError("requested clipsize is too big %d > %d"
@@ -232,6 +235,9 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		uploadcmd += " -j %s "%(self.params['maxlikejobid'])
 		uploadcmd += " -R %s "%(self.params['rundir'])
 		uploadcmd += " -n %s "%(self.params['runname'])
+
+		if self.params['mode'] == 'relion':
+			uploadcmd += " --mode %s "%(self.params['mode'])
 		print uploadcmd
 		proc = subprocess.Popen(uploadcmd, shell=True)
 		proc.communicate()
@@ -289,14 +295,19 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		return
 
 	#=====================
-	def relionRecenterParticles(self):
+	def relionPreProcessParticles(self):
 		exename = 'relion_preprocess'
 		preprocess_exename = subprocess.Popen("which "+exename, shell=True, stdout=subprocess.PIPE).stdout.read().strip()
 
-		preprocess_cmd = '%s --operate_on %s-complete_relion_stack.star --recenter --operate_out %s-recentered.star'%(preprocess_exename,self.stackname,self.stackname)
+		preprocess_cmd = '%s --operate_on %s-complete_relion_stack.star --set_angpix %s --operate_out %s-preprocessed.star'%(preprocess_exename,self.stackname,self.params['apix'],self.stackname)
 
+		if self.params['recenter']:
+			preprocess_cmd+=' --recenter '
+		if self.params['normalize']:
+			preprocess_cmd+=' --norm --bg_radius %s '%(float(self.boxsize)/2)
+		print("relion_preprocess command: ",preprocess_cmd)
 		proc = subprocess.Popen(preprocess_cmd,shell=True,stdout=subprocess.PIPE)
-                proc.wait()
+		proc.wait()
 		#lines = proc.stdout.readlines()
 		#if lines and len(lines) > 0:
 		#	print("Error, could not run relion_preprocess correctly.")
@@ -306,8 +317,17 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			print(line)
 		return
 
+	def convertMrcsToImagic(self):
+		assert self.relionstack
+		assert self.params['localstack']
+		print("RELION STACK: ",self.relionstack)
+		print("IMAGIC STACK: ",self.params['localstack'])
+		refarray = mrc.read(self.relionstack)
+		apImagicFile.writeImagic(refarray,self.params['localstack'])
+		print("Converted %s to Imagic format (%s)"%(self.relionstack,self.params['localstack']))
+
 	#=====================
-	def symlinkQuickStack(self):
+	def symlinkStack(self):
 		if not os.path.isdir(os.path.join(self.params['rundir'],'mrcs')):
 			os.symlink(os.path.join(self.stackpath,"mrcs"),os.path.join(self.params['rundir'],'mrcs'))
 
@@ -388,25 +408,24 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		elif self.params['mode'] == 'relion':
 			self.stackpath = self.stackdata['path']['path']
 			self.stackname = self.stackpath.split('/')[-1]
-			# if recentering, use the recentered star file and mrcs as input to relion
-			self.symlinkQuickStack()
-			if self.params['recenter']:
-				self.relionRecenterParticles()
-				self.params['localstack'] = self.stackname+'-recentered.star'
-				shutil.move(os.path.join(self.params['rundir'],self.stackname+'-recentered.mrcs.mrcs'),os.path.join(self.params['rundir'],self.stackname+'-recentered.mrcs'))
-				relionstarfile = os.path.join(self.params['rundir'],self.stackname+'-recentered.star')
-				os.unlink(os.path.join(self.params['rundir'],self.stackname+'-complete_relion_stack.star'))
-				os.unlink(os.path.join(self.params['rundir'],'mrcs'))
-				self.relioninputstack = os.path.join(self.params['rundir'],self.stackname+'-recentered.mrcs')
+			# if doing preprocessing, use the output mrcs stack as input to relion
+			self.symlinkStack()
+			self.relionPreProcessParticles()
+			#self.params['localstack'] = self.stackname+'-preprocessed.star'
 
-			# else use the star file and multiple mrcs stacks that are the output from relion quickstack
-			else:
-				relionstarfile = self.params['rundir']+'/'+self.stackname+'-complete_relion_stack.star'
-			print("RELIONSTARFILE IS",relionstarfile)
-			if self.params['recenter']:
-				relionopts =  ( " "+" --i %s "%(self.relioninputstack))
-			else:
-				relionopts =  ( " "+" --i %s "%(relionstarfile))
+			# relion2 outputs files from relion_preprocess as filename.mrcs.mrcs,  to filename.mrcs
+			if os.path.isfile(os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs.mrcs')):
+				shutil.move(os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs.mrcs'),os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs'))
+			relionstarfile = os.path.join(self.params['rundir'],self.stackname+'-preprocessed.star')
+			self.relionstack = os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs')
+			self.convertMrcsToImagic()
+			self.imagicstack = self.params['localstack']
+
+			# Delete .mrcs stack to reduce rsync downloading time and data transfer costs. Maybe make this a flag
+			os.remove(self.relionstack)
+			os.unlink(os.path.join(self.params['rundir'],self.stackname+'-complete_relion_stack.star'))
+			os.unlink(os.path.join(self.params['rundir'],'mrcs'))
+			relionopts =  ( " --i %s "%(self.imagicstack))
 			relionopts += ( " --angpix %.4f "%(self.stack['apix']))
 
 		relionopts += ( " "
@@ -437,6 +456,8 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			relionopts += " --j %d "%(self.params['mpithreads'])
 			### find number of processors
 			nproc = self.params['mpiprocs'] * self.params['mpinodes']
+			print("self.params['mpiprocs'] is",self.params['mpiprocs'])
+			print("self.params['mpinodes'] is",self.params['mpinodes'])
 			runcmd = self.mpirun+" -np "+str(nproc)+" "+relionexe+" "+relionopts
 		else:
 			relionexe = apParam.getExecPath("relion_refine", die=True)
@@ -447,7 +468,13 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		print("RUNCMD IS",runcmd)
 		os.chdir(self.params['rundir'])
 		print("CURRENT DIRECTORY: ",os.getcwd())
+
 		apAWS.relion_refine_mpi(runcmd,instancetype=self.params['instancetype'],symlinks=True)
+		self.outdir = os.path.join(self.params['rundir'], "part"+self.timestamp)
+		mkdircmd = 'mkdir -p %s'%(self.outdir)
+		#proc = subprocess.Popen(mkdircmd, shell=True)
+		#proc.wait()
+		#apParam.runCmd(runcmd, package="RELION", verbose=True, showcmd=True)
 		aligntime = time.time() - aligntime
 		apDisplay.printMsg("Alignment time: "+apDisplay.timeString(aligntime))
 

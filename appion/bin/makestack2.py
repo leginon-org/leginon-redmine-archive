@@ -83,6 +83,7 @@ class Makestack2Loop(apParticleExtractor.ParticleBoxLoop):
 			# get original micrograph & ctfimage
 			rel_line = "micrographs/%s "%(imgdata['filename']+".mrc")
 			dstep = imgdata['camera']['pixel size']['x']*1e6
+			print("SELF.PARAMS['apix'] is",self.params['apix'])
 			mag = dstep/self.params['apix']*1e4
 			rel_line+= "%13.6f%13.6f"%(mag,dstep)
 

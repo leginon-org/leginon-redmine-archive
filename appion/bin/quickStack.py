@@ -60,6 +60,7 @@ def makeStack(starfile):
 	if numpart != len(usedparticles):
 		apDisplay.printError("number of particles does not match %d != %d"
 			%(numpart, len(usedparticles)))
+	print("numpart is",numpart)
 	#for ituple in usedparticles:
 	statsstarfile = starfile.replace("picks", "stats")
 	writeUsedParticleStackStats(statsstarfile, stackfile, usedparticles)
@@ -96,6 +97,8 @@ class QuickStack(appionScript.AppionScript):
 			help="Particle Selction ID", metavar="#")
 		self.parser.add_option("--preset", dest="preset",
 			help="Preset Name", metavar="#")
+		self.parser.add_option("--apix",dest="apix", type="float",
+			help="Angstroms per pixel")
 		self.parser.add_option("--init-boxsize", dest="initboxsize", type="int",
 			help="Initial Micrograph Boxsize", metavar="#")
 		self.parser.add_option("--final-boxsize", dest="finalboxsize", type="int",
@@ -301,6 +304,10 @@ class QuickStack(appionScript.AppionScript):
 		else:
 			stackq['description'] = "quick stack completed on "+time.asctime()
 		stackq['hidden'] = False
+		print("self.apix : ",self.apix)
+		print("type self.apix : ",type(self.apix))
+		print("downscalefactor : ",downscalefactor)
+		print("type downscalefactor : ",type(downscalefactor))
 		stackq['pixelsize'] = round(self.apix*downscalefactor, 4)*1e-10
 
 		stackq['boxsize'] = self.params['finalboxsize']
@@ -376,17 +383,26 @@ class QuickStack(appionScript.AppionScript):
 		print("mode is",self.params['mode'])
 		sessiondata = self.getSessionData()
 		self.checkIfStackAlreadyExists()
+		print("PRESET CHECK 1 IS ",self.params['preset'])
 		if self.params['preset'] is not None:
 			self.imgtree = apDatabase.getImagesFromDB(sessiondata['name'], self.params['preset'])
 		else:
 			self.imgtree = apDatabase.getAllImagesFromDB(sessiondata['name'])
+		print("PRESET CHECK 2 IS ",self.params['preset'])
 		apParam.createDirectory("mrcs")
 		apParam.createDirectory("stats")
 		apParam.createDirectory("picks")
 
 		starlist = []
 		apDisplay.printMsg("Writing particle pick star files")
-		self.apix = apDatabase.getPixelSize(self.imgtree[0])
+		print("SELF.IMGTREE[0] IS ",self.imgtree[0])
+
+		if self.params['apix']:
+			self.apix = self.params['apix']
+		else:
+			self.apix = apDatabase.getPixelSize(self.imgtree[0])
+		print("SELF.APIX is",self.apix)
+		print("SELF.IMGTREE[0] is",self.imgtree[0])
 		for imgdata in self.imgtree:
 			sys.stderr.write(".")
 			starfile = self.writeParticleStarFile(imgdata)

@@ -546,6 +546,7 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 		otherPartRclone='rclonetmplist1298.txt'
 	#Choose instance type
 	print("Selecting instance type...")
+	print("instancetype is",instancetype)
 	if instancetype == '':
 		print("No instance type specified. Selecting instance based on number of particles")
 		if initmodel == 'None': #2D classification
@@ -684,7 +685,7 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 	if os.path.exists('%s/awslog.log' %(outdir)):
 		os.remove('%s/awslog.log' %(outdir))
 	dirlocation = subprocess.Popen('echo $AWS_DATA_DIRECTORY', shell=True, stdout=subprocess.PIPE).stdout.read().split()[0]
-
+	print("DIRNAME IS %s"%(dirlocation))
 	cmd='%s/launch_AWS_instance.py --instance=%s --availZone=%sa --volume=%s --dirname=%s > %s/awslog.log' %(awsdir,instance,awsregion,volID,dirlocation,outdir)
 	subprocess.Popen(cmd,shell=True).wait()
 	#Get instance ID, keypair, and username:IP
@@ -729,6 +730,13 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 		numfiles=90
 		cost=4.56
 
+
+	print("instance is",instance)
+	print("gpu is",gpu)
+	print("j is ",j)
+	print("mpi is",mpi)
+	print("numfiles is",numfiles)
+	print("cost is",cost)
 	env.host_string='ubuntu@%s' %(userIP)
         env.key_filename = '%s' %(keypair)
 	if ebs_exist is False:

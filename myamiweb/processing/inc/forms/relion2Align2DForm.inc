@@ -259,7 +259,6 @@ class Relion2Align2DForm extends BasicLayoutForm
 		if (!$nompi) {
 			$phostinfo = $this->getProcessingHostInfo();
 			$maxmem = $phostinfo['memorymax'];
-			//$numnodes = $PROCESSING_HOSTS[0]['
 			$mpithreads = $params->getParamValue('mpithreads');
 			$mpimem = $params->getParamValue('mpimem');
 			$mpiprocs = $params->getParamValue('mpiprocs');
