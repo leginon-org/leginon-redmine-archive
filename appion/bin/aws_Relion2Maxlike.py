@@ -92,6 +92,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		self.parser.add_option('--usegpu', dest='usegpu',action="store_true",default=False)
 		self.parser.add_option('--preread_images', dest='preread_images',action="store_true",default=False)
 		self.parser.add_option('--instancetype',dest='instancetype',type=str,default=None)
+		self.parser.add_option('--spotprice',dest='spotprice',type=float,default=0)
 		self.parser.add_option('--mode',dest='mode',type=str,default='appion')
 		self.parser.add_option('--recenter',dest='recenter',action="store_true",default=False,
 			help="Recenter particles; relion mode only.")
@@ -103,6 +104,28 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 	def checkConflicts(self):
 		if self.params['instancetype'] is None:
 			apDisplay.printError("No AWS instance specified. Choose from p2.xlarge (1 GPU, $0.90/hour), p2.8xlarge (8 GPU's, $7.20/hour), p2.16xlarge (16 GPU's, $14.4/hour), g3.8xlarge (2 GPU's, $2.28/hour), g3.16xlarge (4 GPU's, $4.56/hour).")
+		if self.params['spotprice'] < 0:
+			apDisplay.printError("Spot price set to %s, but must be greater than zero." %(self.params['spotprice']))
+
+		if self.params['instancetype'] == 'p2.xlarge' and self.params['spotprice'] > 0.9:
+			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $0.90/hour; spot price may exceed on-demand price in rare circumstances.")
+
+		if self.params['instancetype'] == 'p2.8xlarge' and self.params['spotprice'] > 7.20:
+			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $7.20/hour; spot price may exceed on-demand price in rare circumstances.")
+
+
+		if self.params['instancetype'] == 'p2.16xlarge' and self.params['spotprice'] > 14.40:
+			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $14.40/hour; spot price may exceed on-demand price in rare circumstances.")
+
+
+		if self.params['instancetype'] == 'g3.8xlarge' and self.params['spotprice'] > 2.28:
+			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $2.28/hour; spot price may exceed on-demand price in rare circumstances.")
+
+
+
+		if self.params['instancetype'] == 'g3.16xlarge' and self.params['spotprice'] > 4.56:
+			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $4.56/hour; spot price may exceed on-demand price in rare circumstances.")
+
 		if self.params['stackid'] is None:
 			apDisplay.printError("stack id was not defined")
 		self.projectid = apProject.getProjectIdFromStackId(self.params['stackid'])
@@ -410,14 +433,16 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			self.stackname = self.stackpath.split('/')[-1]
 			# if doing preprocessing, use the output mrcs stack as input to relion
 			self.symlinkStack()
+
+			relionstarfile = os.path.join(self.params['rundir'],self.stackname+'-preprocessed.star')
+			self.relionstack = os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs')
+			apDisplay.printMsg("Performing preprocessing ...")
 			self.relionPreProcessParticles()
-			#self.params['localstack'] = self.stackname+'-preprocessed.star'
+			apDisplay.printMsg("Preprocessing complete.")
 
 			# relion2 outputs files from relion_preprocess as filename.mrcs.mrcs,  to filename.mrcs
 			if os.path.isfile(os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs.mrcs')):
 				shutil.move(os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs.mrcs'),os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs'))
-			relionstarfile = os.path.join(self.params['rundir'],self.stackname+'-preprocessed.star')
-			self.relionstack = os.path.join(self.params['rundir'],self.stackname+'-preprocessed.mrcs')
 			self.convertMrcsToImagic()
 			self.imagicstack = self.params['localstack']
 
@@ -469,7 +494,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		os.chdir(self.params['rundir'])
 		print("CURRENT DIRECTORY: ",os.getcwd())
 
-		apAWS.relion_refine_mpi(runcmd,instancetype=self.params['instancetype'],symlinks=True)
+		apAWS.relion_refine_mpi(runcmd,instancetype=self.params['instancetype'],spotprice=self.params['spotprice'],symlinks=True)
 		self.outdir = os.path.join(self.params['rundir'], "part"+self.timestamp)
 		mkdircmd = 'mkdir -p %s'%(self.outdir)
 		#proc = subprocess.Popen(mkdircmd, shell=True)

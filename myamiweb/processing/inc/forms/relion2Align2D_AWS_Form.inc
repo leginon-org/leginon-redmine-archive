@@ -17,7 +17,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 	// Set Default values in the constructor
 	function __construct( $expId, $extraHTML='', $stackId='', $clip='', $bin='1', $numpart='3000',
 		$lowpass='10', $highpass='1000', $numRef='3', $maxIter='30', $angStep='5', $tau='2', $partDiam='',
-		$flat='on', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=True,$relionstarfile='',$normalize=True)
+		$flat='on', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=True,$relionstarfile='',$normalize=True,$spotinstance=True,$spotprice='')
 	{
 		parent::__construct($expId, $extraHTML);
 
@@ -96,8 +96,11 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$params->addParam( "flat", $flat, "Flatten Solvent on References " );
 		$params->addParam( "zero_mask", $zero_mask, "Zero Masking");
 		$params->addParam( "commit", $commit, "Commit to Database" );
-		$params->addParam( "correctnorm",$correctnorm,"Perform normalization error correction");
-		$params->addParam( "instancetype",$instancetype,"Amazon GPU instance type");
+		$params->addParam( "correctnorm",$correctnorm,"Perform normalization error correction" );
+		$params->addParam( "instancetype",$instancetype,"Amazon GPU instance type" );
+		$params->addParam( "spotinstance",$spotinstance,"Use spot instance pricing");
+		$params->addParam( "spotprice",$spotprice,"Override recommended spot instance pricing");
+
 		$params->addParam( "mode",$mode,"Stack mode: Appion or Relion");
 		$params->addParam( "preread_images",$preread_images,"Pre-read images into memory");
 		$params->addParam( "description",$description,"Enter a brief description");
@@ -107,6 +110,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 
 		// Validations
 //		$params->addValidation( "numpart", "minval=4" );
+		$params->addValidation( "spotprice", "minval=0" );
 
 	}
 
@@ -140,10 +144,13 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			"p2.xlarge" => "p2.xlarge (1 GPU, $0.90/hour)",
 			"p2.8xlarge" => "p2.8xlarge (8 GPU's,$7.20/hour)",
 			"p2.16xlarge" => "p2.16xlarge (16 GPU's, $14.40/hour)",
-	       		"g3.8xlarge" => "g3.8xlarge (2 GPU's, $2.28/hour, recommended over p2.8x)",
-			"g3.16xlarge" => "g3.16xlarge (4 GPU's, $4.56/hour, recommended over p2.16x)");
+	       		"g3.8xlarge" => "g3.8xlarge (2 GPU's, $2.28/hour)",
+			"g3.16xlarge" => "g3.16xlarge (4 GPU's, $4.56/hour)");
 
-			$html .= $params->insertStackedSelectField( "instancetype", $instanceoptions,'','',$onchange );
+		$html .= $params->insertStackedSelectField( "instancetype", $instanceoptions,'','',$onchange );
+		$html .= "<br />";
+		$html .= $params->insertCheckboxField("spotinstance",'','relion2DMaxlike.spotinstance');
+		$html .= $params->insertTextField( "spotprice",5,$spotprice,"",'relion2DMaxlike.spotprice');
 
 		$html .="<br />
 			<H4>Data limiting numbers</H4>
@@ -151,7 +158,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 
 		$html .= $params->insertTextField( "clip", $fieldSize, "(pixels)", 'relion2DMaxlike.unbinnedclipdiameter' );
 		$html .= $params->insertTextField( "bin", $fieldSize, '', 'relion2DMaxlike.particlebinning' );
-		$html .= $params->insertTextField( "numpart", $fieldSize, '', 'relion2DMaxlike.numberofparticles' );
+		$html .= $params->insertTextField( "numpart", 4, '', 'relion2DMaxlike.numberofparticles' );
 
 		$html .= "
 		<br />
@@ -265,6 +272,47 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$command = $this->removeCommandFlag($command, "highpass" );
 		}
 
+		$spotinstance = $params->getParamValue( 'spotinstance' );
+		$spotprice =  $params->getParamValue( 'spotprice' ) ;
+		$instancetype = $params->getParamValue( 'instancetype' );
+
+		if ($spotinstance == 'on') {
+			$command = $this->removeCommandFlag( $command,"spotinstance" );
+			$command = $this->removeCommandFlag( $command,"spotprice" );
+			if ($spotprice == '0.00' || $spotprice == "") {
+				if ($instancetype == 'p2.xlarge') {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '0.90' );
+				}
+				else if ($instancetype == 'p2.8xlarge') {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '7.20' );
+				}
+				else if ($instancetype == 'p2.16xlarge') {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '14.40' );
+				}
+				else if ($instancetype == 'g3.8xlarge') {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '2.28' );
+				}
+				else if ($instancetype == 'g3.16xlarge') {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '4.56' );
+				}
+				else {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '0.00' );
+				}
+			}
+			//else if ($spotprice > 0.00) {
+			else {
+				$command = $this->addCommandFlag( $command, "spotprice", "spotprice", floatval($spotprice) );
+			}
+			//else {
+			//	$command = $this->addCommandFlag( $command, "spotprice", "spotprice",'0.00' );
+			//}
+		}
+
+		else {
+			$command = $this->removeCommandFlag( $command,"spotinstance" );
+			$command = $this->removeCommandFlag( $command,"spotprice" );
+		}
+
 		return $command;
 	}
 
@@ -296,6 +344,12 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		if ($description === '') {
 			$msg .="<B>Error:</B> Enter a job description.";
 		}
+		$spotprice = $params->getParamValue( 'spotprice' );
+		$spotinstance = $params->getParamValue( 'spotinstance' );
+		if ($spotinstance == 'on' && ($spotprice < 0)) {
+			$msg .="<B>Error:</B> Spot price cannot be less than 0.00.";
+		}
+
 		return $msg;
 	}
 }

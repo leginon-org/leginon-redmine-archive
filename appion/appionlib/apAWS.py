@@ -365,7 +365,7 @@ def getSelectParticleDir(selectdir):
 	return 'Extract/%s' %(jobname)
 
 #==============================
-def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
+def relion_refine_mpi(in_cmd,instancetype='',symlinks=False,spotprice=0):
 
 	assert type(instancetype) == str
 	print("Instance type is: ",instancetype)
@@ -681,54 +681,62 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False):
 	starthr=now.hour
 	startmin=now.minute
 
-	#Launch instance
-	if os.path.exists('%s/awslog.log' %(outdir)):
-		os.remove('%s/awslog.log' %(outdir))
-	dirlocation = subprocess.Popen('echo $AWS_DATA_DIRECTORY', shell=True, stdout=subprocess.PIPE).stdout.read().split()[0]
-	print("DIRNAME IS %s"%(dirlocation))
-	cmd='%s/launch_AWS_instance.py --instance=%s --availZone=%sa --volume=%s --dirname=%s > %s/awslog.log' %(awsdir,instance,awsregion,volID,dirlocation,outdir)
-	subprocess.Popen(cmd,shell=True).wait()
-	#Get instance ID, keypair, and username:IP
-	instanceID=subprocess.Popen('cat %s/awslog.log | grep ID' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split('ID:')[-1].strip()
-	keypair=subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split()[3].strip()
-	userIP=subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split('@')[-1].strip()
-	#Create directories on AWS
-	if instance == 'p2.xlarge':
+        #Create directories on AWS
+        if instance == 'p2.xlarge':
                 gpu='--gpu '
                 j='--j 2 '
                 mpi=2
                 numfiles=8
-		cost=0.9
+                cost=0.9
         if instance == 'p2.8xlarge':
                 gpu='--gpu '
                 j='--j 3 '
                 mpi=9
                 numfiles=50
-		cost=7.20
+                cost=7.20
         if instance == 'p2.16xlarge':
                 gpu='--gpu '
                 j='--j 3 '
                 mpi=17
                 numfiles=90
-		cost=14.40
-	if instance == 'g3.4xlarge':
-		gpu='--gpu '
-		j='--j 2 '
-		mpi=2
-		numfiles=8
-		cost=1.14
-	if instance == 'g3.8xlarge':
-		gpu='--gpu '
-		j='--j 2 '
-		mpi=3
-		numfiles=50
-		cost=2.28
-	if instance == 'g3.16xlarge':
-		gpu='--gpu '
-		j='--j 3 '
-		mpi=5
-		numfiles=90
-		cost=4.56
+                cost=14.40
+        if instance == 'g3.4xlarge':
+                gpu='--gpu '
+                j='--j 2 '
+                mpi=2
+                numfiles=8
+                cost=1.14
+        if instance == 'g3.8xlarge':
+                gpu='--gpu '
+                j='--j 2 '
+                mpi=3
+                numfiles=50
+                cost=2.28
+        if instance == 'g3.16xlarge':
+                gpu='--gpu '
+                j='--j 3 '
+                mpi=5
+                numfiles=90
+                cost=4.56
+
+
+	#Launch instance
+	if os.path.exists('%s/awslog.log' %(outdir)):
+		os.remove('%s/awslog.log' %(outdir))
+	dirlocation = subprocess.Popen('echo $AWS_DATA_DIRECTORY', shell=True, stdout=subprocess.PIPE).stdout.read().split()[0]
+
+	if spotprice >0:
+		cmd='%s/launch_AWS_instance.py --spotPrice=%s --instance=%s --availZone=%sa --volume=%s --dirname=%s -d | tee %s/awslog.log' %(awsdir,str(spotprice),instance,awsregion,volID,dirlocation,outdir)
+	else:
+		cmd='%s/launch_AWS_instance.py --instance=%s --availZone=%s --volume=%s --dirname=%s -d | tee %s/awslog.log' %(awsdir,instance,awsregion,volID,dirlocation,outdir)
+	print("Launching AWS instance with command ",cmd)
+	proc = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE)
+	LaunchOut,LaunchErr = proc.communicate()
+	#Get instance ID, keypair, and username:IP
+	instanceID=subprocess.Popen('cat %s/awslog.log | grep ID' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split('ID:')[-1].strip()
+	print("KEYPAIR IS",subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read())
+	keypair=subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split()[3].strip()
+	userIP=subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split('@')[-1].strip()
 
 
 	print("instance is",instance)
