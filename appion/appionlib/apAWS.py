@@ -565,8 +565,8 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False,spotprice=0):
 			if autoref != -1: #3D refinement
 				instance='p2.8xlarge'
 			#instance='p2.xlarge'
-	elif instancetype not in ['p2.xlarge','p2.8xlarge','p2.16xlarge','g3.8xlarge','g3.16xlarge']:
-		writeToLog("Error, invalid instance type. Must be p2.xlarge, p2.8xlarge, p2.16xlarge, g3.8xlarge, or g3.16xlarge.",'%s/run.out' %(outdir))
+	elif instancetype not in ['p2.xlarge','p2.8xlarge','p2.16xlarge','g3.8xlarge','g3.16xlarge','p3.2xlarge','p3.8xlarge','p3.16xlarge']:
+		writeToLog("Error, invalid instance type. Must be p2.xlarge, p2.8xlarge, p2.16xlarge, g3.8xlarge, g3.16xlarge, p3.2xlarge, p3.8xlarge, or p3.16xlarge.",'%s/run.out' %(outdir))
 		sys.exit()
 
 	else:
@@ -668,7 +668,14 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False,spotprice=0):
         	#Create EBS volume
         	if os.path.exists('%s/awsebs.log' %(outdir)) :
                 	os.remove('%s/awsebs.log' %(outdir))
-        	cmd='%s/create_volume.py %i %sa "rln-aws-tmp-%s-%s"'%(awsdir,int(sizeneeded),awsregion,teamname,particledir)+'> %s/awsebs.log' %(outdir)
+
+		if spotprice >0:
+			most_stable_region = get_stable_instance_region(awsregion,instance,spotprice)
+			writeToLog('Most stable region is %s.'%(most_stable_region),'%s/awslog.log'%(outdir))
+			print("Most stable region is %s."%(most_stable_region))
+        		cmd='%s/create_volume.py %i %s "rln-aws-tmp-%s-%s"'%(awsdir,int(sizeneeded),most_stable_region,teamname,particledir)+'> %s/awsebs.log' %(outdir)
+		else:
+        		cmd='%s/create_volume.py %i %sa "rln-aws-tmp-%s-%s"'%(awsdir,int(sizeneeded),awsregion,teamname,particledir)+'> %s/awsebs.log' %(outdir)
         	subprocess.Popen(cmd,shell=True).wait()
 
         	#Get volID from logfile
@@ -712,6 +719,7 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False,spotprice=0):
                 mpi=3
                 numfiles=50
                 cost=2.28
+		
         if instance == 'g3.16xlarge':
                 gpu='--gpu '
                 j='--j 3 '
@@ -720,20 +728,47 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False,spotprice=0):
                 cost=4.56
 
 
+        if instance == 'p3.2xlarge':
+                gpu='--gpu '
+                j='--j 2 '
+                mpi=3
+                numfiles=90
+                cost=3.06
+
+
+        if instance == 'p3.8xlarge':
+                gpu='--gpu '
+                j='--j 3 '
+                mpi=5
+                numfiles=90
+                cost=12.24
+
+
+        if instance == 'p3.16xlarge':
+                gpu='--gpu '
+                j='--j 3 '
+                mpi=9
+                numfiles=90
+                cost=24.48
+
+
 	#Launch instance
 	if os.path.exists('%s/awslog.log' %(outdir)):
 		os.remove('%s/awslog.log' %(outdir))
 	dirlocation = subprocess.Popen('echo $AWS_DATA_DIRECTORY', shell=True, stdout=subprocess.PIPE).stdout.read().split()[0]
 
 	if spotprice >0:
-		cmd='%s/launch_AWS_instance.py --spotPrice=%s --instance=%s --availZone=%sa --volume=%s --dirname=%s -d | tee %s/awslog.log' %(awsdir,str(spotprice),instance,awsregion,volID,dirlocation,outdir)
+		cmd='%s/launch_AWS_instance.py --spotPrice=%s --instance=%s --availZone=%s --volume=%s --dirname=%s --tag=%s -d | tee %s/awslog.log' %(awsdir,str(spotprice),instance,most_stable_region,volID,dirlocation,outdir,outdir)
+
 	else:
-		cmd='%s/launch_AWS_instance.py --instance=%s --availZone=%s --volume=%s --dirname=%s -d | tee %s/awslog.log' %(awsdir,instance,awsregion,volID,dirlocation,outdir)
+		cmd='%s/launch_AWS_instance.py --instance=%s --availZone=%sa --volume=%s --dirname=%s --tag=%s -d | tee %s/awslog.log' %(awsdir,instance,awsregion,volID,dirlocation,outdir,outdir)
+
 	print("Launching AWS instance with command ",cmd)
 	proc = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE)
 	LaunchOut,LaunchErr = proc.communicate()
 	#Get instance ID, keypair, and username:IP
 	instanceID=subprocess.Popen('cat %s/awslog.log | grep ID' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split('ID:')[-1].strip()
+	print("instanceID is",instanceID)
 	print("KEYPAIR IS",subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read())
 	keypair=subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split()[3].strip()
 	userIP=subprocess.Popen('cat %s/awslog.log | grep ssh' %(outdir), shell=True, stdout=subprocess.PIPE).stdout.read().split('@')[-1].strip()
@@ -902,12 +937,12 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False,spotprice=0):
 	subprocess.Popen(cmd,shell=True).wait()
 
 	#Cleanup
-	if os.path.exists('%s/awslog.log' %(outdir)):
-		os.remove('%s/awslog.log' %(outdir))
-	if os.path.exists('%s/awsebs.log' %(outdir)):
-		os.remove('%s/awsebs.log' %(outdir))
-	if os.path.exists('run_aws.job'):
-		os.remove('run_aws.job')
+	#if os.path.exists('%s/awslog.log' %(outdir)):
+	#	os.remove('%s/awslog.log' %(outdir))
+	#if os.path.exists('%s/awsebs.log' %(outdir)):
+	#	os.remove('%s/awsebs.log' %(outdir))
+	#if os.path.exists('run_aws.job'):
+	#	os.remove('run_aws.job')
 	if os.path.exists('rclonetmplist1298.txt'):
 		os.remove('rclonetmplist1298.txt')
 	if os.path.exists('%s/.rclone.conf' %(outdir)):
@@ -951,6 +986,23 @@ def kill_job(keypair,IP):
 	for pid in pidlist:
 		exec_remote_cmd('kill -9 %s' %(pid))
 
+
+#====================
+def get_stable_instance_region(region,instance,spotprice):
+	cmd = "get_spot_duration.py --region=%s --product-description='Linux/UNIX' --bids=%s:%s "%(region,instance,spotprice)
+	proc=subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE)
+	out,err = proc.communicate()
+
+	most_stable_value = out.split("\n")[1].split("\t")[0]
+	most_stable_region = out.split("\n")[1].split("\t")[2]
+
+	for line in out.split("\n")[1:]:
+		if line is not '':
+			if float(line.split("\t")[0]) > float(most_stable_value):
+				most_stable_value = line.split("\t")[0]
+				most_stable_region = line.split("\t")[2]
+
+	return most_stable_region
 #==============================
 if __name__ == "__main__":
 

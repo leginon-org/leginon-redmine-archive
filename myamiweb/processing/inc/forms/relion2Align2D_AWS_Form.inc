@@ -16,8 +16,8 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 
 	// Set Default values in the constructor
 	function __construct( $expId, $extraHTML='', $stackId='', $clip='', $bin='1', $numpart='3000',
-		$lowpass='10', $highpass='1000', $numRef='3', $maxIter='30', $angStep='5', $tau='2', $partDiam='',
-		$flat='on', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=True,$relionstarfile='',$normalize=True,$spotinstance=True,$spotprice='')
+		$lowpass='10', $highpass='1000', $numRef='15', $maxIter='25', $angStep='10', $tau='1', $partDiam='',
+		$flat='', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=False,$relionstarfile='',$normalize=True,$spotinstance=True,$spotprice='')
 	{
 		parent::__construct($expId, $extraHTML);
 
@@ -145,7 +145,10 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			"p2.8xlarge" => "p2.8xlarge (8 GPU's,$7.20/hour)",
 			"p2.16xlarge" => "p2.16xlarge (16 GPU's, $14.40/hour)",
 	       		"g3.8xlarge" => "g3.8xlarge (2 GPU's, $2.28/hour)",
-			"g3.16xlarge" => "g3.16xlarge (4 GPU's, $4.56/hour)");
+			"g3.16xlarge" => "g3.16xlarge (4 GPU's, $4.56/hour)",
+			"p3.2xlarge" => "p3.2xlarge (1 GPU, $3.06/hour)",
+			"p3.8xlarge" => "p3.8xlarge (4 GPU, $12.24/hour)",
+			"p3.16xlarge" => "p3.16xlarge (8 GPU, $24.48/hour)");
 
 		$html .= $params->insertStackedSelectField( "instancetype", $instanceoptions,'','',$onchange );
 		$html .= "<br />";
@@ -295,6 +298,20 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 				else if ($instancetype == 'g3.16xlarge') {
 					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '4.56' );
 				}
+				else if ($instancetype == 'p3.2xlarge') {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '3.06' );
+				}
+				else if ($instancetype == 'p3.8xlarge') {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '12.24' );
+				}
+				else if ($instancetype == 'p3.16xlarge') {
+					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '24.48' );
+				}
+
+
+
+
+
 				else {
 					$command = $this->addCommandFlag( $command, "spotprice", "spotprice", '0.00' );
 				}

@@ -54,7 +54,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			help="Maximum number of iterations", metavar="#")
 		self.parser.add_option("--numRef", "--num-ref", dest="numrefs", type="int",
 			help="Number of classes to create", metavar="#")
-		self.parser.add_option("--angStep", "--angle-step", dest="psistep", type="int", default=5,
+		self.parser.add_option("--angStep", "--angle-step", dest="psistep", type="int", default=10,
 			help="In-plane rotation sampling step (degrees)", metavar="#")
 		self.parser.add_option("--tau", dest="tau", type="float", default=1,
 			help="Tau2 Fudge Factor (> 1)", metavar="#")
@@ -125,6 +125,18 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 
 		if self.params['instancetype'] == 'g3.16xlarge' and self.params['spotprice'] > 4.56:
 			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $4.56/hour; spot price may exceed on-demand price in rare circumstances.")
+
+
+		if self.params['instancetype'] == 'p3.2xlarge' and self.params['spotprice'] > 3.06:
+			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $3.06/hour; spot price may exceed on-demand price in rare circumstances.")
+
+		if self.params['instancetype'] == 'p3.8xlarge' and self.params['spotprice'] > 12.24:
+			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $12.24/hour; spot price may exceed on-demand price in rare circumstances.")
+
+		if self.params['instancetype'] == 'p3.16xlarge' and self.params['spotprice'] > 24.48:
+			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $24.48/hour; spot price may exceed on-demand price in rare circumstances.")
+
+		
 
 		if self.params['stackid'] is None:
 			apDisplay.printError("stack id was not defined")
