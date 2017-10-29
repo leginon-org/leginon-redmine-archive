@@ -676,6 +676,7 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False,spotprice=0):
         		cmd='%s/create_volume.py %i %s "rln-aws-tmp-%s-%s"'%(awsdir,int(sizeneeded),most_stable_region,teamname,particledir)+'> %s/awsebs.log' %(outdir)
 		else:
         		cmd='%s/create_volume.py %i %sa "rln-aws-tmp-%s-%s"'%(awsdir,int(sizeneeded),awsregion,teamname,particledir)+'> %s/awsebs.log' %(outdir)
+		print("Create volume with command %s"%(cmd))
         	subprocess.Popen(cmd,shell=True).wait()
 
         	#Get volID from logfile
@@ -731,7 +732,7 @@ def relion_refine_mpi(in_cmd,instancetype='',symlinks=False,spotprice=0):
         if instance == 'p3.2xlarge':
                 gpu='--gpu '
                 j='--j 2 '
-                mpi=3
+                mpi=2
                 numfiles=90
                 cost=3.06
 

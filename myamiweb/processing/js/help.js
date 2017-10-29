@@ -1040,8 +1040,12 @@ var help = {
 		'angleinc' : 'angular increment for alignment, the smaller the increment the longer it takes to run, default 5, rough run use 10 degrees',
 		'tau2fudge' : 'The regularisation parameter determines the relative weight between the experimental data and the prior. Bayes law dictates it should be 1, but sometimes better results are obtained using slightly higher values. 2D classifications seem to go better with values of 1-2.',
 		'flattensolvent' : 'Perform masking on references',
-		'zeromasking' : ' Mask surrounding background in particles to zero (by default the solvent area is filled with random noise)',
-		'correctnorm' : 'Perform normalisation error correction'
+		'zeromasking' : ' Mask surrounding background in particles to zero (by default the solvent area is filled with random noise).',
+		'correctnorm' : 'Perform normalisation error correction.',
+		'stack': 'Select a stack to perform alignment',
+		'recenter' : 'Recenter Particles.',
+		'normalize' : 'Do Relion normalization (Recommended).',
+		'spotprice' : 'Maximum price to pay for an instance. The default is the on-demand price, so that a spot instance will never cost more than an on-demand instance.'
 
 	}
 		

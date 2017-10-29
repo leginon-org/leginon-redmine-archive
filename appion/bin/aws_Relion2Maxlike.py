@@ -54,7 +54,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			help="Maximum number of iterations", metavar="#")
 		self.parser.add_option("--numRef", "--num-ref", dest="numrefs", type="int",
 			help="Number of classes to create", metavar="#")
-		self.parser.add_option("--angStep", "--angle-step", dest="psistep", type="int", default=10,
+		self.parser.add_option("--angStep", "--angle-step", dest="psistep", type="int", default=12,
 			help="In-plane rotation sampling step (degrees)", metavar="#")
 		self.parser.add_option("--tau", dest="tau", type="float", default=1,
 			help="Tau2 Fudge Factor (> 1)", metavar="#")
@@ -85,11 +85,12 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			help="Number of threads to generate per processor. For memory intensive jobs, increase this value.", metavar="#")
 		self.parser.add_option("--mpimem", dest="mpimem", type=int, default=1,
 			help="Amount of memory (Gb) to allocate per thread. Increase this value for memory intensive jobs. ", metavar="#")
-		self.parser.add_option("--walltime", dest="walltime", type="int", default=24,
+		self.parser.add_option("--walltime", dest="walltime", type=int, default=24,
 			help="Maximum walltime in hours", metavar="#")
-		self.parser.add_option('--cput', dest='cput', type='int', default=None)
+		self.parser.add_option('--cput', dest='cput', type=int, default=None)
 
 		self.parser.add_option('--usegpu', dest='usegpu',action="store_true",default=False)
+		self.parser.add_option('--numgpus', dest='numgpus',type=float,default=0)
 		self.parser.add_option('--preread_images', dest='preread_images',action="store_true",default=False)
 		self.parser.add_option('--instancetype',dest='instancetype',type=str,default=None)
 		self.parser.add_option('--spotprice',dest='spotprice',type=float,default=0)
@@ -98,15 +99,30 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			help="Recenter particles; relion mode only.")
 		self.parser.add_option('--normalize',dest='normalize',action="store_true",default=False,
 			help="Normalize particles; relion mode only.")	
+		self.parser.add_option('--useaws',dest='useaws',action="store_true",default=False,
+			help="Use AWS cloud instance.")
 
 
 	#=====================
 	def checkConflicts(self):
-		if self.params['instancetype'] is None:
+		self.setInstanceTypes()
+		if self.params['numgpus'] and type(self.params['numgpus']) != int:
+			apDisplay.printError("ERROR: --numgpus parameter must be an integer greater than or equal to zero.")
+		if self.params['numgpus'] and self.params['numgpus'] < 0:
+			apDisplay.printError("ERROR: --numgpus parameter must be an integer greater than or equal to zero.")
+		if self.params['instancetype'] is None and self.params['useaws']:
 			apDisplay.printError("No AWS instance specified. Choose from p2.xlarge (1 GPU, $0.90/hour), p2.8xlarge (8 GPU's, $7.20/hour), p2.16xlarge (16 GPU's, $14.4/hour), g3.8xlarge (2 GPU's, $2.28/hour), g3.16xlarge (4 GPU's, $4.56/hour).")
-		if self.params['spotprice'] < 0:
-			apDisplay.printError("Spot price set to %s, but must be greater than zero." %(self.params['spotprice']))
 
+
+		if self.params['spotprice'] < 0:
+			apDisplay.printError("Spot price set to %s, but must be greater than zero. To use on-demand pricing, do not use --spotprice flag or set spotprice to zero." %(self.params['spotprice']))
+
+		# instanceinfo is in format ('<instancename>,<spotprice>) i.e. (str,float)
+		for instanceinfo in self.instancetypes:
+			if (self.params['instancetype'] == instanceinfo[0]) and (self.params['spotprice'] > instanceinfo[1]):
+				apDisplay.printColor("WARNING: Spot price for %s instance set to %s/hour when on-demand price is %s/hour; spot price may exceed on-demand price in rare circumstances."%(instance[0],(self.params['spotprice']),str(instance[1])))
+
+		'''
 		if self.params['instancetype'] == 'p2.xlarge' and self.params['spotprice'] > 0.9:
 			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $0.90/hour; spot price may exceed on-demand price in rare circumstances.")
 
@@ -135,7 +151,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 
 		if self.params['instancetype'] == 'p3.16xlarge' and self.params['spotprice'] > 24.48:
 			apDisplay.printColor("WARNING: Spot price set to %s/hour when on-demand price is $24.48/hour; spot price may exceed on-demand price in rare circumstances.")
-
+		'''
 		
 
 		if self.params['stackid'] is None:
@@ -146,12 +162,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		if self.params['runname'] is None:
 			apDisplay.printError("run name was not defined")
 		self.stackdata = apStack.getOnlyStackData(self.params['stackid'], msg=False)
-		print("STACK DATA IS",self.stackdata)
-		print("STACK PATH IS",self.stackdata['path'])
 		a = appiondata.ApRunsInStackData(stack=self.stackdata)
-		print("RUNSINSTACKDATA IS",a)
-		print("self.stackdata['name']",self.stackdata['name'])
-		print("self.stackdata['path']['path']",self.stackdata['path']['path'])
 		stackfile = os.path.join(self.stackdata['path']['path'], self.stackdata['name'])
 
 		print("mode is",self.params['mode'])
@@ -343,11 +354,6 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		print("relion_preprocess command: ",preprocess_cmd)
 		proc = subprocess.Popen(preprocess_cmd,shell=True,stdout=subprocess.PIPE)
 		proc.wait()
-		#lines = proc.stdout.readlines()
-		#if lines and len(lines) > 0:
-		#	print("Error, could not run relion_preprocess correctly.")
-		#else:
-		#	print(lines)
 		for line in proc.stdout:
 			print(line)
 		return
@@ -368,8 +374,32 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 
 		if not os.path.isfile(self.params['rundir']+'/'+self.stackname+'-complete_relion_stack.star'):
 			os.symlink(self.stackpath+'/'+self.stackname+'-complete_relion_stack.star',self.params['rundir']+'/'+self.stackname+'-complete_relion_stack.star')
+
+	#=====================
+	# set corresponding instance type and on-demand price for spot price messaging
+	# this is according to us-east-1 GPU instances, other regions may differ
+	# format is ('<instancename>',<on-demand price>,<numgpus>) i.e. (str,float,int)
+	def setInstanceTypes(self):
+		
+		self.instancetypes = [ ('p2.xlarge',0.90,1),
+				       ('p2.8xlarge',7.20,8),
+				       ('p2.16xlarge',14.4,16),
+				       ('g3.8xlarge',2.28,2),
+				       ('g3.16xlarge',4.56,4),
+				       ('p3.2xlarge',3.06,1),
+				       ('p3.8xlarge',12.24,4),
+				       ('p3.16xlarge',24.48,8) ]
+
+	#=====================
+	# set number of gpu's
+
+	def setNumGpus(self):
+		pass
+		
+
 	#=====================
 	def start(self):
+		self.setInstanceTypes()
 		self.insertMaxLikeJob()
 		self.stack = {}
 		self.stack['apix'] = apStack.getStackPixelSizeFromStackId(self.params['stackid'])
@@ -474,6 +504,13 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			+" --particle_diameter %.1f "%(self.params['partdiam'])
 		)
 
+		relionopts += " --pool 100 "
+		relionopts += " --offset_range 5 "
+		relionopts += " --offset_step 2 "
+		relionopts += " --dont_combine_weights_via_disc "
+		relionopts += " --scale "
+
+
 		if self.params['usegpu'] is True:
 			relionopts += " --gpu "
 		if self.params['flattensolvent'] is True:
@@ -488,14 +525,18 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		if self.params['preread_images'] is True:
 			relionopts += " --preread_images "
 
+		if self.params['numgpus']:
+			runcmd = self.mpirun+" -n "+str(numgpus+1)
 		if self.params['usempi'] is True:
 			relionexe = "relion_refine_mpi"
 			relionopts += " --j %d "%(self.params['mpithreads'])
-			### find number of processors
-			nproc = self.params['mpiprocs'] * self.params['mpinodes']
-			print("self.params['mpiprocs'] is",self.params['mpiprocs'])
-			print("self.params['mpinodes'] is",self.params['mpinodes'])
-			runcmd = self.mpirun+" -np "+str(nproc)+" "+relionexe+" "+relionopts
+
+			if self.params['numgpus'] > 0:
+				runcmd = self.mpirun+" -np "+str(self.params['numgpus']+1)+" "+relionexe+" "+relionopts
+			else:	
+				### find number of processors
+				nproc = self.params['mpiprocs'] * self.params['mpinodes']
+				runcmd = self.mpirun+" -np "+str(nproc)+" "+relionexe+" "+relionopts
 		else:
 			relionexe = apParam.getExecPath("relion_refine", die=True)
 			runcmd = relionexe+" "+relionopts
@@ -506,12 +547,17 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		os.chdir(self.params['rundir'])
 		print("CURRENT DIRECTORY: ",os.getcwd())
 
-		apAWS.relion_refine_mpi(runcmd,instancetype=self.params['instancetype'],spotprice=self.params['spotprice'],symlinks=True)
-		self.outdir = os.path.join(self.params['rundir'], "part"+self.timestamp)
-		mkdircmd = 'mkdir -p %s'%(self.outdir)
-		#proc = subprocess.Popen(mkdircmd, shell=True)
-		#proc.wait()
-		#apParam.runCmd(runcmd, package="RELION", verbose=True, showcmd=True)
+		if self.params['useaws']:
+			apAWS.relion_refine_mpi(runcmd,instancetype=self.params['instancetype'],spotprice=self.params['spotprice'],symlinks=True)
+
+		else:
+
+			self.outdir = os.path.join(self.params['rundir'], "part"+self.timestamp)
+			mkdircmd = 'mkdir -p %s'%(self.outdir)
+			if not os.path.isdir(self.outdir):
+				os.mkdir(self.outdir)
+
+			apParam.runCmd(runcmd, package="RELION", verbose=True, showcmd=True)
 		aligntime = time.time() - aligntime
 		apDisplay.printMsg("Alignment time: "+apDisplay.timeString(aligntime))
 

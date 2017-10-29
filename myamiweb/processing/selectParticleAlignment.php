@@ -36,6 +36,84 @@ echo "</table>\n";
 echo "<br/>\n";
 echo "<table border='1' class='tableborder' width='640'>\n";
 
+
+if (!HIDE_AWS_FEATURE)
+{
+/*
+ ** Relion 2.0 2D Reference Free Alignment with AWS
+*/
+        echo "<tr><td width='100' align='center'>\n";
+        echo "  <img src='img/Relion_logo_v1_64x64.png' width='64'>\n";
+        echo "</td><td>\n";
+        $form = "Relion2Align2D_AWS_Form";
+	echo "  <h3><a href='runAppionLoop.php?expId=$expId&form=$form'>Relion 2D Maximum Likelihood Alignment in AWS (GPU)</a></h3>\n";
+	echo " <p> This package uses the AWS interface package from <a href='https://github.com/cianfrocco-lab/cryoem-cloud-tools'>Cianfrocco Lab</a> to launch GPU Relion jobs on AWS cloud instances. It otherwise uses the same underlying algorithms as Relion 2.</p>\n";
+
+
+        //echo "  <img src='img/align-smr.png' width='250'><br/>\n";
+        echo "</td></tr>\n";
+}
+/*
+ ** Relion 2.0 2D Reference Free Alignment for GPU
+*/
+if (!HIDE_GPU_FEATURE)
+{
+        echo "<tr><td width='100' align='center'>\n";
+        echo "  <img src='img/Relion_logo_v1_64x64.png' width='64'>\n";
+        echo "</td><td>\n";
+        $form = "relion2Align2DForm";
+        echo "  <h3><a href='runAppionLoop.php?expId=$expId&form=$form'>Relion 2D Maximum Likelihood Alignment (GPU)</a></h3>\n";
+        echo " <p> this method is the most robust, but takes some time to complete."
+                ." It uses the "
+                ."<a href='http://www2.mrc-lmb.cam.ac.uk/relion/index.php/Calculate_2D_class_averages'>Relion Refine 2d</a>"
+                ."&nbsp;<img src='img/external.png'>"
+                ." program to perform alignments. "
+                ."</p><p>\n"
+                ."Like Xmipp Maximum Likelihood (from the same author), "
+                ."This method is unbiased and very thorough, but also the slowest of the methods (~days). "
+                ."While it produces excellent templates, it only does a course search (integer pixels shifts and large angle increments), "
+                ."so it is best to use ref-based alignment to get better alignment parameters."
+                ."</p>\n";
+
+
+        //echo "  <img src='img/align-smr.png' width='250'><br/>\n";
+        echo "</td></tr>\n";
+}
+
+
+
+
+//echo "  <img src='img/align-smr.png' width='250'><br/>\n";
+echo "</td></tr>\n";
+
+/*
+ ** Relion 2D Reference Free Alignment (CPU)
+*/
+echo "<tr><td width='100' align='center'>\n";
+echo "  <img src='img/Relion_logo_v1_64x64.png' width='64'>\n";
+echo "</td><td>\n";
+$form = "relionAlign2DForm";
+echo "  <h3><a href='runAppionLoop.php?expId=$expId&form=$form'>Relion 2D Maximum Likelihood Alignment (CPU)</a></h3>\n";
+echo " <p> this method is the most robust, but takes some time to complete."
+	." It uses the "
+	."<a href='http://www2.mrc-lmb.cam.ac.uk/relion/index.php/Calculate_2D_class_averages'>Relion Refine 2d</a>"
+	."&nbsp;<img src='img/external.png'>"
+	." program to perform alignments. "
+	."</p><p>\n"
+	."Like Xmipp Maximum Likelihood (from the same author), "
+	."this method is unbiased and very thorough, but it is also one of the slower methods (~days). "
+	."While it produces excellent templates, it only does a course search (integer pixels shifts and large angle increments), "
+	."so it is best to use ref-based alignment to get better alignment parameters"
+	."</p><p>\n"
+	."RELION ML alignment typically takes longer than Xmipp ML alignment. While the first iteration will take the same time, "
+	."later iterations typically take longer in the RELION than Xmipp, which adds to the total run time. Second, RELION will "
+	."always run for specified iterations, whereas Xmipp will stop when the class averages stop changing."
+	."</p>\n";
+
+//echo "  <img src='img/align-smr.png' width='250'><br/>\n";
+echo "</td></tr>\n";
+
+
 /*
 ** Xmipp Maximum Likelihood Reference Free Alignment
 */
@@ -44,7 +122,7 @@ echo "<tr><td width='100' align='center'>\n";
 echo "  <img src='img/xmipp_logo.png' width='64'>\n";
 echo "</td><td>\n";
 echo "  <h3><a href='runMaxLikeAlign.php?expId=$expId'>Xmipp Maximum Likelihood Alignment</a></h3>\n";
-echo " <p> this method is the most robust, but takes some time to complete."
+echo " <p> This method is the most robust, but takes some time to complete."
 	." It uses the "
 	."<a href='http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/MLalign2D'>Xmipp ml_align2d</a>"
 	."&nbsp;<img src='img/external.png'>"
@@ -91,93 +169,13 @@ echo "  <h3><a href='runAppionLoop.php?expId=$expId&form=$form'>Xmipp 3 Clusteri
 echo " <p> this method builds a hierarchical classification of particles"
 		." It uses the "
 		."<a href='http://xmipp.cnb.csic.es/twiki/bin/view/Xmipp/Classify_mpi_cl2d_v3'>Xmipp 3 cl2d</a>"
-				."&nbsp;<img src='img/external.png'>"
-						." program to perform alignments. "
-								."It is a relatively fast method that aligns and classify the images at the same time. "
-										."The method starts by estimating a few classes that are further subdivided till the desired number of classes is reached. "
-												."Every time an image is compared to the class averages it is aligned before-hand."
+		."&nbsp;<img src='img/external.png'>"
+		." program to perform alignments. "
+		."It is a relatively fast method that aligns and classify the images at the same time. "
+		."The method starts by estimating a few classes that are further subdivided till the desired number of classes is reached. "
+		."Every time an image is compared to the class averages it is aligned before-hand."
+		."</p>\n";
 
-
-
-
-																."</p>\n";
-
-
-//echo "  <img src='img/align-smr.png' width='250'><br/>\n";
-echo "</td></tr>\n";
-
-if (!HIDE_AWS_FEATURE)
-{
-/*
- ** Relion 2.0 2D Reference Free Alignment with AWS
-*/
-        echo "<tr><td width='100' align='center'>\n";
-        echo "  <img src='img/Relion_logo_v1_64x64.png' width='64'>\n";
-        echo "</td><td>\n";
-        $form = "Relion2Align2D_AWS_Form";
-	echo "  <h3><a href='runAppionLoop.php?expId=$expId&form=$form'>Relion 2.0 GPU-Powered 2D Maximum Likelihood Alignment in AWS</a></h3>\n";
-	echo " <p> This package uses the AWS interface package from <a href='https://github.com/cianfrocco-lab/cryoem-cloud-tools'>Cianfrocco Lab</a> to launch GPU and CPU Relion jobs on AWS cloud instances. It otherwise uses the same underlying algorithms as Relion 2.</p>\n";
-
-
-        //echo "  <img src='img/align-smr.png' width='250'><br/>\n";
-        echo "</td></tr>\n";
-}
-/*
- ** Relion 2.0 2D Reference Free Alignment for GPU
-*/
-if (!HIDE_GPU_FEATURE)
-{
-        echo "<tr><td width='100' align='center'>\n";
-        echo "  <img src='img/Relion_logo_v1_64x64.png' width='64'>\n";
-        echo "</td><td>\n";
-        $form = "relion2Align2DForm";
-        echo "  <h3><a href='runAppionLoop.php?expId=$expId&form=$form'>Relion 2.0 GPU-Powered 2D Maximum Likelihood Alignment</a></h3>\n";
-        echo " <p> this method is the most robust, but takes some time to complete."
-                ." It uses the "
-                ."<a href='http://www2.mrc-lmb.cam.ac.uk/relion/index.php/Calculate_2D_class_averages'>Relion Refine 2d</a>"
-                ."&nbsp;<img src='img/external.png'>"
-                ." program to perform alignments. "
-                ."</p><p>\n"
-                ."Like Xmipp Maximum Likelihood (from the same author), "
-                ."this method is unbiased and very thorough, but also the slowest of the methods (~days). "
-                ."While it produces excellent templates, it only does a course search (integer pixels shifts and large angle increments), "
-                ."so it is best to use ref-based alignment to get better alignment parameters"
-                ."</p>\n";
-
-
-        //echo "  <img src='img/align-smr.png' width='250'><br/>\n";
-        echo "</td></tr>\n";
-}
-
-
-
-
-//echo "  <img src='img/align-smr.png' width='250'><br/>\n";
-echo "</td></tr>\n";
-
-/*
- ** Relion 2D Reference Free Alignment
-*/
-echo "<tr><td width='100' align='center'>\n";
-echo "  <img src='img/Relion_logo_v1_64x64.png' width='64'>\n";
-echo "</td><td>\n";
-$form = "relionAlign2DForm";
-echo "  <h3><a href='runAppionLoop.php?expId=$expId&form=$form'>Relion 2D Maximum Likelihood Alignment</a></h3>\n";
-echo " <p> this method is the most robust, but takes some time to complete."
-	." It uses the "
-	."<a href='http://www2.mrc-lmb.cam.ac.uk/relion/index.php/Calculate_2D_class_averages'>Relion Refine 2d</a>"
-	."&nbsp;<img src='img/external.png'>"
-	." program to perform alignments. "
-	."</p><p>\n"
-	."Like Xmipp Maximum Likelihood (from the same author), "
-	."this method is unbiased and very thorough, but it is also one of the slower methods (~days). "
-	."While it produces excellent templates, it only does a course search (integer pixels shifts and large angle increments), "
-	."so it is best to use ref-based alignment to get better alignment parameters"
-	."</p><p>\n"
-	."RELION ML alignment typically takes longer than Xmipp ML alignment. While the first iteration will take the same time, "
-	."later iterations typically take longer in the RELION than Xmipp, which adds to the total run time. Second, RELION will "
-	."always run for specified iterations, whereas Xmipp will stop when the class averages stop changing."
-	."</p>\n";
 
 //echo "  <img src='img/align-smr.png' width='250'><br/>\n";
 echo "</td></tr>\n";

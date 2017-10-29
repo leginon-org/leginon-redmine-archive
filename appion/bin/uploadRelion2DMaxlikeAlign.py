@@ -145,12 +145,9 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 			lastiterfile = os.path.join("refalign", lastiterfile)
 			print("No lasteriterfile")
 		shutil.copy(lastiterfile, inputfile)
-		print("final star file is",inputfile)
 		starData = starFile.StarFile(inputfile)
-		print("starData is",starData)
 		starData.read()
 		dataBlock = starData.getDataBlock('data_images')
-		print("dataBlock is",dataBlock)
 
 		particleTree = dataBlock.getLoopDict()
 
@@ -350,7 +347,7 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 	#=====================
 	def replaceNaNImageInReferenceStack(self, runparams):
 		apDisplay.printMsg('Checking reference stack for NaN data....')
-		finalreffile = "part%s_it%03d_classes.mrcs"%(runparams['timestamp'], runparams['maxiter'])
+		finalreffile = "part%s_it%03d_classes.mrcs"%(runparams['timestamp'], self.lastiter)
 		number_of_replacement = apRelion.replaceNaNImageInStack(finalreffile)
 		apDisplay.printMsg('Replaced %d bad images in stack' % number_of_replacement)
 
@@ -358,7 +355,8 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 	def alignReferences(self, runparams):
 		### align references
 		# ref16may19v36_it010_classes.mrcs
-		finalreffile = "part%s_it%03d_classes.mrcs"%(runparams['timestamp'], runparams['maxiter'])
+
+		finalreffile = "part%s_it%03d_classes.mrcs"%(runparams['timestamp'], self.lastiter)
 		apix = apStack.getStackPixelSizeFromStackId(runparams['stackid'])*runparams['bin']
 		relionopts = ( " "
 			+" --i %s "%(finalreffile)
@@ -444,7 +442,8 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		runparams = self.readRunParameters()
 		apDisplay.printColor("going to directory %s"%(runparams['rundir']), "green")
 		os.chdir(runparams['rundir'])
-		self.lastiter = runparams['maxiter'] #self.findLastIterNumber()
+		#self.lastiter = runparams['maxiter'] #self.findLastIterNumber()
+		self.lastiter = self.findLastIterNumber()
 
 		#import pprint
 		#pprint.pprint( runparams)
@@ -500,8 +499,6 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 
 		#create average image for web
 
-		#if self.params['mode'] == 'appion':
-		#	apStack.averageStack(alignimagicfile, msg=False)
 		apStack.averageStack(alignimagicfile, msg=False)
 		### calculate resolution for each reference
 		### The way the function average particles in each class
@@ -511,11 +508,8 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		#self.createAlignedReferenceStack(runparams)
 
 		### insert into databse
-		if self.params['mode'] == 'appion':
-			self.insertRunIntoDatabase(alignref_imagicfile, alignimagicfile, runparams)
-			self.insertParticlesIntoDatabase(runparams['stackid'], partlist)
-		else:
-			self.insertRunIntoDatabase(alignref_imagicfile, alignref_imagicfile, runparams)
+		self.insertRunIntoDatabase(alignref_imagicfile, alignimagicfile, runparams)
+		self.insertParticlesIntoDatabase(runparams['stackid'], partlist)
 
 		apFile.removeStack(runparams['localstack'], warn=False)
 

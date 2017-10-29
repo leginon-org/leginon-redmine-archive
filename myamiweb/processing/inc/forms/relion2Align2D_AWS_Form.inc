@@ -16,8 +16,8 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 
 	// Set Default values in the constructor
 	function __construct( $expId, $extraHTML='', $stackId='', $clip='', $bin='1', $numpart='3000',
-		$lowpass='10', $highpass='1000', $numRef='15', $maxIter='25', $angStep='10', $tau='1', $partDiam='',
-		$flat='', $zero_mask=False, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=False,$relionstarfile='',$normalize=True,$spotinstance=True,$spotprice='')
+		$lowpass='10', $highpass='1000', $numRef='30', $maxIter='50', $angStep='10', $tau='2', $partDiam='',
+		$flat=True, $zero_mask=True, $commit='on',$instancetype='',$mode='appion',$preread_images=False,$recenter=True,$relionstarfile='',$normalize=True,$spotinstance=True,$spotprice='')
 	{
 		parent::__construct($expId, $extraHTML);
 
@@ -59,10 +59,24 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$javascript .= "		var bestbin = 1 ;}\n";
 		$javascript .= "	document.viewerform.bin.value = bestbin;\n";
 		//number of references is the natural log of the number of particles
-		$javascript .= "	var bestref = Math.floor(Math.log(stackArray[3])/2)*2;\n";
+		/*$javascript .= "	var bestref = Math.floor(Math.log(stackArray[3])/2)*2;\n";
 		$javascript .= "	if (bestref < 2) {\n";
 		$javascript .= "		var bestref = 2 ;}\n";
-		$javascript .= "	document.viewerform.numref.value = bestref;\n";
+		$javascript .= "	document.viewerform.numRef.value = bestref;\n";
+		*/
+	
+		$javascript .= "	var startfile = stackArray[5];\n";
+		$javascript .= "	if (startfile == 'relion.mrcs') {\n";
+		$javascript .= "		document.getElementById('appion-preprocessing').style.display = 'none';\n";
+		$javascript .= "		document.getElementById('relion-preprocessing').style.display = 'block';\n";
+		$javascript .= "		}\n";
+		$javascript .= "	else {\n";
+		$javascript .= "		document.getElementById('appion-preprocessing').style.display = 'block';\n";
+		$javascript .= "		document.getElementById('relion-preprocessing').style.display = 'none';\n";
+		$javascript .= "		}\n";
+	
+
+
 		// set particle & mask radius and lp
 		$javascript .= "}\n";
 		$javascript .= "</script>\n";
@@ -97,15 +111,15 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$params->addParam( "zero_mask", $zero_mask, "Zero Masking");
 		$params->addParam( "commit", $commit, "Commit to Database" );
 		$params->addParam( "correctnorm",$correctnorm,"Perform normalization error correction" );
-		$params->addParam( "instancetype",$instancetype,"Amazon GPU instance type" );
+		$params->addParam( "instancetype",$instancetype,"GPU instance type" );
 		$params->addParam( "spotinstance",$spotinstance,"Use spot instance pricing");
 		$params->addParam( "spotprice",$spotprice,"Override recommended spot instance pricing");
 
 		$params->addParam( "mode",$mode,"Stack mode: Appion or Relion");
 		$params->addParam( "preread_images",$preread_images,"Pre-read images into memory");
 		$params->addParam( "description",$description,"Enter a brief description");
-		$params->addParam( "recenter",$recenter,"Recenter particles (Relion stack only)");
-		$params->addParam( "normalize",$normalize,"Normalize particles (Relion stack only)");
+		$params->addParam( "recenter",$recenter,"Recenter particles");
+		$params->addParam( "normalize",$normalize,"Normalize particles");
 
 
 		// Validations
@@ -126,7 +140,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$fieldSize = 5;
 
 		$html = "";
-		$html .= "<br /><H4>Stack Selection</H4><hr />";
+		$html .= "<H4>Stack Selection</H4><hr />";
 
 		if (!$this->stackIds) {
 			$html .=  "<font color='red'><B>No Stacks for this Session</B></FONT>\n";
@@ -137,6 +151,52 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$html .= $params->insertStackedSelectField( "stack", $options,'', '', $onchange );
 		}
 
+		$html .="<div id='relion-preprocessing'>";
+		$html .="<br />
+			<H4>Relion-only stack preprocessing options</H4>";
+		$html .= $params->insertCheckboxField("recenter",'','relion2DMaxlike.recenter');
+		$html .= $params->insertCheckboxField("normalize",'','relion2DMaxlike.normalize');
+		$html .= "</div><!-- END relion-preprocessing -->";
+
+		$html .="<div id='appion-preprocessing'>";
+		$html .="<br />
+			<hr /><H4>Appion-only stack preprocessing options</H4>";
+
+		$html .= $params->insertTextField( "clip", $fieldSize, "(pixels)", 'relion2DMaxlike.unbinnedclipdiameter' );
+		$html .= $params->insertTextField( "bin", $fieldSize, '', 'relion2DMaxlike.particlebinning' );
+		$html .= $params->insertTextField( "numpart", 5, '', 'relion2DMaxlike.numberofparticles' );
+		$html .= $params->insertTextField( "lowpass", $fieldSize, "(&Aring;ngstroms)",'relion2DMaxlike.lowpassfilterradius' );
+		$html .= $params->insertTextField( "highpass", $fieldSize, "(&Aring;ngstroms)", 'relion2DMaxlike.highpassfilterradius' );
+		$html .= "</div><!-- END appion-preprocessing -->";
+		$html .= "<br /><H4>Alignment Parameters</H4>
+		<hr />";
+
+		$html .= $params->insertTextField( "partDiam", $fieldSize,"(&Aring;ngstroms)",'relion2DMaxlike.particlediameter' );
+
+		$html .= $params->insertTextField( "numRef", $fieldSize,'','relion2DMaxlike.numberofreferences' );
+		$html .= $params->insertTextField( "maxIter", $fieldSize,'','relion2DMaxlike.maxnumberofiterations' );
+		$html .= $params->insertTextField( "angStep", $fieldSize,'(degrees)','relion2DMaxlike.angleinc' );
+		$html .= $params->insertTextField( "tau", $fieldSize,'','appion.tau2fudge' );
+		$html .= $params->insertCheckboxField("flat",'','relion2DMaxlike.flattensolvent');
+		$html .= $params->insertCheckboxField("zero_mask",'','relion2DMaxlike.zeromasking');
+#		$html .= $params->insertCheckboxField("correctnorm",'','relion2DMaxlike.correctnorm');
+#		$html .= $params->insertCheckboxField("preread_images",'','relion2DMaxlike.preread_images');
+		$html .= $params->insertHiddenField( "mode" );
+
+		// When loading this page the first time, use the switchDefaults javascript function to set
+		// form parameters based on the currently selected stack.
+		if (!$_POST['process']) {
+			$html .= "<script>switchDefaults(document.viewerform.stack.options[document.viewerform.stack.selectedIndex].value);</script>\n";
+		}
+
+		return $html;
+	}
+
+	public function generateAdditionalFormLeft()
+	{
+		$this->updateFormParams();
+		$params = $this->getFormParams();
+		$html = "";
 		$html .= "<br /><H4>Select AWS Instance type </H4><hr />";
 
 		$instanceoptions = array(
@@ -153,64 +213,13 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 		$html .= $params->insertStackedSelectField( "instancetype", $instanceoptions,'','',$onchange );
 		$html .= "<br />";
 		$html .= $params->insertCheckboxField("spotinstance",'','relion2DMaxlike.spotinstance');
-		$html .= $params->insertTextField( "spotprice",5,$spotprice,"",'relion2DMaxlike.spotprice');
-
-		$html .="<br />
-			<H4>Data limiting numbers</H4>
-		<hr /><H5 style='color:red'>(Ignore these parameters when using a Relion Stack)</H5>";
-
-		$html .= $params->insertTextField( "clip", $fieldSize, "(pixels)", 'relion2DMaxlike.unbinnedclipdiameter' );
-		$html .= $params->insertTextField( "bin", $fieldSize, '', 'relion2DMaxlike.particlebinning' );
-		$html .= $params->insertTextField( "numpart", 4, '', 'relion2DMaxlike.numberofparticles' );
-
-		$html .= "
-		<br />
-		<H4>Filters</H4>
-		<hr /> <H5 style='color:red'>(Ignore these parameters when using a Relion Stack)</H5>";
-
-		$html .= $params->insertTextField( "lowpass", $fieldSize, "(&Aring;ngstroms)",'relion2DMaxlike.lowpassfilterradius' );
-		$html .= $params->insertTextField( "highpass", $fieldSize, "(&Aring;ngstroms)", 'relion2DMaxlike.highpassfilterradius' );
-
-		$html .= "
-		<br />
-		<H4>Alignment Parameters</H4>
-		<hr />";
-
-		$html .= $params->insertTextField( "partDiam", $fieldSize,"(&Aring;ngstroms)",'relion2DMaxlike.particlediameter' );
-
-		$html .= $params->insertTextField( "numRef", $fieldSize,'','relion2DMaxlike.numberofreferences' );
-		$html .= $params->insertTextField( "maxIter", $fieldSize,'','relion2DMaxlike.maxnumberofiterations' );
-		$html .= $params->insertTextField( "angStep", $fieldSize,'(degrees)','relion2DMaxlike.angleinc' );
-		$html .= $params->insertTextField( "tau", $fieldSize,'','appion.tau2fudge' );
-		$html .= $params->insertCheckboxField("recenter",'','relion2DMaxlike.recenter');
-		$html .= $params->insertCheckboxField("normalize",'','relion2DMaxlike.normalize');
-		$html .= $params->insertCheckboxField("flat",'','relion2DMaxlike.flattensolvent');
-		$html .= $params->insertCheckboxField("zero_mask",'','relion2DMaxlike.zeromasking');
-		$html .= $params->insertCheckboxField("correctnorm",'','relion2DMaxlike.correctnorm');
-		$html .= $params->insertCheckboxField("preread_images",'','relion2DMaxlike.preread_images');
-		$html .= $params->insertCheckboxField("commit");
-		$html .= $params->insertHiddenField( "mode" );
-
-		// When loading this page the first time, use the switchDefaults javascript function to set
-		// form parameters based on the currently selected stack.
-		if (!$_POST['process']) {
-			$html .= "<script>switchDefaults(document.viewerform.stack.options[document.viewerform.stack.selectedIndex].value);</script>\n";
-		}
-
-		return $html;
-	}
-/*
-	public function generateAdditionalFormLeft()
-	{
-		$this->updateFormParams();
-		$params = $this->getFormParams();
-
-		$html = "<br />";
+		$html .= $params->insertTextField( "spotprice",5,$spotprice,"$",'relion2DMaxlike.spotprice');
+		$html .= "<hr />";
 		$html .= $params->insertCheckboxField("commit");
 
 		return $html;
 	}
- */
+
 	// Override the buildCommand function to adapt to the old python command
 	// that uses "-" in params and parse the stack id.
 	public function buildCommand( $postArray )
@@ -275,6 +284,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$command = $this->removeCommandFlag($command, "highpass" );
 		}
 
+		$command .= " --useaws ";
 		$spotinstance = $params->getParamValue( 'spotinstance' );
 		$spotprice =  $params->getParamValue( 'spotprice' ) ;
 		$instancetype = $params->getParamValue( 'instancetype' );
@@ -320,9 +330,6 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			else {
 				$command = $this->addCommandFlag( $command, "spotprice", "spotprice", floatval($spotprice) );
 			}
-			//else {
-			//	$command = $this->addCommandFlag( $command, "spotprice", "spotprice",'0.00' );
-			//}
 		}
 
 		else {
