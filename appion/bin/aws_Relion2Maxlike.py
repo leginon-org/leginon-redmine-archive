@@ -90,7 +90,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 		self.parser.add_option('--cput', dest='cput', type=int, default=None)
 
 		self.parser.add_option('--usegpu', dest='usegpu',action="store_true",default=False)
-		self.parser.add_option('--numgpus', dest='numgpus',type=float,default=0)
+		self.parser.add_option('--numgpus', dest='numgpus',type=int,default=0)
 		self.parser.add_option('--preread_images', dest='preread_images',action="store_true",default=False)
 		self.parser.add_option('--instancetype',dest='instancetype',type=str,default=None)
 		self.parser.add_option('--spotprice',dest='spotprice',type=float,default=0)
@@ -526,7 +526,7 @@ class RelionMaxLikeScript(appionScript.AppionScript):
 			relionopts += " --preread_images "
 
 		if self.params['numgpus']:
-			runcmd = self.mpirun+" -n "+str(numgpus+1)
+			runcmd = self.mpirun+" -n "+str(self.params['numgpus']+1)
 		if self.params['usempi'] is True:
 			relionexe = "relion_refine_mpi"
 			relionopts += " --j %d "%(self.params['mpithreads'])

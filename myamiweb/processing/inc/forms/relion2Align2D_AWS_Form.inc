@@ -284,7 +284,7 @@ class Relion2Align2D_AWS_Form extends BasicLayoutForm
 			$command = $this->removeCommandFlag($command, "highpass" );
 		}
 
-		$command .= " --useaws ";
+		$command .= " --useaws --usegpu ";
 		$spotinstance = $params->getParamValue( 'spotinstance' );
 		$spotprice =  $params->getParamValue( 'spotprice' ) ;
 		$instancetype = $params->getParamValue( 'instancetype' );

@@ -37,8 +37,8 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 			help="Maximum likelihood jobid", metavar="#")
 		self.parser.add_option("-t", "--timestamp", dest="timestamp",
 			help="Timestamp of files, e.g. 08nov02b35", metavar="CODE")
-		self.parser.add_option("--no-sort", dest="sort", default=True,
-			action="store_false", help="Do not sort files into nice folders")
+		self.parser.add_option("--sort", dest="sort", default=True,
+			action="store_true", help="Sort files into nice folders")
 		self.parser.add_option("--mode",dest="mode",default="appion", type="str",
 			help="Type of stack; appion or relion",metavar="STR")
 
@@ -182,7 +182,6 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		#else:
 		#	dataBlock = starData.getDataBlock('data_images')
 		dataBlock = starData.getDataBlock('data_images')
-		print("datablock is",dataBlock)
 		particleTree = dataBlock.getLoopDict()
 		self.class_count = {}
 		for relionpartdict in particleTree:
@@ -466,14 +465,14 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		partlist = self.readPartStarFile(reflist)
 		#self.writePartDocFile(partlist)
 
-		#if self.params['mode'] == 'relion':
-		#	alignimagicfile = ''
-		#else:
-		#	alignimagicfile = self.createAlignedStack(partlist, runparams['localstack'])
 		alignimagicfile = self.createAlignedStack(partlist, runparams['localstack'])
 
 		# convert unaligned weighted refstack from mrc to imagic format
-		unaligned_refstack_mrc = os.path.join('iter%03d' % self.lastiter,'part%s_it%03d_classes.mrcs' % (self.params['timestamp'], self.lastiter))
+		if self.params['sort']:
+			unaligned_refstack_mrc = os.path.join('iter%03d' % self.lastiter,'part%s_it%03d_classes.mrcs' % (self.params['timestamp'], self.lastiter))
+		else:
+			unaligned_refstack_mrc = 'part%s_it%03d_classes.mrcs' % (self.params['timestamp'],     self.lastiter)
+
 		unaligned_refstack_imagic = 'part%s_it%03d_classes.hed' % (self.params['timestamp'], self.lastiter)
 		## hopefully this reference stack is not too big to cause memory error
 		stackarray = mrc.read(unaligned_refstack_mrc)
@@ -507,9 +506,12 @@ class UploadRelionMaxLikeScript(appionScript.AppionScript):
 		#self.calcResolution(partlist, alignimagicfile, apix)
 		#self.createAlignedReferenceStack(runparams)
 
-		### insert into databse
-		self.insertRunIntoDatabase(alignref_imagicfile, alignimagicfile, runparams)
-		self.insertParticlesIntoDatabase(runparams['stackid'], partlist)
+		### insert into database
+		if self.params['mode'] == 'appion':
+			self.insertRunIntoDatabase(alignref_imagicfile, alignimagicfile, runparams)
+			self.insertParticlesIntoDatabase(runparams['stackid'], partlist)
+		else:
+			self.insertRunIntoDatabase(alignref_imagicfile, alignimagicfile, runparams)
 
 		apFile.removeStack(runparams['localstack'], warn=False)
 
