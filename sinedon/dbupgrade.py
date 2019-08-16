@@ -56,7 +56,7 @@ class DBUpgradeTools(object):
 		self.link = 'int(20) NULL DEFAULT NULL'
 		self.int = 'int(20) NULL DEFAULT NULL' 
 		self.bool = 'tinyint(1) NULL DEFAULT 0' 
-		self.str = 'text NULL DEFAULT NULL' 
+		self.str = 'varchar(511) NULL DEFAULT NULL' 
 		self.float = 'double NULL DEFAULT NULL'
 		self.timestamp = 'timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP' 
 

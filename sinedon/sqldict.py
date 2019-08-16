@@ -1292,25 +1292,25 @@ def sql2data(in_dict, qikey=None, qinfo=None):
 	This function converts any result of an SQL query to an Data type:
 
 	>>> d = {'SUBD|camera|exposure time': 1, 'SUBD|camera|SUBD|binning|x': 1,
-				 'SUBD|camera|SUBD|binning|y': 1, 'SUBD|scope|SUBD|gun shift|y': 1,
-				 'SUBD|scope|SUBD|gun shift|x': 1,
-				 'ARRAY|matrix|1_1': 1.9444897985776799e-10,
-				 'SUBD|scope|dark field mode': 1, 'ARRAY|matrix|2_1': -1.24684512082676e-10,
-				 'SEQ|id': "('manager', 'corrector', 49)",
-				 'ARRAY|matrix|2_2': 2.0027370335951399e-10,
-				 'SUBD|camera|SUBD|camera size|y': 1, 'SUBD|camera|SUBD|camera size|x': 1,
-				 'SUBD|camera|SUBD|dimension|y': 1, 'SUBD|camera|SUBD|dimension|x': 1,
-				 'ARRAY|matrix|1_2': 1.2226514813724901e-10, 'SUBD|camera|SUBD|offset|y': 1,
-				 'SUBD|camera|SUBD|offset|x': 1, 'database filename': 1}
+				'SUBD|camera|SUBD|binning|y': 1, 'SUBD|scope|SUBD|gun shift|y': 1,
+				'SUBD|scope|SUBD|gun shift|x': 1,
+				'ARRAY|matrix|1_1': 1.9444897985776799e-10,
+				'SUBD|scope|dark field mode': 1, 'ARRAY|matrix|2_1': -1.24684512082676e-10,
+				'SEQ|id': "('manager', 'corrector', 49)",
+				'ARRAY|matrix|2_2': 2.0027370335951399e-10,
+				'SUBD|camera|SUBD|camera size|y': 1, 'SUBD|camera|SUBD|camera size|x': 1,
+				'SUBD|camera|SUBD|dimension|y': 1, 'SUBD|camera|SUBD|dimension|x': 1,
+				'ARRAY|matrix|1_2': 1.2226514813724901e-10, 'SUBD|camera|SUBD|offset|y': 1,
+				'SUBD|camera|SUBD|offset|x': 1, 'database filename': 1}
 		>>> sql2data(d)
 	{'camera': {'exposure time': 1, 'camera size': {'y': 1, 'x': 1},
-		 'dimension': {'y': 1, 'x': 1}, 'binning': {'y': 1, 'x': 1},
-		 'offset': {'y': 1, 'x': 1}},
-	 'matrix': array([[  1.94448980e-10,   1.22265148e-10], 
-			 [ -1.24684512e-10,   2.00273703e-10]]),
-	 'database filename': 1,
-	 'scope': {'gun shift': {'y': 1, 'x': 1}, 'dark field mode': 1},
-	 'id': ('manager', 'corrector', 49)}
+		'dimension': {'y': 1, 'x': 1}, 'binning': {'y': 1, 'x': 1},
+		'offset': {'y': 1, 'x': 1}},
+	'matrix': array([[  1.94448980e-10,   1.22265148e-10], 
+			[ -1.24684512e-10,   2.00273703e-10]]),
+	'database filename': 1,
+	'scope': {'gun shift': {'y': 1, 'x': 1}, 'dark field mode': 1},
+	'id': ('manager', 'corrector', 49)}
 	"""
 	content={}
 	allsubdicts={}
@@ -1447,13 +1447,17 @@ def _sqltype(t):
 	Convert a python type to an SQL type
 	"""
 	if t is str:
-		return "TEXT"
+		## New limit for InnoDB -- worried this will cause problems
+		## Max image name length is 153 characters
+		return "VARCHAR(511)"
 	elif issubclass(t, float):
 		return "DOUBLE"
 	elif t is bool:
 		return "TINYINT(1)"
 	elif issubclass(t, (int,long)):
-		return "INT(20)"
+		## (11) is just for display purposes
+		## it is still a signed integer 2^31 (2.1 billion) max value
+		return "INT(11)"
 	elif t is datetime.datetime:
 		return "TIMESTAMP"
 	elif t is datetime.date:
@@ -1525,7 +1529,7 @@ def dataSQLColumns(data_instance, fail=True):
 	# default columns
 	columns.append({
 			'Field': 'DEF_id',
-			'Type': 'int(16)',
+			'Type': 'INT(11)',
 			'Key': 'PRIMARY',
 			'Extra':'auto_increment',
 	})
@@ -1585,8 +1589,11 @@ def type2column(key, value, value_type, parentdata):
 				tableclass = parentdata.__class__
 				field = refFieldName(tableclass, value_type, key)
 				column['Field'] = field
-				column['Type'] = 'INT(20)'
-				column['Key'] = 'INDEX'
+				## Neil: (11) is just for display purposes, it is still a signed integer 2^31 max value
+				column['Type'] = 'INT(11)'
+				## Neil: Changed this next line for InnoDB
+				#column['Key'] = 'INDEX'
+				column['Key'] = 'FOREIGN KEY'
 				column['Index'] = [column['Field']]
 				if value is None:
 					row[field] = None

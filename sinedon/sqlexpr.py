@@ -385,6 +385,10 @@ class ColumnSpec(dict):
 				if self['Key'] in ('PRI', 'PRIMARY'):
 						keyargs['primary'] = 1
 
+				elif self['Key'] in ('FOREIGN', 'FOREIGN KEY'):
+						## Neil: update for InnoDB
+						keyargs['foreignkey'] = 1
+
 				elif self['Key'] in ('UNI', 'UNIQUE'):
 						keyargs['unique'] = 1
 
@@ -412,7 +416,7 @@ class ColumnSpec(dict):
 
 				return self.create_sql(**colargs)
 
-		def create_sql(self, name=None, type=None, null=1, default=None, auto=None, primary=None, index=None, unique=None, fulltext=None):
+		def create_sql(self, name=None, type=None, null=1, default=None, auto=None, primary=None, index=None, unique=None, fulltext=None, foreignkey=None):
 			"""
 			returns the proper sql syntax given the following params:
 				index:   sequence of column names to index
@@ -467,6 +471,13 @@ class ColumnSpec(dict):
 
 				if primary:
 					keys.append('PRIMARY KEY '+'('+ backquote(name) +')' )
+
+				## Neil: update for InnoDB
+				if foreignkey:
+					#FOREIGN KEY (particle_id) REFERENCES ApParticleData (DEF_id)
+					foreigntable = 'NULL' #<-- need to get this information
+					keys.append('FOREIGN KEY '+'('+ backquote(name) +') REFERENCES ' + foreigntable + ' (DEF_id) ' )
+					sys.exit(1)
 
 				return string.join(keys)
 
@@ -526,18 +537,18 @@ class HasTable(SQLExpression):
 		return q
 
 class CreateTable(SQLExpression):
-	def __init__(self, table, columns, type=None):
+	def __init__(self, table, columns, engine=None):
 		self.table = table
 		self.columns = columns
-		self.type = type
+		self.engine = engine
 
 	def sqlRepr(self):
 		if not self.columns:
 			return ''
 		if self.type in ('BDB', 'HEAP', 'ISAM', 'InnoDB', 'MERGE', 'MRG_MyISAM', 'MyISAM'):
-			type_str = " ENGINE=%s " % self.type
+			engine_str = " ENGINE=%s " % self.engine
 		else:
-			type_str = " ENGINE=MyISAM "
+			engine_str = " ENGINE=MyISAM "
 
 		# For InnoDB implementation, CREATE TABLE IF NOT EXISTS
 		# is replaced with CREATE TABLE, and a seperate query 
@@ -550,9 +561,11 @@ class CreateTable(SQLExpression):
 			fields.append(ColumnSpec(column).create_column())
 			if ColumnSpec(column).create_key():
 				keys.append(ColumnSpec(column).create_key())
+			### add foreign keys here for InnoDB
+			#FOREIGN KEY (particle_id) REFERENCES ApParticleData (DEF_id)
 
 		l = fields + keys
-		create += '(' + string.join(l, ', ') + ')' + type_str
+		create += '(' + string.join(l, ', ') + ')' + engine_str
 		return create
 
 class Insert(SQLExpression):
