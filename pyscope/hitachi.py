@@ -19,7 +19,7 @@ from pyami import moduleconfig
 from pyscope import tem
 from pyscope import hitachisocket
 
-STAGE_DEBUG = True
+STAGE_DEBUG = False
 
 class MagnificationsUninitialized(Exception):
 	pass
@@ -57,6 +57,7 @@ class Hitachi(tem.TEM):
 	lens_hex_range = {
 		'OBJ':(0,2.0),
 		'C2':(0,2.0),
+		'I1':(0,2.0),
 	}
 
 	def __init__(self):
@@ -277,7 +278,10 @@ class Hitachi(tem.TEM):
 				# alpha is disabled.
 				return
 			if a_degree >= limit[0] and a_degree <= limit[1]:
-				self.h.runSetFloatAndWait('StageTilt','Move', [a_degree,],precision=alpha_precision)
+				try:
+					self.h.runSetFloatAndWait('StageTilt','Move', [a_degree,],precision=alpha_precision)
+				except (AttributeError, ValueError) as e:
+					raise ValueError('Stage tilt disabled. Pls set htt.cfg stage limit to 0.0 and do not use any set tilt function.')
 			else:
 				raise ValueError('requested stage tilt %.1f degrees out of range' % (a_degree))
 		self.printStageDebug('----------')
@@ -589,6 +593,17 @@ class Hitachi(tem.TEM):
 		for key in value.keys():
 			new_value[key]=value[key]
 		self.setCoilVector(coil, new_value)
+		print 'setting BeamTilt to', new_value
+		time.sleep(1.0)
+		i = 0
+		while True:
+			got_value = self.getBeamTilt()
+			off_sum = abs(got_value['x']-new_value['x'])+abs(got_value['y']-new_value['y'])
+			if off_sum < 0.0002 or i > 20:
+				break
+			i += 1
+			print 'slow setBeamTilt', i, off_sum
+			time.sleep(0.2)
 	
 	def getBeamShift(self):
 		coil = 'BH'
@@ -644,7 +659,7 @@ class Hitachi(tem.TEM):
 	def getImageShift(self):
 		coil = self.getImageShiftCoil()
 		value = self.getCoilVector(coil)
-		print 'get image shift %s=' % coil, value
+		#print 'get image shift %s=' % coil, value
 		return value
 	
 	def setImageShift(self, value):
@@ -655,7 +670,7 @@ class Hitachi(tem.TEM):
 		for key in value.keys(): 
 				fine_value[key]=value[key] 
 		self.setCoilVector(coil, fine_value)
-		print 'set image shift %s=' % coil, fine_value
+		#print 'set image shift %s=' % coil, fine_value
 		time.sleep(2)
 
 	def getRawImageShift(self):
@@ -671,11 +686,15 @@ class Hitachi(tem.TEM):
 			new_value[key]=value[key]
 		self.setCoilVector(coil, new_value)
 
-	def makeDefocusLensName(self,submode):
+	def getFocusLensName(self, submode):
 		if submode.lower() != 'lowmag':
 			lens='obj'
 		else:
 			lens='i1'
+		return lens
+
+	def makeDefocusLensName(self,submode):
+		lens = self.getFocusLensName(submode)
 		lens_scale_name = 'lens_%s_current_defocus_scale' % (lens,)
 		return lens_scale_name
 
@@ -702,20 +721,26 @@ class Hitachi(tem.TEM):
 			raise RuntimeError('%s%%%s not set in hht.cfg' % (lens_scale_name.upper(), submode.upper()))
 		lens_current_value = value / m
 		focus = lens_current_value + self.zero_defocus_current[submode][mag]
+		print 'setDefocus defocus0', self.zero_defocus_current[submode][mag]
+		print 'setDefocus %s will setFocus to %s' % (value, focus)
 		self.setFocus(focus)
 		return 
 
 	def resetDefocus(self):
 		focus = self.getFocus()
+		print 'reseting Defocus called at', focus
 		mag = self.getMagnification()
 		probe = self.getProbeMode()
 		submode = self.getProjectionSubModeFromProbeMode(probe)
 		focus_diff = focus - self.zero_defocus_current[submode][mag]
+		print 'defocus0 before resetDefocus', self.zero_defocus_current[submode][mag]
+		print 'dfocus0 change required', focus_diff
 		# Only reset within its own probe mode
 		for mag in self.submode_mags[submode]:
 			self.zero_defocus_current[submode][mag] += focus_diff
 		ref_mag = self.getHitachiConfig('optics','ref_magnification')[submode.lower()]
 		self.saveEucentricFocusAtReference(submode, self.zero_defocus_current[submode][ref_mag])
+		print 'defocus0 after resetDefocus', self.zero_defocus_current[submode][mag]
 
 	def getMagnification(self, index=None):
 		if index is None:
@@ -1048,10 +1073,22 @@ class Hitachi(tem.TEM):
 		time.sleep(delay_time)
 
 	def getFocus(self):
-		return self.getLensCurrent('OBJ')
+		submode = self.getProjectionSubModeName()
+		lens = self.getFocusLensName(submode)
+		return self.getLensCurrent(lens.upper())
 
 	def setFocus(self, value):
-		self.setLensCurrent('OBJ', value)
+		submode = self.getProjectionSubModeName()
+		lens = self.getFocusLensName(submode)
+		# LowMag change Int1, others change OBJ
+		self.setLensCurrent(lens.upper(), value)
+		f1=self.getFocus()
+		i=0
+		while abs(f1-value) > 0.0002 and i < 10:
+			print 'slow setfocus', i, f1
+			time.sleep(0.2)
+			f1=self.getFocus()
+			i += 1
 
 	def getColumnPressure(self):
 		return self.h.runGetCommand('EvacGauge','FRG',['float','float','float'])[0] #In unit of Pa
@@ -1229,6 +1266,8 @@ class HT7800(Hitachi):
 	lens_hex_range = {
 		'OBJ':(0,1.94007),
 		'C2':(0,1.70002),
+		'I1':(0,1.70002),
+		
 	}
 	probe_submode_match_map = [('hc','zoom1-hc'),('hr','zoom1-hr'),('low','lowmag')]
 
