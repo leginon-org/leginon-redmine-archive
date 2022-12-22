@@ -32,7 +32,7 @@ function project_header($title="", $javascript="") {
 	$onload = (empty($javascript)) ? '' : 'onload="'.$javascript.'"';
 	$url = "ln=".urlencode($_SERVER['REQUEST_URI']);
 
-	echo '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+	echo '<!DOCTYPE html>
 	<html>
 	<head>
 			<link rel="icon" href="img/favicon.ico" type="image/x-icon">

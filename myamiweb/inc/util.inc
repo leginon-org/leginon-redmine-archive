@@ -739,7 +739,7 @@ function checkExtensions() {
 		}
 	}
 	if ($notloaded) {
-			$err='<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">';
+			$err='<!DOCTYPE html>';
 			$err.='<html><body><div style="border: 1px solid #FF0000; padding: 10px 10px">';
 			$err.="<p>Check your PHP extensions <b>".ini_get('extension_dir')."</b></p><p>cannot load:\n";
 			foreach($notloaded as $ext) {
