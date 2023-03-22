@@ -277,7 +277,7 @@ class mysql {
 	         	return False;
       	  	}
         }
-		$result = mysqli_query($link, $query); 
+		$result = mysqli_query($link, $query);
 		if (!$result) {
 			$this->mysqlerror = "Error: ".mysqli_error($link);
 			$this->mysqlerrornb = mysqli_errno($link);
@@ -289,6 +289,22 @@ class mysql {
 			$res = $result;
 		//$this->close_db();
 		return $res;
+	}
+
+	function getSQLModeSetResult($query, $disable_mode='', $enable_mode='') {
+		//Disable or Enable sql_mode for the query session and get result.
+		$r =$this->getSQLResult("Select @@sql_mode");
+		$q_mode = $r[0]['@@sql_mode'];
+		if (!empty($disable_mode) && strpos($q_mode,$disable_mode)!==false) {
+			$q_set1="Set sql_mode=REPLACE('".$q_mode."','".$disable_mode."','')";
+		}
+		if (!empty($enable_mode) && strpos($q_mode,$enable_mode)==false) {
+			$q_set1.=','.$enable_mode;
+		}
+		$multi_line_query=(!empty($q_set1))? $q_set1.";":"";
+		$multi_line_query.=$query.";";
+		$r=$this->getMultiLineSQLResult($multi_line_query);
+		return $r;
 	}
 
 	function getSQLResult($query, $fetch=MYSQLI_ASSOC) {
@@ -323,6 +339,9 @@ class mysql {
 	}
 
 	function SQLQueries($queries) {
+		// Execute an array of queries.  Not results are expected and
+		// each is independent to each other in settings.  Compare this and
+		// getMultiLineSQLResult to see the difference.
 		$link = $this->connect_db($this->db_host);
 		$q = (is_array($queries)) ? $queries : array($queries);
 		foreach($q as $v) {
@@ -330,6 +349,29 @@ class mysql {
 		}
 		$this->close_db($link);
 		return(true);
+	}
+
+	function getMultiLineSQLResult($multi_line_query) {
+		//Special case where the multi-line query is used to set variable
+		//within the same sql session before query.
+		$link = $this->connect_db($this->db_host);
+		$success=mysqli_multi_query($link,$multi_line_query);
+		//Break once result is obtained or no more result.
+		do {
+			$result = mysqli_store_result($link);
+			if (is_object($result)) {
+				break;
+			}
+			$has_more = mysqli_more_results($link);
+			if (!$has_more) break;
+			mysqli_next_result($link);
+		} while (true);
+
+		$fetch = MYSQLI_ASSOC;
+		$data = array();
+		while ($row = mysqli_fetch_array($result, $fetch))
+			$data[] = $row;
+		return $data;
 	}
 
 	function SQLInsert($table, $data, $db='') {

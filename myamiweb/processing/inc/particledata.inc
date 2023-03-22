@@ -1367,7 +1367,7 @@ class particledata {
 		}
 		$q .= " GROUP BY ctfdata.imageid ORDER BY ctfdata.unix_timestamp ";
 		//echo $q."<br/><br/>\n";
-		return $this->mysql->getSQLResult($q);
+		return $this->mysql->getSQLModeSetResult($q, $disable_mode='ONLY_FULL_GROUP_BY');
 	}
 
 	function getCTFParameterFields($runId=false) {
